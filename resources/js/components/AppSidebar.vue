@@ -58,7 +58,7 @@ const dashboardRoute = computed(() => {
 
 <template>
     <Sidebar collapsible="icon" variant="inset">
-        <SidebarHeader>
+        <SidebarHeader class="p-4 pb-6">
             <SidebarMenu>
                 <SidebarMenuItem>
                     <SidebarMenuButton size="lg" as-child>
@@ -70,11 +70,11 @@ const dashboardRoute = computed(() => {
             </SidebarMenu>
         </SidebarHeader>
 
-        <SidebarContent>
+        <SidebarContent class="px-2">
             <NavMain :items="mainNavItems" />
         </SidebarContent>
 
-        <SidebarFooter>
+        <SidebarFooter class="p-4 pt-6 border-t border-sidebar-border/50">
             <NavFooter :items="footerNavItems" />
             <NavUser />
         </SidebarFooter>
