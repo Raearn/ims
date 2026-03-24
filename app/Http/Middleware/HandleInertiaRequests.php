@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Ticket;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -45,6 +46,10 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $request->user(),
             ],
+            'openTicketsCount' => $request->user()?->role === 'admin'
+                ? Ticket::query()->where('status', 'Open')->count()
+                : null,
+            'unreadNotificationsCount' => $request->user()?->unreadNotifications()->count() ?? 0,
         ]);
     }
 }

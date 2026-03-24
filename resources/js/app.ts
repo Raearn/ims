@@ -1,11 +1,22 @@
 import '../css/app.css';
 
-import { createInertiaApp } from '@inertiajs/vue3';
+import { createInertiaApp, router } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import type { DefineComponent } from 'vue';
 import { createApp, h } from 'vue';
 import { ZiggyVue } from '../../vendor/tightenco/ziggy';
 import { initializeTheme } from './composables/useAppearance';
+
+// When Laravel returns 419 (CSRF token expired / session timeout), reload the
+// page with preserveState so all Vue component state (open modals, form values)
+// is kept intact. The user simply retries the same action immediately.
+router.on('invalid', (event) => {
+    if (event.detail.response.status === 419) {
+        event.preventDefault();
+        sessionStorage.setItem('csrf_expired', '1');
+        router.reload({ preserveState: true, preserveScroll: true });
+    }
+});
 
 // Extend ImportMeta interface for Vite...
 declare module 'vite/client' {

@@ -5,12 +5,13 @@ import NavUser from '@/components/NavUser.vue';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem, type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid } from 'lucide-vue-next';
+import { Folder, LayoutGrid, Users } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
 import { computed } from 'vue';
 
 const page = usePage<SharedData>();
 const user = computed(() => page.props.auth.user);
+const openTicketsCount = computed(() => page.props.openTicketsCount ?? null);
 
 const mainNavItems = computed<NavItem[]>(() => {
     const items: NavItem[] = [];
@@ -27,6 +28,13 @@ const mainNavItems = computed<NavItem[]>(() => {
             href: route('tickets'),
             icon: Folder,
             name: 'tickets',
+            badge: openTicketsCount.value,
+        });
+        items.push({
+            title: 'Users',
+            href: route('users'),
+            icon: Users,
+            name: 'users',
         });
     } else if (user.value?.role === 'supervisor') {
         items.push({
@@ -58,7 +66,7 @@ const dashboardRoute = computed(() => {
 
 <template>
     <Sidebar collapsible="icon" variant="inset">
-        <SidebarHeader class="p-4 pb-6">
+        <SidebarHeader class="px-4 py-4">
             <SidebarMenu>
                 <SidebarMenuItem>
                     <SidebarMenuButton size="lg" as-child>
@@ -70,11 +78,11 @@ const dashboardRoute = computed(() => {
             </SidebarMenu>
         </SidebarHeader>
 
-        <SidebarContent class="px-2">
+        <SidebarContent class="px-2 py-2">
             <NavMain :items="mainNavItems" />
         </SidebarContent>
 
-        <SidebarFooter class="p-4 pt-6 border-t border-sidebar-border/50">
+        <SidebarFooter class="px-4 py-4 border-t border-sidebar-border/40">
             <NavFooter :items="footerNavItems" />
             <NavUser />
         </SidebarFooter>

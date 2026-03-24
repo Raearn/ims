@@ -15,12 +15,14 @@ export interface NavItem {
     icon?: LucideIcon;
     isActive?: boolean;
     name?: string;
+    badge?: number | null;
 }
 
 export interface SharedData {
     name: string;
     quote: { message: string; author: string };
     auth: Auth;
+    openTicketsCount: number | null;
     ziggy: {
         location: string;
         url: string;
