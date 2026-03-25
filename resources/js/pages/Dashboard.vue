@@ -9,7 +9,8 @@ import TicketComments from '@/components/TicketComments.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, Link, useForm } from '@inertiajs/vue3';
-import { VisAxis, VisLine, VisXYContainer, VisArea, VisScatter } from '@unovis/vue';
+import { VisAxis, VisLine, VisXYContainer, VisArea } from '@unovis/vue';
+import { ChartCrosshair } from '@/components/ui/chart';
 import DonutChart from '@/components/DonutChart.vue';
 import { CurveType } from '@unovis/ts';
 import { AlertCircle, AlertTriangle, ArrowUpCircle, Ban, CheckCircle2, Circle, Clock, ImageIcon, Pause, Play, TrendingUp, BarChart2, PieChart, TrendingDown, Flame, RefreshCcw, ChevronRight, ArrowUpRight, UserPlus, MoreHorizontal, Search, X, MessageSquare, Crown, ShieldCheck, Headset, UserRound } from 'lucide-vue-next';
@@ -168,8 +169,17 @@ const selectedRange     = ref<7 | 30>(7);
 
 const displayData = computed(() => {
     const sliced = selectedRange.value === 7 ? trendData.slice(-7) : trendData;
-    return sliced.map((d, i) => ({ ...d, x: i }));
+    return sliced.map((d, i) => ({
+        ...d,
+        x: i,
+        displayLabel: selectedRange.value === 7 ? d.day : d.date,
+    }));
 });
+
+const chartItems = [
+    { name: 'created', label: 'New', color: '#f43f5e' },
+    { name: 'resolved', label: 'Resolved', color: '#10b981' },
+];
 
 const xTickValues = computed(() => displayData.value.map(d => d.x));
 
@@ -183,25 +193,6 @@ const xTickFormat = (x: number) => {
 const totalCreated  = computed(() => displayData.value.reduce((s, d) => s + d.created, 0));
 const totalResolved = computed(() => displayData.value.reduce((s, d) => s + d.resolved, 0));
 
-// Chart hover state
-const hoveredIndex = ref<number | null>(null);
-
-const tooltipStyle = computed(() => {
-    const idx = hoveredIndex.value;
-    if (idx === null) return {};
-    const n    = displayData.value.length;
-    const mL   = 44; // estimated y-axis left margin
-    const mR   = 12; // right margin
-    const frac = (idx + 0.5) / n;
-    // Prevent tooltip overflow on first/last columns
-    const tx = idx < Math.max(1, Math.floor(n * 0.2)) ? '-5%'
-             : idx >= n - Math.max(1, Math.floor(n * 0.2)) ? '-95%'
-             : '-50%';
-    return {
-        left: `calc(${mL}px + (100% - ${mL + mR}px) * ${frac})`,
-        transform: `translateX(${tx})`,
-    };
-});
 
 const isRefreshing = ref(false);
 const refresh = () => {
@@ -652,70 +643,13 @@ watch(isAssignModalOpen, (val) => {
                                 <!-- Lines -->
                                 <VisLine :x="(d: TrendPoint) => d.x" :y="(d: TrendPoint) => d.created" color="#f43f5e" :stroke-width="2" :curve-type="CurveType.MonotoneX" />
                                 <VisLine :x="(d: TrendPoint) => d.x" :y="(d: TrendPoint) => d.resolved" color="#10b981" :stroke-width="2" :curve-type="CurveType.MonotoneX" />
-                                <!-- Dots -->
-                                <VisScatter :x="(d: TrendPoint) => d.x" :y="(d: TrendPoint) => d.created" color="#f43f5e" :size="5" />
-                                <VisScatter :x="(d: TrendPoint) => d.x" :y="(d: TrendPoint) => d.resolved" color="#10b981" :size="5" />
+                                <!-- Crosshair: cursor-following dots + tooltip -->
+                                <ChartCrosshair
+                                    :colors="['#f43f5e', '#10b981']"
+                                    index="displayLabel"
+                                    :items="chartItems"
+                                />
                             </VisXYContainer>
-
-                            <!-- Invisible hit-area columns for hover detection -->
-                            <div class="absolute inset-0 flex" style="padding: 8px 12px 28px 44px;">
-                                <div
-                                    v-for="(d, i) in displayData"
-                                    :key="i"
-                                    class="relative flex-1 cursor-crosshair"
-                                    @mouseenter="hoveredIndex = i"
-                                    @mouseleave="hoveredIndex = null"
-                                >
-                                    <!-- Vertical guide line -->
-                                    <Transition
-                                        enter-from-class="opacity-0"
-                                        enter-active-class="transition-opacity duration-100"
-                                        leave-to-class="opacity-0"
-                                        leave-active-class="transition-opacity duration-75"
-                                    >
-                                        <div
-                                            v-if="hoveredIndex === i"
-                                            class="pointer-events-none absolute bottom-0 left-1/2 top-0 w-px -translate-x-px bg-border/60"
-                                        ></div>
-                                    </Transition>
-                                </div>
-                            </div>
-
-                            <!-- Tooltip -->
-                            <Transition
-                                enter-from-class="opacity-0 translate-y-1 scale-95"
-                                enter-active-class="transition-all duration-150 ease-out"
-                                leave-to-class="opacity-0 translate-y-1 scale-95"
-                                leave-active-class="transition-all duration-100 ease-in"
-                            >
-                                <div
-                                    v-if="hoveredIndex !== null && displayData[hoveredIndex]"
-                                    class="pointer-events-none absolute top-1.5 z-20 origin-bottom"
-                                    :style="tooltipStyle"
-                                >
-                                    <div class="min-w-[126px] rounded-xl border border-border/80 bg-background/95 px-3 py-2.5 shadow-xl backdrop-blur-sm">
-                                        <p class="mb-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-                                            {{ selectedRange === 7 ? displayData[hoveredIndex].day : displayData[hoveredIndex].date }}
-                                        </p>
-                                        <div class="space-y-1.5">
-                                            <div class="flex items-center justify-between gap-4">
-                                                <div class="flex items-center gap-1.5">
-                                                    <span class="h-2 w-2 shrink-0 rounded-full bg-rose-500"></span>
-                                                    <span class="text-xs text-muted-foreground">New</span>
-                                                </div>
-                                                <span class="text-xs font-bold tabular-nums text-foreground">{{ displayData[hoveredIndex].created }}</span>
-                                            </div>
-                                            <div class="flex items-center justify-between gap-4">
-                                                <div class="flex items-center gap-1.5">
-                                                    <span class="h-2 w-2 shrink-0 rounded-full bg-emerald-500"></span>
-                                                    <span class="text-xs text-muted-foreground">Resolved</span>
-                                                </div>
-                                                <span class="text-xs font-bold tabular-nums text-foreground">{{ displayData[hoveredIndex].resolved }}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </Transition>
                         </div>
                     </CardContent>
                     <div class="mt-3 flex flex-col gap-1 border-t border-border/50 p-4 sm:p-6">

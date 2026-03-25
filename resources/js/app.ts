@@ -47,5 +47,17 @@ createInertiaApp({
     },
 });
 
+// Strip Unovis tooltip container background so ChartTooltip owns the visual design.
+// Must be done via JS because Unovis injects its :root CSS variables at runtime,
+// after app.css loads, and inline element styles always beat stylesheet declarations.
+const root = document.documentElement;
+root.style.setProperty('--vis-tooltip-background-color', 'transparent');
+root.style.setProperty('--vis-tooltip-border-color', 'transparent');
+root.style.setProperty('--vis-tooltip-box-shadow', 'none');
+root.style.setProperty('--vis-tooltip-padding', '0');
+root.style.setProperty('--vis-tooltip-border-radius', '0');
+root.style.setProperty('--vis-dark-tooltip-background-color', 'transparent');
+root.style.setProperty('--vis-dark-tooltip-border-color', 'transparent');
+
 // This will set light / dark mode on page load...
 initializeTheme();

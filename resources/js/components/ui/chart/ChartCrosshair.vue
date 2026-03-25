@@ -27,10 +27,10 @@ function template(d: any) {
       .filter(([key]) => props.items.some(item => item.name === key))
       .map(([key, value]) => {
         const legendReference = props.items.find(i => i.name === key)
-        return { ...legendReference, value }
+        return { ...legendReference, name: (legendReference as any)?.label ?? legendReference?.name, value }
       })
     const TooltipComponent = props.customTooltip ?? ChartTooltip
-    const title = d.day || d[props.index]?.toString()
+    const title = d[props.index]?.toString() ?? d.day
     createApp(TooltipComponent, { title, data: omittedData }).mount(componentDiv)
     wm.set(d, componentDiv.innerHTML)
     return componentDiv.innerHTML

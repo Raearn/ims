@@ -68,6 +68,7 @@ import {
 import { ref, watch, computed, onMounted, onUnmounted } from 'vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import { Ticket, TicketCheck, Loader, Pause, Play, X, Ban, ChevronsUpDown, ChevronUp, ChevronDown, ChevronLeft } from 'lucide-vue-next';
+import { compressImage } from '@/lib/utils';
 
 interface ActivityEntry {
     id: number;
@@ -224,6 +225,7 @@ const isDetailModalOpen = ref(false);
 const selectedTicket = ref<typeof props.tickets[0] | null>(null);
 const editingTicket = ref<typeof props.tickets[0] | null>(null);
 const attachmentPreview = ref<string | null>(null);
+const attachmentCompression = ref<{ before: number; after: number } | null>(null);
 
 // ── History tab watches (depend on isDetailModalOpen + selectedTicket) ─────
 watch(
@@ -248,13 +250,24 @@ watch(
 
 const isDraggingOver = ref(false);
 
-const setAttachmentFile = (file: File | null) => {
-    form.attachment = file;
-    attachmentPreview.value = file ? URL.createObjectURL(file) : null;
+const setAttachmentFile = async (file: File | null) => {
+    if (!file) {
+        form.attachment = null;
+        attachmentPreview.value = null;
+        attachmentCompression.value = null;
+        return;
+    }
+    const compressed = await compressImage(file);
+    form.attachment = compressed;
+    attachmentPreview.value = URL.createObjectURL(compressed);
+    attachmentCompression.value = compressed !== file
+        ? { before: file.size, after: compressed.size }
+        : null;
 };
 
 const onAttachmentChange = (e: Event) => {
-    setAttachmentFile((e.target as HTMLInputElement).files?.[0] ?? null);
+    const file = (e.target as HTMLInputElement).files?.[0] ?? null;
+    setAttachmentFile(file);
 };
 
 const onAttachmentDrop = (e: DragEvent) => {
@@ -268,6 +281,7 @@ const onAttachmentDrop = (e: DragEvent) => {
 const removeAttachment = () => {
     form.attachment = null;
     attachmentPreview.value = null;
+    attachmentCompression.value = null;
 };
 
 const openDetailModal = (ticket: typeof props.tickets[0]) => {
@@ -1205,6 +1219,17 @@ const getPriorityBadge = (priority: string) => {
                                                 >
                                                     <X class="h-3.5 w-3.5" />
                                                 </button>
+                                                <!-- Compression badge -->
+                                                <div
+                                                    v-if="attachmentCompression"
+                                                    class="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-background/90 border border-emerald-500/30 px-2 py-0.5 text-[10px] shadow-sm backdrop-blur-sm"
+                                                >
+                                                    <span class="text-muted-foreground line-through">{{ (attachmentCompression.before / 1024).toFixed(0) }}KB</span>
+                                                    <span class="text-muted-foreground/50">→</span>
+                                                    <span class="font-semibold text-emerald-500">{{ (attachmentCompression.after / 1024).toFixed(0) }}KB</span>
+                                                    <span class="text-muted-foreground/70">·</span>
+                                                    <span class="font-semibold text-emerald-500">-{{ Math.round((1 - attachmentCompression.after / attachmentCompression.before) * 100) }}%</span>
+                                                </div>
                                             </div>
                                             <label
                                                 v-else

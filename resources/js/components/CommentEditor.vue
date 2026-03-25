@@ -9,12 +9,15 @@ import {
     Bold, Italic, Underline as UnderlineIcon,
     List, ListOrdered, ImageIcon, Undo, Redo,
 } from 'lucide-vue-next';
+import { compressImage } from '@/lib/utils';
 
 const props = defineProps<{ modelValue: string; placeholder?: string }>();
 const emit = defineEmits<{ 'update:modelValue': [value: string]; 'focus': [] }>();
 
 const imageInputRef = ref<HTMLInputElement | null>(null);
 const isUploading = ref(false);
+const compressionInfo = ref<{ before: number; after: number } | null>(null);
+let compressionInfoTimer: ReturnType<typeof setTimeout> | null = null;
 
 const editor = useEditor({
     content: props.modelValue,
@@ -50,8 +53,16 @@ async function handleImageUpload(event: Event) {
 
     isUploading.value = true;
     try {
+        const compressed = await compressImage(file);
+
+        if (compressed !== file) {
+            compressionInfo.value = { before: file.size, after: compressed.size };
+            if (compressionInfoTimer) clearTimeout(compressionInfoTimer);
+            compressionInfoTimer = setTimeout(() => { compressionInfo.value = null; }, 4000);
+        }
+
         const form = new FormData();
-        form.append('image', file);
+        form.append('image', compressed);
 
         const xsrfToken = document.cookie.match(/XSRF-TOKEN=([^;]+)/)?.[1] ?? '';
         const response = await fetch(route('comments.images.store'), {
@@ -128,6 +139,23 @@ async function handleImageUpload(event: Event) {
                 <span v-if="isUploading" class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
                 <ImageIcon v-else class="h-3.5 w-3.5" />
             </button>
+            <!-- Compression result badge (fades after 4s) -->
+            <Transition
+                enter-from-class="opacity-0 scale-90"
+                enter-active-class="transition-all duration-200"
+                leave-to-class="opacity-0 scale-90"
+                leave-active-class="transition-all duration-150"
+            >
+                <div
+                    v-if="compressionInfo"
+                    class="flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/8 px-2 py-0.5 text-[10px]"
+                >
+                    <span class="text-muted-foreground line-through">{{ (compressionInfo.before / 1024).toFixed(0) }}KB</span>
+                    <span class="text-muted-foreground/50">→</span>
+                    <span class="font-semibold text-emerald-500">{{ (compressionInfo.after / 1024).toFixed(0) }}KB</span>
+                    <span class="font-semibold text-emerald-600">-{{ Math.round((1 - compressionInfo.after / compressionInfo.before) * 100) }}%</span>
+                </div>
+            </Transition>
             <input
                 ref="imageInputRef"
                 type="file"

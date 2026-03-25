@@ -95,12 +95,36 @@ function getCsrfToken(): string {
     return match ? decodeURIComponent(match[1]) : '';
 }
 
+async function refreshCsrf(): Promise<void> {
+    // Any same-origin GET refreshes the XSRF-TOKEN cookie
+    await fetch(window.location.pathname, { method: 'GET', credentials: 'same-origin' });
+}
+
+async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
+    const doFetch = () => fetch(url, {
+        ...options,
+        credentials: 'same-origin',
+        headers: {
+            'Accept': 'application/json',
+            ...options.headers,
+            'X-XSRF-TOKEN': getCsrfToken(),
+        },
+    });
+
+    let res = await doFetch();
+
+    if (res.status === 419) {
+        await refreshCsrf();
+        res = await doFetch();
+    }
+
+    return res;
+}
+
 async function loadComments() {
     isLoading.value = true;
     try {
-        const res = await fetch(route('tickets.comments.index', props.ticketId), {
-            headers: { 'Accept': 'application/json' },
-        });
+        const res = await apiFetch(route('tickets.comments.index', props.ticketId));
         if (res.ok) {
             const data = await res.json();
             subscribed.value = data.subscribed;
@@ -116,10 +140,7 @@ async function toggleSubscription() {
     if (isTogglingSubscription.value) return;
     isTogglingSubscription.value = true;
     try {
-        const res = await fetch(route('tickets.subscribe.toggle', props.ticketId), {
-            method: 'POST',
-            headers: { 'Accept': 'application/json', 'X-XSRF-TOKEN': getCsrfToken() },
-        });
+        const res = await apiFetch(route('tickets.subscribe.toggle', props.ticketId), { method: 'POST' });
         if (res.ok) {
             const data = await res.json();
             subscribed.value = data.subscribed;
@@ -135,13 +156,9 @@ async function submitComment() {
 
     isSubmitting.value = true;
     try {
-        const res = await fetch(route('tickets.comments.store', props.ticketId), {
+        const res = await apiFetch(route('tickets.comments.store', props.ticketId), {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'X-XSRF-TOKEN': getCsrfToken(),
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ body }),
         });
 
@@ -167,10 +184,7 @@ function cancelDelete()            { pendingDeleteId.value = null; }
 
 async function deleteComment(id: number) {
     pendingDeleteId.value = null;
-    const res = await fetch(route('ticket-comments.destroy', id), {
-        method: 'DELETE',
-        headers: { 'Accept': 'application/json', 'X-XSRF-TOKEN': getCsrfToken() },
-    });
+    const res = await apiFetch(route('ticket-comments.destroy', id), { method: 'DELETE' });
     if (res.ok) {
         comments.value = comments.value.filter(c => c.id !== id);
     }
@@ -178,13 +192,9 @@ async function deleteComment(id: number) {
 
 async function toggleReaction(commentId: number, emoji: string) {
     openEmojiPickerFor.value = null;
-    const res = await fetch(route('ticket-comments.reactions.toggle', commentId), {
+    const res = await apiFetch(route('ticket-comments.reactions.toggle', commentId), {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'X-XSRF-TOKEN': getCsrfToken(),
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ emoji }),
     });
 
@@ -212,13 +222,9 @@ function toggleEmojiPicker(id: number) {
 }
 
 async function voteComment(commentId: number, type: 'up' | 'down') {
-    const res = await fetch(route('ticket-comments.vote', commentId), {
+    const res = await apiFetch(route('ticket-comments.vote', commentId), {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'X-XSRF-TOKEN': getCsrfToken(),
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type }),
     });
     if (res.ok) {
@@ -245,10 +251,7 @@ const canPin = computed(() => {
 });
 
 async function pinComment(commentId: number) {
-    const res = await fetch(route('ticket-comments.pin', commentId), {
-        method: 'POST',
-        headers: { 'Accept': 'application/json', 'X-XSRF-TOKEN': getCsrfToken() },
-    });
+    const res = await apiFetch(route('ticket-comments.pin', commentId), { method: 'POST' });
     if (res.ok) {
         const data = await res.json();
         const c = comments.value.find(c => c.id === commentId);
@@ -341,13 +344,9 @@ async function submitReply(parentComment: Comment) {
     if (isBodyEmpty(replyBody.value) || isReplying.value) return;
     isReplying.value = true;
     try {
-        const res = await fetch(route('tickets.comments.store', props.ticketId), {
+        const res = await apiFetch(route('tickets.comments.store', props.ticketId), {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'X-XSRF-TOKEN': getCsrfToken(),
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ body: replyBody.value, parent_id: parentComment.id }),
         });
         if (res.ok) {
@@ -386,8 +385,13 @@ watch(() => props.ticketId, loadComments);
         <div class="flex items-center gap-2.5 border-t border-border/40 pt-4 mb-4">
             <MessageSquare class="h-4 w-4 text-muted-foreground shrink-0" />
             <span class="text-sm font-semibold text-foreground">Comments</span>
+
+            <!-- Count badge — skeleton while loading -->
+            <template v-if="isLoading">
+                <div class="h-5 w-7 rounded-full bg-muted animate-pulse" />
+            </template>
             <span
-                v-if="!isLoading && comments.length"
+                v-else-if="comments.length"
                 class="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-muted text-muted-foreground tabular-nums"
             >{{ comments.length }}</span>
 
@@ -407,8 +411,12 @@ watch(() => props.ticketId, loadComments);
                 >{{ opt.label }}</button>
             </div>
 
-            <!-- Subscribe toggle -->
+            <!-- Subscribe toggle — skeleton while loading -->
+            <template v-if="isLoading">
+                <div class="ml-auto h-6 w-24 rounded-full bg-muted animate-pulse" />
+            </template>
             <button
+                v-else
                 type="button"
                 @click="toggleSubscription"
                 :disabled="isTogglingSubscription"
@@ -483,16 +491,51 @@ watch(() => props.ticketId, loadComments);
         </div>
 
         <!-- ── Loading skeleton ───────────────────────────────────── -->
-        <div v-if="isLoading" class="flex flex-col gap-4 mb-4">
-            <div v-for="i in 3" :key="i" class="flex gap-3 animate-pulse">
-                <div class="h-8 w-8 rounded-full bg-muted shrink-0" />
-                <div class="flex-1 space-y-2 pt-0.5">
-                    <div class="flex gap-2 items-center">
-                        <div class="h-2.5 w-20 rounded-full bg-muted" />
-                        <div class="h-2 w-12 rounded-full bg-muted/60" />
+        <div v-if="isLoading" class="flex flex-col gap-1 mb-2" aria-label="Loading comments…">
+            <div
+                v-for="(item, i) in [
+                    { lines: [{ w: 'w-full' }, { w: 'w-4/5' }, { w: 'w-3/5' }], reactions: 2, reply: true  },
+                    { lines: [{ w: 'w-full' }, { w: 'w-2/3' }],                  reactions: 0, reply: false },
+                    { lines: [{ w: 'w-full' }, { w: 'w-11/12' }, { w: 'w-1/2' }], reactions: 1, reply: true  },
+                ]"
+                :key="i"
+                class="flex gap-3 rounded-xl px-2 py-3 animate-pulse"
+            >
+                <!-- Avatar -->
+                <div class="h-8 w-8 rounded-full bg-muted shrink-0 mt-0.5" />
+
+                <!-- Body -->
+                <div class="flex-1 min-w-0 space-y-2 pr-10">
+                    <!-- Name row: name + role badge + timestamp -->
+                    <div class="flex items-center gap-2">
+                        <div :class="['h-2.5 rounded-full bg-muted', i === 1 ? 'w-24' : 'w-20']" />
+                        <div class="h-4 w-14 rounded-full bg-muted/60" />
+                        <div class="h-2 w-10 rounded-full bg-muted/40" />
                     </div>
-                    <div class="h-2.5 w-full rounded-full bg-muted" />
-                    <div class="h-2.5 w-4/5 rounded-full bg-muted" />
+
+                    <!-- Body lines -->
+                    <div v-for="(line, li) in item.lines" :key="li" :class="['h-2.5 rounded-full bg-muted', line.w]" />
+
+                    <!-- Vote row + optional reaction pills -->
+                    <div class="flex items-center gap-2 pt-0.5">
+                        <div class="h-6 w-16 rounded-full bg-muted/60" />
+                        <div v-for="r in item.reactions" :key="r" class="h-5 w-10 rounded-full bg-muted/50" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Indented reply skeleton under the first comment -->
+            <div class="ml-11 border-l-2 border-border/20 pl-3 animate-pulse">
+                <div class="flex gap-2.5 rounded-xl px-2 py-2">
+                    <div class="h-6 w-6 rounded-full bg-muted shrink-0 mt-0.5" />
+                    <div class="flex-1 space-y-1.5">
+                        <div class="flex items-center gap-2">
+                            <div class="h-2 w-16 rounded-full bg-muted" />
+                            <div class="h-3.5 w-12 rounded-full bg-muted/60" />
+                        </div>
+                        <div class="h-2 w-4/5 rounded-full bg-muted" />
+                        <div class="h-2 w-3/5 rounded-full bg-muted/70" />
+                    </div>
                 </div>
             </div>
         </div>
@@ -566,67 +609,69 @@ watch(() => props.ticketId, loadComments);
                             @click="onBodyClick"
                             v-html="comment.body"
                         />
-                        <!-- Vote row (Reddit-style) -->
-                        <div class="inline-flex items-center gap-0 mt-2 rounded-full border border-border/40 bg-muted/40 overflow-hidden">
-                            <button
-                                type="button"
-                                @click="voteComment(comment.id, 'up')"
-                                :class="[
-                                    'flex items-center justify-center h-6 w-6 transition-all duration-150 active:scale-90',
-                                    comment.userVote === 'up'
-                                        ? 'text-indigo-500 bg-indigo-500/10'
-                                        : 'text-muted-foreground hover:text-indigo-500 hover:bg-indigo-500/10',
-                                ]"
-                                title="Upvote"
-                            >
-                                <ArrowBigUp class="h-3.5 w-3.5" :fill="comment.userVote === 'up' ? 'currentColor' : 'none'" />
-                            </button>
-                            <span :class="[
-                                'text-xs font-bold tabular-nums px-1 min-w-[20px] text-center leading-none',
-                                comment.userVote === 'up' ? 'text-indigo-500' : comment.userVote === 'down' ? 'text-orange-500' : 'text-foreground/70',
-                            ]">{{ comment.upvotes - comment.downvotes }}</span>
-                            <button
-                                type="button"
-                                @click="voteComment(comment.id, 'down')"
-                                :class="[
-                                    'flex items-center justify-center h-6 w-6 transition-all duration-150 active:scale-90',
-                                    comment.userVote === 'down'
-                                        ? 'text-orange-500 bg-orange-500/10'
-                                        : 'text-muted-foreground hover:text-orange-500 hover:bg-orange-500/10',
-                                ]"
-                                title="Downvote"
-                            >
-                                <ArrowBigDown class="h-3.5 w-3.5" :fill="comment.userVote === 'down' ? 'currentColor' : 'none'" />
-                            </button>
-                        </div>
-                        <div v-if="comment.reactions.length" class="flex flex-wrap items-center gap-1 mt-2">
-                            <div
-                                v-for="reaction in comment.reactions"
-                                :key="reaction.emoji"
-                                class="relative group/rxn"
-                            >
+                        <!-- Vote row + reactions (same line) -->
+                        <div class="flex items-center flex-wrap gap-2 mt-2">
+                            <div class="inline-flex items-center gap-0 rounded-full border border-border/40 bg-muted/40 overflow-hidden shrink-0">
                                 <button
                                     type="button"
-                                    @click="toggleReaction(comment.id, reaction.emoji)"
+                                    @click="voteComment(comment.id, 'up')"
                                     :class="[
-                                        'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-all duration-150 active:scale-90',
-                                        reaction.reacted
-                                            ? 'border-primary/40 bg-primary/10 text-primary font-semibold shadow-sm shadow-primary/10'
-                                            : 'border-border/40 bg-muted/40 text-foreground/60 hover:border-border hover:bg-muted hover:text-foreground',
+                                        'flex items-center justify-center h-6 w-6 transition-all duration-150 active:scale-90',
+                                        comment.userVote === 'up'
+                                            ? 'text-indigo-500 bg-indigo-500/10'
+                                            : 'text-muted-foreground hover:text-indigo-500 hover:bg-indigo-500/10',
                                     ]"
+                                    title="Upvote"
                                 >
-                                    <span class="text-sm leading-none">{{ reaction.emoji }}</span>
-                                    <span class="tabular-nums">{{ reaction.count }}</span>
+                                    <ArrowBigUp class="h-3.5 w-3.5" :fill="comment.userVote === 'up' ? 'currentColor' : 'none'" />
                                 </button>
-                                <!-- Hover tooltip: who reacted -->
-                                <div class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50
-                                            opacity-0 group-hover/rxn:opacity-100 transition-opacity duration-150">
-                                    <div class="bg-popover border border-border/60 rounded-lg shadow-lg px-2.5 py-1.5 text-[11px] text-popover-foreground whitespace-nowrap max-w-[180px]">
-                                        <div class="font-semibold mb-0.5 text-center">{{ reaction.emoji }} {{ reaction.count }}</div>
-                                        <div v-for="(name, i) in reaction.users.slice(0, 5)" :key="i" class="truncate text-muted-foreground leading-tight">{{ name }}</div>
-                                        <div v-if="reaction.users.length > 5" class="text-muted-foreground/60 text-[10px] mt-0.5 text-center">+{{ reaction.users.length - 5 }} more</div>
+                                <span :class="[
+                                    'text-xs font-bold tabular-nums px-1 min-w-[20px] text-center leading-none',
+                                    comment.userVote === 'up' ? 'text-indigo-500' : comment.userVote === 'down' ? 'text-orange-500' : 'text-foreground/70',
+                                ]">{{ comment.upvotes - comment.downvotes }}</span>
+                                <button
+                                    type="button"
+                                    @click="voteComment(comment.id, 'down')"
+                                    :class="[
+                                        'flex items-center justify-center h-6 w-6 transition-all duration-150 active:scale-90',
+                                        comment.userVote === 'down'
+                                            ? 'text-orange-500 bg-orange-500/10'
+                                            : 'text-muted-foreground hover:text-orange-500 hover:bg-orange-500/10',
+                                    ]"
+                                    title="Downvote"
+                                >
+                                    <ArrowBigDown class="h-3.5 w-3.5" :fill="comment.userVote === 'down' ? 'currentColor' : 'none'" />
+                                </button>
+                            </div>
+                            <div v-if="comment.reactions.length" class="flex flex-wrap items-center gap-1">
+                                <div
+                                    v-for="reaction in comment.reactions"
+                                    :key="reaction.emoji"
+                                    class="relative group/rxn"
+                                >
+                                    <button
+                                        type="button"
+                                        @click="toggleReaction(comment.id, reaction.emoji)"
+                                        :class="[
+                                            'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-all duration-150 active:scale-90',
+                                            reaction.reacted
+                                                ? 'border-primary/40 bg-primary/10 text-primary font-semibold shadow-sm shadow-primary/10'
+                                                : 'border-border/40 bg-muted/40 text-foreground/60 hover:border-border hover:bg-muted hover:text-foreground',
+                                        ]"
+                                    >
+                                        <span class="text-sm leading-none">{{ reaction.emoji }}</span>
+                                        <span class="tabular-nums">{{ reaction.count }}</span>
+                                    </button>
+                                    <!-- Hover tooltip: who reacted -->
+                                    <div class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50
+                                                opacity-0 group-hover/rxn:opacity-100 transition-opacity duration-150">
+                                        <div class="bg-popover border border-border/60 rounded-lg shadow-lg px-2.5 py-1.5 text-[11px] text-popover-foreground whitespace-nowrap max-w-[180px]">
+                                            <div class="font-semibold mb-0.5 text-center">{{ reaction.emoji }} {{ reaction.count }}</div>
+                                            <div v-for="(name, i) in reaction.users.slice(0, 5)" :key="i" class="truncate text-muted-foreground leading-tight">{{ name }}</div>
+                                            <div v-if="reaction.users.length > 5" class="text-muted-foreground/60 text-[10px] mt-0.5 text-center">+{{ reaction.users.length - 5 }} more</div>
+                                        </div>
+                                        <div class="w-2 h-2 bg-popover border-r border-b border-border/60 rotate-45 mx-auto -mt-1.5"></div>
                                     </div>
-                                    <div class="w-2 h-2 bg-popover border-r border-b border-border/60 rotate-45 mx-auto -mt-1.5"></div>
                                 </div>
                             </div>
                         </div>
@@ -735,67 +780,69 @@ watch(() => props.ticketId, loadComments);
                                 @click="onBodyClick"
                                 v-html="reply.body"
                             />
-                            <!-- Vote row (Reddit-style) -->
-                            <div class="inline-flex items-center gap-0 mt-1.5 rounded-full border border-border/40 bg-muted/40 overflow-hidden">
-                                <button
-                                    type="button"
-                                    @click="voteComment(reply.id, 'up')"
-                                    :class="[
-                                        'flex items-center justify-center h-6 w-6 transition-all duration-150 active:scale-90',
-                                        reply.userVote === 'up'
-                                            ? 'text-indigo-500 bg-indigo-500/10'
-                                            : 'text-muted-foreground hover:text-indigo-500 hover:bg-indigo-500/10',
-                                    ]"
-                                    title="Upvote"
-                                >
-                                    <ArrowBigUp class="h-3.5 w-3.5" :fill="reply.userVote === 'up' ? 'currentColor' : 'none'" />
-                                </button>
-                                <span :class="[
-                                    'text-xs font-bold tabular-nums px-1 min-w-[20px] text-center leading-none',
-                                    reply.userVote === 'up' ? 'text-indigo-500' : reply.userVote === 'down' ? 'text-orange-500' : 'text-foreground/70',
-                                ]">{{ reply.upvotes - reply.downvotes }}</span>
-                                <button
-                                    type="button"
-                                    @click="voteComment(reply.id, 'down')"
-                                    :class="[
-                                        'flex items-center justify-center h-6 w-6 transition-all duration-150 active:scale-90',
-                                        reply.userVote === 'down'
-                                            ? 'text-orange-500 bg-orange-500/10'
-                                            : 'text-muted-foreground hover:text-orange-500 hover:bg-orange-500/10',
-                                    ]"
-                                    title="Downvote"
-                                >
-                                    <ArrowBigDown class="h-3.5 w-3.5" :fill="reply.userVote === 'down' ? 'currentColor' : 'none'" />
-                                </button>
-                            </div>
-                            <div v-if="reply.reactions.length" class="flex flex-wrap items-center gap-1 mt-1.5">
-                                <div
-                                    v-for="reaction in reply.reactions"
-                                    :key="reaction.emoji"
-                                    class="relative group/rxn"
-                                >
+                            <!-- Vote row + reactions (same line) -->
+                            <div class="flex items-center flex-wrap gap-2 mt-1.5">
+                                <div class="inline-flex items-center gap-0 rounded-full border border-border/40 bg-muted/40 overflow-hidden shrink-0">
                                     <button
                                         type="button"
-                                        @click="toggleReaction(reply.id, reaction.emoji)"
+                                        @click="voteComment(reply.id, 'up')"
                                         :class="[
-                                            'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-all duration-150 active:scale-90',
-                                            reaction.reacted
-                                                ? 'border-primary/40 bg-primary/10 text-primary font-semibold shadow-sm shadow-primary/10'
-                                                : 'border-border/40 bg-muted/40 text-foreground/60 hover:border-border hover:bg-muted hover:text-foreground',
+                                            'flex items-center justify-center h-6 w-6 transition-all duration-150 active:scale-90',
+                                            reply.userVote === 'up'
+                                                ? 'text-indigo-500 bg-indigo-500/10'
+                                                : 'text-muted-foreground hover:text-indigo-500 hover:bg-indigo-500/10',
                                         ]"
+                                        title="Upvote"
                                     >
-                                        <span class="text-sm leading-none">{{ reaction.emoji }}</span>
-                                        <span class="tabular-nums">{{ reaction.count }}</span>
+                                        <ArrowBigUp class="h-3.5 w-3.5" :fill="reply.userVote === 'up' ? 'currentColor' : 'none'" />
                                     </button>
-                                    <!-- Hover tooltip: who reacted -->
-                                    <div class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50
-                                                opacity-0 group-hover/rxn:opacity-100 transition-opacity duration-150">
-                                        <div class="bg-popover border border-border/60 rounded-lg shadow-lg px-2.5 py-1.5 text-[11px] text-popover-foreground whitespace-nowrap max-w-[180px]">
-                                            <div class="font-semibold mb-0.5 text-center">{{ reaction.emoji }} {{ reaction.count }}</div>
-                                            <div v-for="(name, i) in reaction.users.slice(0, 5)" :key="i" class="truncate text-muted-foreground leading-tight">{{ name }}</div>
-                                            <div v-if="reaction.users.length > 5" class="text-muted-foreground/60 text-[10px] mt-0.5 text-center">+{{ reaction.users.length - 5 }} more</div>
+                                    <span :class="[
+                                        'text-xs font-bold tabular-nums px-1 min-w-[20px] text-center leading-none',
+                                        reply.userVote === 'up' ? 'text-indigo-500' : reply.userVote === 'down' ? 'text-orange-500' : 'text-foreground/70',
+                                    ]">{{ reply.upvotes - reply.downvotes }}</span>
+                                    <button
+                                        type="button"
+                                        @click="voteComment(reply.id, 'down')"
+                                        :class="[
+                                            'flex items-center justify-center h-6 w-6 transition-all duration-150 active:scale-90',
+                                            reply.userVote === 'down'
+                                                ? 'text-orange-500 bg-orange-500/10'
+                                                : 'text-muted-foreground hover:text-orange-500 hover:bg-orange-500/10',
+                                        ]"
+                                        title="Downvote"
+                                    >
+                                        <ArrowBigDown class="h-3.5 w-3.5" :fill="reply.userVote === 'down' ? 'currentColor' : 'none'" />
+                                    </button>
+                                </div>
+                                <div v-if="reply.reactions.length" class="flex flex-wrap items-center gap-1">
+                                    <div
+                                        v-for="reaction in reply.reactions"
+                                        :key="reaction.emoji"
+                                        class="relative group/rxn"
+                                    >
+                                        <button
+                                            type="button"
+                                            @click="toggleReaction(reply.id, reaction.emoji)"
+                                            :class="[
+                                                'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-all duration-150 active:scale-90',
+                                                reaction.reacted
+                                                    ? 'border-primary/40 bg-primary/10 text-primary font-semibold shadow-sm shadow-primary/10'
+                                                    : 'border-border/40 bg-muted/40 text-foreground/60 hover:border-border hover:bg-muted hover:text-foreground',
+                                            ]"
+                                        >
+                                            <span class="text-sm leading-none">{{ reaction.emoji }}</span>
+                                            <span class="tabular-nums">{{ reaction.count }}</span>
+                                        </button>
+                                        <!-- Hover tooltip: who reacted -->
+                                        <div class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50
+                                                    opacity-0 group-hover/rxn:opacity-100 transition-opacity duration-150">
+                                            <div class="bg-popover border border-border/60 rounded-lg shadow-lg px-2.5 py-1.5 text-[11px] text-popover-foreground whitespace-nowrap max-w-[180px]">
+                                                <div class="font-semibold mb-0.5 text-center">{{ reaction.emoji }} {{ reaction.count }}</div>
+                                                <div v-for="(name, i) in reaction.users.slice(0, 5)" :key="i" class="truncate text-muted-foreground leading-tight">{{ name }}</div>
+                                                <div v-if="reaction.users.length > 5" class="text-muted-foreground/60 text-[10px] mt-0.5 text-center">+{{ reaction.users.length - 5 }} more</div>
+                                            </div>
+                                            <div class="w-2 h-2 bg-popover border-r border-b border-border/60 rotate-45 mx-auto -mt-1.5"></div>
                                         </div>
-                                        <div class="w-2 h-2 bg-popover border-r border-b border-border/60 rotate-45 mx-auto -mt-1.5"></div>
                                     </div>
                                 </div>
                             </div>
