@@ -6,6 +6,8 @@ const props = defineProps<{
     total: number;
 }>();
 
+const emit = defineEmits<{ (e: 'segment-click', name: string): void }>();
+
 const hoveredIndex = ref<number | null>(null);
 
 const CX = 100;
@@ -92,6 +94,7 @@ const active = computed(() =>
                         style="cursor: pointer;"
                         @mouseenter="hoveredIndex = seg.index"
                         @mouseleave="hoveredIndex = null"
+                        @click="emit('segment-click', seg.name)"
                     />
                 </g>
 
@@ -162,6 +165,7 @@ const active = computed(() =>
                     : 'hover:bg-muted/60'"
                 @mouseenter="hoveredIndex = seg.index"
                 @mouseleave="hoveredIndex = null"
+                @click="emit('segment-click', seg.name)"
             >
                 <div
                     class="w-2.5 h-2.5 rounded-full shrink-0 transition-transform duration-150"

@@ -3,13 +3,10 @@
 namespace App\Notifications;
 
 use App\Models\Ticket;
-use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
 
 class TicketSlaBreached extends Notification
 {
-    use Queueable;
-
     public function __construct(public readonly Ticket $ticket) {}
 
     /**

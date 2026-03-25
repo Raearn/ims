@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/layouts/AppLayout.vue';
+import TicketComments from '@/components/TicketComments.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -54,10 +55,47 @@ import {
     Lock,
     RefreshCcw,
     Download,
+    History,
+    GitBranch,
+    Flag,
+    MessageSquare,
+    UserMinus,
+    Smile,
+    FilePenLine,
+    Pin,
+    PinOff,
 } from 'lucide-vue-next';
 import { ref, watch, computed, onMounted, onUnmounted } from 'vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import { Ticket, TicketCheck, Loader, Pause, Play, X, Ban, ChevronsUpDown, ChevronUp, ChevronDown, ChevronLeft } from 'lucide-vue-next';
+
+interface ActivityEntry {
+    id: number;
+    action: string;
+    oldValue: string | null;
+    newValue: string | null;
+    userName: string;
+    createdAt: string;
+    createdAtFormatted: string;
+}
+
+// ── Detail modal history tab ───────────────────────────────────────────────
+const detailTab = ref<'overview' | 'history'>('overview');
+const activityLog = ref<ActivityEntry[]>([]);
+const activityLoading = ref(false);
+const historyFetchedFor = ref<number | null>(null);
+
+async function fetchHistory(ticketId: number): Promise<void> {
+    if (historyFetchedFor.value === ticketId) return;
+    activityLoading.value = true;
+    try {
+        const res = await fetch(route('tickets.history', { ticket: ticketId }));
+        activityLog.value = await res.json();
+        historyFetchedFor.value = ticketId;
+    } finally {
+        activityLoading.value = false;
+    }
+}
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -95,6 +133,7 @@ const props = defineProps<{
         handlerIds: number[];
         handlers: { id: number; name: string }[];
         reporter: string;
+        reporterId: number;
         createdAt: string;
         createdAtFormatted: string;
         createdAtRaw: string;
@@ -113,7 +152,7 @@ const ticketStats = computed(() => [
     {
         label: 'Total',
         status: 'All',
-        value: props.tickets.length,
+        value: preStatusFiltered.value.length,
         icon: Ticket,
         colorClass: 'text-primary',
         bgClass: 'bg-primary/10',
@@ -124,7 +163,7 @@ const ticketStats = computed(() => [
     {
         label: 'Open',
         status: 'Open',
-        value: props.tickets.filter(t => t.status === 'Open').length,
+        value: preStatusFiltered.value.filter(t => t.status === 'Open').length,
         icon: AlertTriangle,
         colorClass: 'text-rose-500',
         bgClass: 'bg-rose-500/10',
@@ -135,7 +174,7 @@ const ticketStats = computed(() => [
     {
         label: 'In Progress',
         status: 'In Progress',
-        value: props.tickets.filter(t => t.status === 'In Progress').length,
+        value: preStatusFiltered.value.filter(t => t.status === 'In Progress').length,
         icon: Play,
         colorClass: 'text-blue-500',
         bgClass: 'bg-blue-500/10',
@@ -144,9 +183,20 @@ const ticketStats = computed(() => [
         ringClass: 'ring-blue-500/20',
     },
     {
+        label: 'On Hold',
+        status: 'On Hold',
+        value: preStatusFiltered.value.filter(t => t.status === 'On Hold').length,
+        icon: Pause,
+        colorClass: 'text-amber-500',
+        bgClass: 'bg-amber-500/10',
+        borderActive: 'border-amber-500/40',
+        glowClass: 'shadow-amber-500/20',
+        ringClass: 'ring-amber-500/20',
+    },
+    {
         label: 'Resolved',
         status: 'Resolved',
-        value: props.tickets.filter(t => t.status === 'Resolved').length,
+        value: preStatusFiltered.value.filter(t => t.status === 'Resolved').length,
         icon: CheckCircle2,
         colorClass: 'text-emerald-500',
         bgClass: 'bg-emerald-500/10',
@@ -157,7 +207,7 @@ const ticketStats = computed(() => [
     {
         label: 'Closed',
         status: 'Closed',
-        value: props.tickets.filter(t => t.status === 'Closed').length,
+        value: preStatusFiltered.value.filter(t => t.status === 'Closed').length,
         icon: Ban,
         colorClass: 'text-slate-500',
         bgClass: 'bg-slate-500/10',
@@ -174,6 +224,27 @@ const isDetailModalOpen = ref(false);
 const selectedTicket = ref<typeof props.tickets[0] | null>(null);
 const editingTicket = ref<typeof props.tickets[0] | null>(null);
 const attachmentPreview = ref<string | null>(null);
+
+// ── History tab watches (depend on isDetailModalOpen + selectedTicket) ─────
+watch(
+    () => detailTab.value,
+    (tab) => {
+        if (tab === 'history' && selectedTicket.value) {
+            fetchHistory(selectedTicket.value.numericId);
+        }
+    },
+);
+
+watch(
+    () => isDetailModalOpen.value,
+    (open) => {
+        if (!open) {
+            detailTab.value = 'overview';
+            historyFetchedFor.value = null;
+            activityLog.value = [];
+        }
+    },
+);
 
 const isDraggingOver = ref(false);
 
@@ -541,6 +612,7 @@ const exportToExcel = async () => {
             { key: 'handlers',   header: 'Handler(s)',   width: 28 },
             { key: 'createdAt',  header: 'Created At',   width: 22 },
             { key: 'resolvedAt', header: 'Resolved At',  width: 22 },
+            { key: 'solution',   header: 'Solution',     width: 50 },
         ];
 
         // ── Header row styling ──────────────────────────────────────────
@@ -570,6 +642,12 @@ const exportToExcel = async () => {
             'Low':      'FFF8FAFC',
         };
 
+        // Strip HTML tags from rich-text solution field
+        const stripHtml = (html: string | null | undefined): string => {
+            if (!html) return '—';
+            return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim() || '—';
+        };
+
         // ── Data rows ──────────────────────────────────────────────────
         sortedTickets.value.forEach((t, idx) => {
             const row = sheet.addRow({
@@ -582,6 +660,7 @@ const exportToExcel = async () => {
                 handlers:   t.handlers.map(h => h.name).join(', ') || '—',
                 createdAt:  t.createdAtFormatted,
                 resolvedAt: t.resolvedAtFormatted ?? '—',
+                solution:   stripHtml((t as any).solution),
             });
 
             row.height = 18;
@@ -617,10 +696,17 @@ const exportToExcel = async () => {
                 resolvedCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
                 resolvedCell.font = { size: 10, color: { argb: 'FF065F46' } };
             }
+
+            // Solution cell — wrap text and subtle tint when present
+            const solutionCell = row.getCell('solution');
+            solutionCell.alignment = { vertical: 'top', wrapText: true };
+            if ((t as any).solution) {
+                solutionCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFBEB' } };
+            }
         });
 
         // ── Auto-filter on header ───────────────────────────────────────
-        sheet.autoFilter = { from: 'A1', to: 'H1' };
+        sheet.autoFilter = { from: 'A1', to: 'J1' };
 
         // ── Download ───────────────────────────────────────────────────
         const dateStr = new Date().toISOString().slice(0, 10);
@@ -737,24 +823,14 @@ const statusOrder: Record<string, number> = { Open: 1, 'In Progress': 2, 'On Hol
 const dateFrom = ref('');
 const dateTo   = ref('');
 
-const sortedTickets = computed(() => {
+// Base: search + date filters only (no status, no priority).
+// Used as the starting point for the two filter-group counts below.
+const searchDateFiltered = computed(() => {
     let base = props.tickets;
 
-    // Status filter
-    if (currentStatus.value !== 'All') {
-        base = base.filter(t => t.status === currentStatus.value);
-    }
-
-    // Priority filter
-    if (currentPriority.value !== 'All') {
-        base = base.filter(t => t.priority === currentPriority.value);
-    }
-
-    // Date range filter (inclusive, YYYY-MM-DD comparison)
     if (dateFrom.value) base = base.filter(t => t.createdAtRaw >= dateFrom.value);
     if (dateTo.value)   base = base.filter(t => t.createdAtRaw <= dateTo.value);
 
-    // Multi-field search: ID, title, reporter, handler names
     if (search.value.trim()) {
         const q = search.value.toLowerCase().trim();
         base = base.filter(t =>
@@ -763,6 +839,35 @@ const sortedTickets = computed(() => {
             t.reporter.toLowerCase().includes(q) ||
             t.handlers.some(h => h.name.toLowerCase().includes(q))
         );
+    }
+
+    return base;
+});
+
+// Excludes status filter → drives stat-card counts (they ARE the status filter).
+const preStatusFiltered = computed(() => {
+    let base = searchDateFiltered.value;
+    if (currentPriority.value !== 'All') {
+        base = base.filter(t => t.priority === currentPriority.value);
+    }
+    return base;
+});
+
+// Excludes priority filter → drives priority-chip counts (they ARE the priority filter).
+const prePriorityFiltered = computed(() => {
+    let base = searchDateFiltered.value;
+    if (currentStatus.value !== 'All') {
+        base = base.filter(t => t.status === currentStatus.value);
+    }
+    return base;
+});
+
+const sortedTickets = computed(() => {
+    let base = preStatusFiltered.value;
+
+    // Status filter
+    if (currentStatus.value !== 'All') {
+        base = base.filter(t => t.status === currentStatus.value);
     }
 
     if (!sortKey.value) return base;
@@ -811,8 +916,11 @@ const pageRange = computed((): (number | '...')[] => {
 
 // Count per priority for badge labels
 const priorityCounts = computed(() => {
-    const counts: Record<string, number> = { All: props.tickets.length };
-    for (const t of props.tickets) {
+    // Count from prePriorityFiltered (status + search + date applied, NOT priority)
+    // so the chips show accurate counts for the currently visible status.
+    const base = prePriorityFiltered.value;
+    const counts: Record<string, number> = { All: base.length };
+    for (const t of base) {
         counts[t.priority] = (counts[t.priority] ?? 0) + 1;
     }
     return counts;
@@ -831,6 +939,48 @@ const toggleSort = (key: SortKey) => {
 const getInitials = (name: string) => {
     if (name === 'Unassigned') return 'UN';
     return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+};
+
+// ── Activity history helpers ───────────────────────────────────────────────
+type Component = typeof History;
+
+const ACTIVITY_CONFIG: Record<string, { icon: Component; classes: string; verb: string }> = {
+    created:           { icon: FilePenLine, classes: 'bg-primary/10 border-primary/20 text-primary', verb: 'created this ticket' },
+    status_changed:    { icon: GitBranch,   classes: 'bg-blue-500/10 border-blue-500/20 text-blue-500', verb: 'changed status' },
+    priority_changed:  { icon: Flag,        classes: 'bg-amber-500/10 border-amber-500/20 text-amber-500', verb: 'changed priority' },
+    solution_updated:  { icon: CheckCircle2, classes: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500', verb: 'updated the solution' },
+    handler_assigned:  { icon: UserPlus,    classes: 'bg-violet-500/10 border-violet-500/20 text-violet-500', verb: 'assigned handler(s)' },
+    handler_removed:   { icon: UserMinus,   classes: 'bg-rose-500/10 border-rose-500/20 text-rose-500', verb: 'removed handler(s)' },
+    comment_posted:    { icon: MessageSquare, classes: 'bg-sky-500/10 border-sky-500/20 text-sky-500', verb: 'posted a comment' },
+    comment_deleted:   { icon: Trash2,      classes: 'bg-rose-500/10 border-rose-500/20 text-rose-500', verb: 'deleted a comment' },
+    comment_pinned:    { icon: Pin,         classes: 'bg-amber-500/10 border-amber-500/20 text-amber-500', verb: 'pinned a comment' },
+    comment_unpinned:  { icon: PinOff,      classes: 'bg-muted border-border/50 text-muted-foreground', verb: 'unpinned a comment' },
+    reaction_added:    { icon: Smile,       classes: 'bg-pink-500/10 border-pink-500/20 text-pink-500', verb: 'reacted' },
+    reaction_removed:  { icon: Smile,       classes: 'bg-muted border-border/50 text-muted-foreground', verb: 'removed a reaction' },
+};
+
+const getActivityIcon = (action: string): Component =>
+    (ACTIVITY_CONFIG[action]?.icon ?? History) as Component;
+
+const getActivityIconClass = (action: string): string =>
+    ACTIVITY_CONFIG[action]?.classes ?? 'bg-muted border-border/50 text-muted-foreground';
+
+const getActivityLabel = (entry: ActivityEntry): string => {
+    const verb = ACTIVITY_CONFIG[entry.action]?.verb ?? entry.action.replace(/_/g, ' ');
+    if (entry.action === 'handler_assigned' && entry.newValue) {
+        return `assigned ${entry.newValue}`;
+    }
+    if (entry.action === 'handler_removed' && entry.oldValue) {
+        return `removed ${entry.oldValue}`;
+    }
+    if (entry.action === 'reaction_added' && entry.newValue) {
+        return `reacted with ${entry.newValue}`;
+    }
+    if (['comment_posted', 'comment_deleted'].includes(entry.action)) {
+        const snippet = (entry.newValue ?? entry.oldValue)?.trim();
+        return snippet ? `${verb}: "${snippet}"` : verb;
+    }
+    return verb;
 };
 
 const getStatusColor = (status: string) => {
@@ -1274,7 +1424,7 @@ const getPriorityBadge = (priority: string) => {
             </div>
 
             <!-- ── Stat Cards ──────────────────────────────────── -->
-            <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5 sm:gap-3">
+            <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6 sm:gap-3">
                 <button
                     v-for="stat in ticketStats"
                     :key="stat.label"
@@ -1985,9 +2135,37 @@ const getPriorityBadge = (priority: string) => {
                 </div>
 
                 <!-- Body (scrollable) -->
-                <div class="modal-body overflow-y-auto flex-1 px-5 py-5 grid gap-4">
-                    <!-- Meta grid -->
-                    <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                <div class="modal-body overflow-y-auto flex-1 flex flex-col">
+                    <!-- Tab switcher -->
+                    <div class="flex items-center gap-1 px-5 pt-4 pb-0 border-b border-border/40">
+                        <button
+                            @click="detailTab = 'overview'"
+                            :class="[
+                                'flex items-center gap-1.5 px-3 py-2 text-xs font-semibold border-b-2 -mb-px transition-colors',
+                                detailTab === 'overview'
+                                    ? 'border-primary text-primary'
+                                    : 'border-transparent text-muted-foreground hover:text-foreground',
+                            ]"
+                        >
+                            <Info class="h-3.5 w-3.5" /> Overview
+                        </button>
+                        <button
+                            @click="detailTab = 'history'"
+                            :class="[
+                                'flex items-center gap-1.5 px-3 py-2 text-xs font-semibold border-b-2 -mb-px transition-colors',
+                                detailTab === 'history'
+                                    ? 'border-primary text-primary'
+                                    : 'border-transparent text-muted-foreground hover:text-foreground',
+                            ]"
+                        >
+                            <History class="h-3.5 w-3.5" /> History
+                        </button>
+                    </div>
+
+                    <!-- Overview tab -->
+                    <div v-if="detailTab === 'overview'" class="px-5 py-5 grid gap-4">
+                        <!-- Meta grid -->
+                        <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                         <div class="flex flex-col gap-1 rounded-xl bg-muted/40 px-3 py-2.5 border border-border/40">
                             <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Category</span>
                             <span class="text-sm font-semibold text-foreground">{{ selectedTicket.category }}</span>
@@ -2068,7 +2246,64 @@ const getPriorityBadge = (priority: string) => {
                             <span class="text-muted-foreground/70">{{ selectedTicket.resolvedAtFormatted }}</span>
                         </div>
                     </div>
-                </div>
+
+                    <!-- Comments -->
+                    <TicketComments :ticket-id="selectedTicket.numericId" :reporter-id="selectedTicket.reporterId" />
+                    </div><!-- end overview tab -->
+
+                    <!-- History tab -->
+                    <div v-if="detailTab === 'history'" class="px-5 py-5">
+                        <!-- Loading skeleton -->
+                        <div v-if="activityLoading" class="flex flex-col gap-3">
+                            <div v-for="i in 5" :key="i" class="flex items-start gap-3 animate-pulse">
+                                <div class="h-7 w-7 rounded-full bg-muted shrink-0 mt-0.5"></div>
+                                <div class="flex-1 flex flex-col gap-1.5 pt-1">
+                                    <div class="h-3 bg-muted rounded w-3/4"></div>
+                                    <div class="h-2.5 bg-muted/60 rounded w-1/2"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Empty state -->
+                        <div v-else-if="activityLog.length === 0" class="flex flex-col items-center justify-center py-10 gap-2 text-center">
+                            <History class="h-8 w-8 text-muted-foreground/30" />
+                            <p class="text-sm text-muted-foreground/60">No activity recorded yet.</p>
+                        </div>
+
+                        <!-- Timeline -->
+                        <div v-else class="relative">
+                            <!-- vertical line -->
+                            <div class="absolute left-3.5 top-4 bottom-4 w-px bg-border/50"></div>
+
+                            <div class="flex flex-col gap-0">
+                                <div
+                                    v-for="entry in activityLog"
+                                    :key="entry.id"
+                                    class="flex items-start gap-3 relative py-2.5 group"
+                                >
+                                    <!-- Icon bubble -->
+                                    <div :class="['h-7 w-7 rounded-full flex items-center justify-center shrink-0 z-10 border', getActivityIconClass(entry.action)]">
+                                        <component :is="getActivityIcon(entry.action)" class="h-3.5 w-3.5" />
+                                    </div>
+
+                                    <!-- Content -->
+                                    <div class="flex-1 min-w-0 pt-0.5">
+                                        <p class="text-xs font-medium text-foreground leading-snug">
+                                            <span class="font-semibold">{{ entry.userName }}</span>
+                                            {{ getActivityLabel(entry) }}
+                                        </p>
+                                        <div v-if="(entry.oldValue || entry.newValue) && !['comment_posted','comment_deleted','comment_pinned','comment_unpinned','reaction_added','reaction_removed'].includes(entry.action)" class="flex items-center gap-1.5 mt-1 flex-wrap">
+                                            <span v-if="entry.oldValue" class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold bg-destructive/10 text-destructive/80 line-through">{{ entry.oldValue }}</span>
+                                            <ChevronRight v-if="entry.oldValue && entry.newValue" class="h-3 w-3 text-muted-foreground/50 shrink-0" />
+                                            <span v-if="entry.newValue" class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">{{ entry.newValue }}</span>
+                                        </div>
+                                        <p class="text-[10px] text-muted-foreground/50 mt-0.5" :title="entry.createdAtFormatted">{{ entry.createdAt }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div><!-- end history tab -->
+                </div><!-- end modal-body -->
 
                 <DialogFooter class="px-5 py-4 bg-muted/20 border-t border-border/50 flex items-center gap-2">
                     <Button variant="outline" @click="openEditModal(selectedTicket!); isDetailModalOpen = false" class="text-xs font-bold gap-1.5">

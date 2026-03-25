@@ -5,13 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import RichTextEditor from '@/components/RichTextEditor.vue';
+import TicketComments from '@/components/TicketComments.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, Link, useForm } from '@inertiajs/vue3';
 import { VisAxis, VisLine, VisXYContainer, VisArea, VisScatter } from '@unovis/vue';
 import DonutChart from '@/components/DonutChart.vue';
 import { CurveType } from '@unovis/ts';
-import { AlertCircle, AlertTriangle, ArrowUpCircle, Ban, CheckCircle2, Circle, Clock, ExternalLink, ImageIcon, Pause, Play, TrendingUp, BarChart2, PieChart, TrendingDown, Flame, RefreshCcw, ChevronRight, ArrowUpRight, UserPlus, MoreHorizontal, Search, X } from 'lucide-vue-next';
+import { AlertCircle, AlertTriangle, ArrowUpCircle, Ban, CheckCircle2, Circle, Clock, ImageIcon, Pause, Play, TrendingUp, BarChart2, PieChart, TrendingDown, Flame, RefreshCcw, ChevronRight, ArrowUpRight, UserPlus, MoreHorizontal, Search, X, MessageSquare, Crown, ShieldCheck, Headset, UserRound } from 'lucide-vue-next';
 import { cn } from '@/lib/utils';
 import Sparkline from '@/components/Sparkline.vue';
 import { ref, computed, watch } from 'vue';
@@ -61,7 +62,9 @@ interface ActivityItem {
     time: string;
     createdAtFormatted: string;
     reporter: string;
+    reporterId?: number;
     priority: string;
+    status?: string;
     category: string;
     handlerIds: number[];
     handlers: { id: number; name: string }[];
@@ -71,6 +74,37 @@ interface ActivityItem {
 interface User {
     id: number;
     name: string;
+}
+
+interface RecentComment {
+    id: number;
+    userName: string;
+    userInitials: string;
+    userRole: string;
+    bodySnippet: string;
+    ticketNumericId: number | null;
+    ticketTktId: string;
+    ticketTitle: string;
+    ticketDescription: string | null;
+    ticketStatus: string;
+    ticketPriority: string;
+    ticketCategory: string;
+    ticketReporter: string;
+    ticketReporterId: number | null;
+    ticketCreatedAtFormatted: string;
+    ticketHandlerIds: number[];
+    ticketHandlers: { id: number; name: string }[];
+    ticketAttachmentUrl: string | null;
+    createdAt: string;
+}
+
+interface SeverityTicket {
+    id: number; numericId: number; tktId: string; title: string;
+    description: string | null; status: string; priority: string; category: string;
+    reporter: string; reporterId: number | null;
+    handlerIds: number[]; handlers: { id: number; name: string }[];
+    attachmentUrl: string | null;
+    createdAtFormatted: string; time: string;
 }
 
 interface ChartTrend {
@@ -86,6 +120,7 @@ const {
     categories,
     topRecurring,
     recentActivity,
+    recentComments,
     users,
 } = defineProps<{
     stats: Stat[];
@@ -95,6 +130,7 @@ const {
     categories: ChartItem[];
     topRecurring: RecurringIncident[];
     recentActivity: ActivityItem[];
+    recentComments: RecentComment[];
     users: User[];
 }>();
 
@@ -174,6 +210,20 @@ const refresh = () => {
     router.reload({ onFinish: () => { isRefreshing.value = false; } });
 };
 
+const isRefreshingActivity = ref(false);
+const refreshActivity = () => {
+    if (isRefreshingActivity.value) return;
+    isRefreshingActivity.value = true;
+    router.reload({ only: ['recentActivity'], onFinish: () => { isRefreshingActivity.value = false; } });
+};
+
+const isRefreshingComments = ref(false);
+const refreshComments = () => {
+    if (isRefreshingComments.value) return;
+    isRefreshingComments.value = true;
+    router.reload({ only: ['recentComments'], onFinish: () => { isRefreshingComments.value = false; } });
+};
+
 const priorityLabel: Record<string, string> = {
     Critical: 'bg-rose-500/15 text-rose-500 border border-rose-500/25',
     High:     'bg-orange-500/15 text-orange-500 border border-orange-500/25',
@@ -236,6 +286,50 @@ const getPriorityIcon = (priority: string) => {
     }
 };
 
+const AVATAR_COLORS = [
+    'bg-violet-500/15 text-violet-500 border-violet-500/20',
+    'bg-sky-500/15 text-sky-500 border-sky-500/20',
+    'bg-emerald-500/15 text-emerald-500 border-emerald-500/20',
+    'bg-orange-500/15 text-orange-500 border-orange-500/20',
+    'bg-rose-500/15 text-rose-500 border-rose-500/20',
+    'bg-amber-500/15 text-amber-500 border-amber-500/20',
+    'bg-teal-500/15 text-teal-500 border-teal-500/20',
+    'bg-indigo-500/15 text-indigo-500 border-indigo-500/20',
+];
+
+const getAvatarColor = (name: string): string => {
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+};
+
+const getRoleBadgeClass = (role: string): string => {
+    switch (role) {
+        case 'admin':      return 'bg-rose-500/15 text-rose-500 border-rose-500/30';
+        case 'supervisor': return 'bg-amber-500/15 text-amber-500 border-amber-500/30';
+        case 'technical':  return 'bg-blue-500/15 text-blue-500 border-blue-500/30';
+        default:           return 'bg-muted text-muted-foreground border-border';
+    }
+};
+
+const getRoleIcon = (role: string) => {
+    switch (role) {
+        case 'admin':      return Crown;
+        case 'supervisor': return ShieldCheck;
+        case 'technical':  return Headset;
+        default:           return UserRound;
+    }
+};
+
+const getRoleLabel = (role: string): string => {
+    switch (role) {
+        case 'admin':      return 'Admin';
+        case 'supervisor': return 'Supervisor';
+        case 'technical':  return 'Technical';
+        default:           return 'User';
+    }
+};
+
 // ── Detail modal ───────────────────────────────────────────────────────────
 const isDetailModalOpen = ref(false);
 const selectedActivity  = ref<ActivityItem | null>(null);
@@ -244,6 +338,27 @@ const openDetailModal = (item: ActivityItem) => {
     selectedActivity.value  = item;
     isDetailModalOpen.value = true;
 };
+
+const openCommentTicketDetail = (comment: RecentComment) => {
+    if (!comment.ticketNumericId) return;
+    openDetailModal({
+        id:                 comment.ticketNumericId,
+        numericId:          comment.ticketNumericId,
+        tktId:              comment.ticketTktId,
+        title:              comment.ticketTitle,
+        description:        comment.ticketDescription,
+        time:               comment.createdAt,
+        createdAtFormatted: comment.ticketCreatedAtFormatted,
+        reporter:           comment.ticketReporter,
+        reporterId:         comment.ticketReporterId ?? undefined,
+        priority:           comment.ticketPriority,
+        status:             comment.ticketStatus,
+        category:           comment.ticketCategory,
+        handlerIds:         comment.ticketHandlerIds,
+        handlers:           comment.ticketHandlers,
+        attachmentUrl:      comment.ticketAttachmentUrl,
+    });
+};
 // ──────────────────────────────────────────────────────────────────────────
 
 // ── Assign modal ───────────────────────────────────────────────────────────
@@ -251,6 +366,48 @@ const isAssignModalOpen    = ref(false);
 const assigningTicket      = ref<ActivityItem | null>(null);
 const assignHandlerSearch  = ref('');
 const assignStatusOverride = ref<string>('In Progress');
+
+// ── Severity drill-down modal ───────────────────────────────────────────────
+const severityModalOpen     = ref(false);
+const severityModalPriority = ref('');
+const severityModalTickets  = ref<SeverityTicket[]>([]);
+const severityModalLoading  = ref(false);
+
+async function openSeverityModal(priority: string) {
+    severityModalPriority.value = priority;
+    severityModalTickets.value  = [];
+    severityModalOpen.value     = true;
+    severityModalLoading.value  = true;
+    try {
+        const res = await fetch(route('tickets.by-priority', { priority }), {
+            headers: { 'Accept': 'application/json' },
+        });
+        if (res.ok) severityModalTickets.value = await res.json();
+    } finally {
+        severityModalLoading.value = false;
+    }
+}
+
+const categoryModalOpen     = ref(false);
+const categoryModalName     = ref('');
+const categoryModalTickets  = ref<SeverityTicket[]>([]);
+const categoryModalLoading  = ref(false);
+
+async function openCategoryModal(category: string) {
+    categoryModalName.value    = category;
+    categoryModalTickets.value = [];
+    categoryModalOpen.value    = true;
+    categoryModalLoading.value = true;
+    try {
+        const res = await fetch(route('tickets.by-category', { category }), {
+            headers: { 'Accept': 'application/json' },
+        });
+        if (res.ok) categoryModalTickets.value = await res.json();
+    } finally {
+        categoryModalLoading.value = false;
+    }
+}
+// ──────────────────────────────────────────────────────────────────────────
 
 const assignForm = useForm({
     handler_ids: [] as number[],
@@ -353,8 +510,20 @@ watch(isAssignModalOpen, (val) => {
                 <!-- Recent Activity -->
                 <Card class="shadow-none border border-border/50 overflow-hidden flex flex-col">
                     <CardHeader class="pb-4">
-                        <CardTitle class="text-lg font-semibold">Recent Open Tickets</CardTitle>
-                        <p class="mt-0.5 text-sm text-muted-foreground">Latest unresolved incidents</p>
+                        <div class="flex items-start justify-between gap-2">
+                            <div>
+                                <CardTitle class="text-lg font-semibold">Recent Open Tickets</CardTitle>
+                                <p class="mt-0.5 text-sm text-muted-foreground">Latest unresolved incidents</p>
+                            </div>
+                            <button
+                                @click="refreshActivity"
+                                :disabled="isRefreshingActivity"
+                                class="flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-all hover:bg-muted hover:text-foreground disabled:opacity-40"
+                                title="Refresh"
+                            >
+                                <RefreshCcw :class="['h-3.5 w-3.5', isRefreshingActivity && 'animate-spin']" />
+                            </button>
+                        </div>
                     </CardHeader>
                     <CardContent class="flex-1 space-y-2 px-6 pb-2">
                         <div
@@ -585,10 +754,10 @@ watch(isAssignModalOpen, (val) => {
                     </CardHeader>
                     <CardContent>
                         <div v-if="severityChartType === 'bar'" class="space-y-3 sm:space-y-5">
-                            <div v-for="sev in severities" :key="sev.name" class="group relative cursor-pointer">
+                            <div v-for="sev in severities" :key="sev.name" class="group relative cursor-pointer" @click="openSeverityModal(sev.name)">
                                 <div class="flex items-center justify-between text-sm mb-2">
                                     <div class="flex items-center gap-2 min-w-0">
-                                        <div :class="cn('w-2 h-2 rounded-full shrink-0', sev.color)"></div>
+                                        <div class="w-2 h-2 rounded-full shrink-0" :style="{ backgroundColor: sev.hex }"></div>
                                         <span class="font-medium transition-colors group-hover:text-foreground truncate">{{ sev.name }}</span>
                                     </div>
                                     <div class="flex items-center gap-2 shrink-0 ml-2">
@@ -597,12 +766,12 @@ watch(isAssignModalOpen, (val) => {
                                     </div>
                                 </div>
                                 <div class="h-2 w-full overflow-hidden rounded-full bg-secondary">
-                                    <div :class="cn('h-full transition-all duration-500 ease-out group-hover:opacity-80', sev.color)" :style="{ width: `${(sev.count / totalSeverityCount) * 100}%` }"></div>
+                                    <div class="h-full transition-all duration-500 ease-out group-hover:opacity-80" :style="{ width: `${(sev.count / totalSeverityCount) * 100}%`, backgroundColor: sev.hex }"></div>
                                 </div>
                                 <div class="absolute -inset-x-2 -inset-y-2.5 z-[-1] rounded-lg bg-muted/50 opacity-0 transition-opacity group-hover:opacity-100"></div>
                             </div>
                         </div>
-                        <DonutChart v-else :data="severities" :total="totalSeverityCount" />
+                        <DonutChart v-else :data="severities" :total="totalSeverityCount" @segment-click="openSeverityModal" />
                     </CardContent>
                 </Card>
 
@@ -660,8 +829,10 @@ watch(isAssignModalOpen, (val) => {
                 </Card>
             </div>
 
-            <!-- Row 3: Incidents by Category (full width) -->
-            <Card class="shadow-none border border-border/50 overflow-hidden min-w-0">
+            <!-- Row 3: Incidents by Category + Recent Comments -->
+            <div class="grid gap-4 sm:gap-6 lg:grid-cols-2">
+                <!-- Incidents by Category -->
+                <Card class="shadow-none border border-border/50 overflow-hidden min-w-0">
                 <CardHeader>
                     <div class="flex items-start justify-between gap-2">
                         <div>
@@ -680,10 +851,10 @@ watch(isAssignModalOpen, (val) => {
                 </CardHeader>
                 <CardContent>
                     <div v-if="categoryChartType === 'bar'" class="space-y-3 sm:space-y-5">
-                        <div v-for="cat in categories" :key="cat.name" class="group relative cursor-pointer">
+                        <div v-for="cat in categories" :key="cat.name" class="group relative cursor-pointer" @click="openCategoryModal(cat.name)">
                             <div class="flex items-center justify-between text-sm mb-2">
                                 <div class="flex items-center gap-2 min-w-0">
-                                    <div :class="cn('w-2 h-2 rounded-full shrink-0', cat.color)"></div>
+                                    <div class="w-2 h-2 rounded-full shrink-0" :style="{ backgroundColor: cat.hex }"></div>
                                     <span class="font-medium transition-colors group-hover:text-foreground truncate">{{ cat.name }}</span>
                                 </div>
                                 <div class="flex items-center gap-2 shrink-0 ml-2">
@@ -692,14 +863,101 @@ watch(isAssignModalOpen, (val) => {
                                 </div>
                             </div>
                             <div class="h-2 w-full overflow-hidden rounded-full bg-secondary">
-                                <div :class="cn('h-full transition-all duration-500 ease-out group-hover:opacity-80', cat.color)" :style="{ width: `${(cat.count / totalCategoriesCount) * 100}%` }"></div>
+                                <div class="h-full transition-all duration-500 ease-out group-hover:opacity-80" :style="{ width: `${(cat.count / totalCategoriesCount) * 100}%`, backgroundColor: cat.hex }"></div>
                             </div>
                             <div class="absolute -inset-x-2 -inset-y-2.5 z-[-1] rounded-lg bg-muted/50 opacity-0 transition-opacity group-hover:opacity-100"></div>
                         </div>
                     </div>
-                    <DonutChart v-else :data="categories" :total="totalCategoriesCount" />
+                    <DonutChart v-else :data="categories" :total="totalCategoriesCount" @segment-click="openCategoryModal" />
                 </CardContent>
             </Card>
+
+                <!-- Recent Comments -->
+                <Card class="shadow-none border border-border/50 overflow-hidden min-w-0 flex flex-col">
+                    <CardHeader class="shrink-0">
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="flex items-center gap-2.5">
+                                <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">
+                                    <MessageSquare class="h-4 w-4" />
+                                </div>
+                                <div>
+                                    <CardTitle class="text-lg font-semibold leading-none">Recent Comments</CardTitle>
+                                    <p class="text-xs text-muted-foreground mt-0.5">Latest across all tickets</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2 shrink-0">
+                                <span v-if="recentComments.length" class="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary tabular-nums">
+                                    {{ recentComments.length }}
+                                </span>
+                                <button
+                                    @click="refreshComments"
+                                    :disabled="isRefreshingComments"
+                                    class="flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-all hover:bg-muted hover:text-foreground disabled:opacity-40"
+                                    title="Refresh"
+                                >
+                                    <RefreshCcw :class="['h-3.5 w-3.5', isRefreshingComments && 'animate-spin']" />
+                                </button>
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent class="flex-1 px-4 pb-4 overflow-y-auto max-h-[380px] modal-body">
+                        <!-- Empty state -->
+                        <div v-if="!recentComments.length" class="flex flex-col items-center justify-center gap-3 py-10 text-center">
+                            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-muted/50">
+                                <MessageSquare class="h-5 w-5 text-muted-foreground/50" />
+                            </div>
+                            <div>
+                                <p class="text-sm font-medium text-foreground">No comments yet</p>
+                                <p class="text-xs text-muted-foreground mt-0.5">Comments on tickets will appear here</p>
+                            </div>
+                        </div>
+
+                        <!-- Comment list -->
+                        <div v-else class="flex flex-col gap-1">
+                            <div
+                                v-for="comment in recentComments"
+                                :key="comment.id"
+                                class="group relative flex gap-3 rounded-xl px-2 py-2.5 transition-all cursor-pointer hover:bg-muted/40 active:scale-[0.99] active:bg-muted/60"
+                                @click="openCommentTicketDetail(comment)"
+                            >
+                                <!-- Avatar -->
+                                <div
+                                    :class="['h-8 w-8 rounded-full text-xs font-bold flex items-center justify-center border select-none shrink-0 mt-0.5 transition-all group-hover:ring-2 group-hover:ring-primary/30 group-hover:ring-offset-1', getAvatarColor(comment.userName)]"
+                                >
+                                    {{ comment.userInitials }}
+                                </div>
+
+                                <!-- Content -->
+                                <div class="flex-1 min-w-0 pr-6">
+                                    <!-- Ticket ID + title (top, emphasized) -->
+                                    <div class="flex items-center gap-1.5 mb-1.5 min-w-0">
+                                        <span class="inline-flex items-center shrink-0 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary border border-primary/20 leading-none">
+                                            {{ comment.ticketTktId }}
+                                        </span>
+                                        <span class="text-xs font-semibold text-foreground truncate leading-none">{{ comment.ticketTitle }}</span>
+                                    </div>
+
+                                    <!-- Name + role badge + time -->
+                                    <div class="flex items-center gap-1.5 flex-wrap mb-1">
+                                        <span class="text-[11px] font-medium text-muted-foreground leading-none">{{ comment.userName }}</span>
+                                        <span :class="['inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold border leading-none', getRoleBadgeClass(comment.userRole)]">
+                                            <component :is="getRoleIcon(comment.userRole)" class="h-2.5 w-2.5" />
+                                            {{ getRoleLabel(comment.userRole) }}
+                                        </span>
+                                        <span class="text-[10px] text-muted-foreground/60 leading-none">· {{ comment.createdAt }}</span>
+                                    </div>
+
+                                    <!-- Body snippet -->
+                                    <p class="text-xs text-foreground/70 leading-relaxed line-clamp-2">{{ comment.bodySnippet }}</p>
+                                </div>
+
+                                <!-- Hover chevron -->
+                                <ChevronRight class="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40 opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-0.5 group-hover:text-primary/60" />
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
         </div>
 
         <!-- ── View Details Modal ──────────────────────────────────────── -->
@@ -712,9 +970,9 @@ watch(isAssignModalOpen, (val) => {
                             <Badge variant="outline" class="bg-primary/10 text-primary border-primary/20 px-2 py-0 text-[10px] font-bold uppercase tracking-wider">
                                 {{ selectedActivity.tktId }}
                             </Badge>
-                            <Badge variant="outline" :class="['inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 border', getStatusColor('Open')]">
-                                <component :is="getStatusIcon('Open')" class="h-3 w-3" />
-                                Open
+                            <Badge variant="outline" :class="['inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 border', getStatusColor(selectedActivity.status ?? 'Open')]">
+                                <component :is="getStatusIcon(selectedActivity.status ?? 'Open')" class="h-3 w-3" />
+                                {{ selectedActivity.status ?? 'Open' }}
                             </Badge>
                             <span :class="['inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase', priorityLabel[selectedActivity.priority] ?? 'bg-muted text-muted-foreground border border-border']">
                                 <component :is="getPriorityIcon(selectedActivity.priority)" class="h-3 w-3" />
@@ -796,16 +1054,12 @@ watch(isAssignModalOpen, (val) => {
                             <span>{{ selectedActivity.createdAtFormatted }}</span>
                         </div>
                     </div>
+
+                    <!-- Comments -->
+                    <TicketComments :ticket-id="selectedActivity.numericId" :reporter-id="selectedActivity.reporterId" />
                 </div>
 
                 <DialogFooter class="px-5 py-4 bg-muted/20 border-t border-border/50 flex items-center gap-2">
-                    <Link
-                        :href="route('tickets')"
-                        class="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-bold shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors"
-                    >
-                        <ExternalLink class="h-3.5 w-3.5" />
-                        Open in Tickets
-                    </Link>
                     <Button variant="outline" @click="isDetailModalOpen = false" class="ml-auto text-xs font-bold">
                         Close
                     </Button>
@@ -988,6 +1242,146 @@ watch(isAssignModalOpen, (val) => {
                         </div>
                     </div>
                 </DialogFooter>
+            </DialogContent>
+        </Dialog>
+        <!-- ──────────────────────────────────────────────────────────────── -->
+        <!-- ── Severity Drill-Down Modal ─────────────────────────────────── -->
+        <Dialog v-model:open="severityModalOpen">
+            <DialogContent class="sm:max-w-[640px] p-0 overflow-hidden border-none shadow-2xl max-h-[85dvh] flex flex-col">
+                <!-- Header -->
+                <div class="bg-primary/5 px-5 pt-5 pb-4 border-b border-primary/10 shrink-0">
+                    <DialogHeader>
+                        <div class="flex items-center gap-2 mb-1">
+                            <component :is="getPriorityIcon(severityModalPriority)" class="h-4 w-4 text-muted-foreground" />
+                            <DialogTitle class="text-base font-bold">{{ severityModalPriority }} Priority Tickets</DialogTitle>
+                        </div>
+                        <p class="text-xs text-muted-foreground">All tickets with {{ severityModalPriority.toLowerCase() }} severity</p>
+                    </DialogHeader>
+                </div>
+
+                <!-- Body -->
+                <div class="flex-1 overflow-y-auto modal-body">
+                    <!-- Loading -->
+                    <div v-if="severityModalLoading" class="flex flex-col gap-2 p-4">
+                        <div v-for="i in 4" :key="i" class="h-14 rounded-lg bg-muted/50 animate-pulse" />
+                    </div>
+
+                    <!-- Empty -->
+                    <div v-else-if="!severityModalTickets.length" class="flex flex-col items-center justify-center gap-3 py-12 text-center">
+                        <AlertCircle class="h-8 w-8 text-muted-foreground/40" />
+                        <p class="text-sm text-muted-foreground">No {{ severityModalPriority.toLowerCase() }} priority tickets found.</p>
+                    </div>
+
+                    <!-- Ticket rows -->
+                    <div v-else class="divide-y divide-border/40">
+                        <div
+                            v-for="t in severityModalTickets"
+                            :key="t.numericId"
+                            class="group flex items-start gap-3 px-5 py-3.5 hover:bg-muted/40 active:scale-[0.995] transition-all cursor-pointer"
+                            @click="openDetailModal({ id: t.id, numericId: t.numericId, tktId: t.tktId, title: t.title, description: t.description, status: t.status, priority: t.priority, category: t.category, reporter: t.reporter, reporterId: t.reporterId ?? undefined, handlerIds: t.handlerIds, handlers: t.handlers, attachmentUrl: t.attachmentUrl, createdAtFormatted: t.createdAtFormatted, time: t.time })"
+                        >
+                            <!-- TKT ID badge -->
+                            <span class="inline-flex items-center shrink-0 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary border border-primary/20 leading-none mt-0.5">
+                                {{ t.tktId }}
+                            </span>
+                            <!-- Main info -->
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-foreground leading-snug truncate group-hover:text-primary transition-colors">{{ t.title }}</p>
+                                <div class="flex items-center gap-2 mt-1 flex-wrap">
+                                    <Badge variant="outline" :class="['inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 border', getStatusColor(t.status)]">
+                                        <component :is="getStatusIcon(t.status)" class="h-2.5 w-2.5" />
+                                        {{ t.status }}
+                                    </Badge>
+                                    <span class="text-[11px] text-muted-foreground">{{ t.category }}</span>
+                                    <span class="text-[11px] text-muted-foreground">·</span>
+                                    <span class="text-[11px] text-muted-foreground truncate">{{ t.reporter }}</span>
+                                </div>
+                            </div>
+                            <!-- Date + chevron -->
+                            <div class="flex items-center gap-1 shrink-0 mt-0.5">
+                                <span class="text-[11px] text-muted-foreground">{{ t.time }}</span>
+                                <ChevronRight class="h-3.5 w-3.5 text-muted-foreground/30 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:text-primary/60 transition-all" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="px-5 py-3 bg-muted/20 border-t border-border/50 shrink-0">
+                    <Button variant="outline" @click="severityModalOpen = false" class="ml-auto flex text-xs font-bold">
+                        Close
+                    </Button>
+                </div>
+            </DialogContent>
+        </Dialog>
+        <!-- ──────────────────────────────────────────────────────────────── -->
+        <!-- ── Category Drill-Down Modal ────────────────────────────────── -->
+        <Dialog v-model:open="categoryModalOpen">
+            <DialogContent class="sm:max-w-[640px] p-0 overflow-hidden border-none shadow-2xl max-h-[85dvh] flex flex-col">
+                <!-- Header -->
+                <div class="bg-primary/5 px-5 pt-5 pb-4 border-b border-primary/10 shrink-0">
+                    <DialogHeader>
+                        <div class="flex items-center gap-2 mb-1">
+                            <BarChart2 class="h-4 w-4 text-muted-foreground" />
+                            <DialogTitle class="text-base font-bold">{{ categoryModalName }} Tickets</DialogTitle>
+                        </div>
+                        <p class="text-xs text-muted-foreground">All tickets in the {{ categoryModalName }} category</p>
+                    </DialogHeader>
+                </div>
+
+                <!-- Body -->
+                <div class="flex-1 overflow-y-auto modal-body">
+                    <!-- Loading -->
+                    <div v-if="categoryModalLoading" class="flex flex-col gap-2 p-4">
+                        <div v-for="i in 4" :key="i" class="h-14 rounded-lg bg-muted/50 animate-pulse" />
+                    </div>
+
+                    <!-- Empty -->
+                    <div v-else-if="!categoryModalTickets.length" class="flex flex-col items-center justify-center gap-3 py-12 text-center">
+                        <AlertCircle class="h-8 w-8 text-muted-foreground/40" />
+                        <p class="text-sm text-muted-foreground">No tickets found in the {{ categoryModalName }} category.</p>
+                    </div>
+
+                    <!-- Ticket rows -->
+                    <div v-else class="divide-y divide-border/40">
+                        <div
+                            v-for="t in categoryModalTickets"
+                            :key="t.numericId"
+                            class="group flex items-start gap-3 px-5 py-3.5 hover:bg-muted/40 active:scale-[0.995] transition-all cursor-pointer"
+                            @click="openDetailModal({ id: t.id, numericId: t.numericId, tktId: t.tktId, title: t.title, description: t.description, status: t.status, priority: t.priority, category: t.category, reporter: t.reporter, reporterId: t.reporterId ?? undefined, handlerIds: t.handlerIds, handlers: t.handlers, attachmentUrl: t.attachmentUrl, createdAtFormatted: t.createdAtFormatted, time: t.time })"
+                        >
+                            <!-- TKT ID badge -->
+                            <span class="inline-flex items-center shrink-0 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary border border-primary/20 leading-none mt-0.5">
+                                {{ t.tktId }}
+                            </span>
+                            <!-- Main info -->
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-foreground leading-snug truncate group-hover:text-primary transition-colors">{{ t.title }}</p>
+                                <div class="flex items-center gap-2 mt-1 flex-wrap">
+                                    <Badge variant="outline" :class="['inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 border', getStatusColor(t.status)]">
+                                        <component :is="getStatusIcon(t.status)" class="h-2.5 w-2.5" />
+                                        {{ t.status }}
+                                    </Badge>
+                                    <span class="text-[11px] text-muted-foreground">{{ t.priority }}</span>
+                                    <span class="text-[11px] text-muted-foreground">·</span>
+                                    <span class="text-[11px] text-muted-foreground truncate">{{ t.reporter }}</span>
+                                </div>
+                            </div>
+                            <!-- Time + chevron -->
+                            <div class="flex items-center gap-1 shrink-0 mt-0.5">
+                                <span class="text-[11px] text-muted-foreground">{{ t.time }}</span>
+                                <ChevronRight class="h-3.5 w-3.5 text-muted-foreground/30 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:text-primary/60 transition-all" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="px-5 py-3 bg-muted/20 border-t border-border/50 shrink-0">
+                    <Button variant="outline" @click="categoryModalOpen = false" class="ml-auto flex text-xs font-bold">
+                        Close
+                    </Button>
+                </div>
             </DialogContent>
         </Dialog>
         <!-- ──────────────────────────────────────────────────────────────── -->

@@ -2,11 +2,13 @@
 
 namespace App\Models;
 
+use App\Observers\TicketObserver;
 use Database\Factories\TicketFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Ticket extends Model
 {
@@ -42,6 +44,8 @@ class Ticket extends Model
                 $ticket->resolved_at = $ticket->status === 'Resolved' ? now() : null;
             }
         });
+
+        static::observe(TicketObserver::class);
     }
 
     /**
@@ -58,5 +62,29 @@ class Ticket extends Model
     public function handlers(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'ticket_handlers');
+    }
+
+    /**
+     * Get the comments for this ticket.
+     */
+    public function comments(): HasMany
+    {
+        return $this->hasMany(TicketComment::class);
+    }
+
+    /**
+     * Get the users subscribed to comment notifications for this ticket.
+     */
+    public function subscribers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'ticket_subscriptions');
+    }
+
+    /**
+     * Get the activity log entries for this ticket.
+     */
+    public function activities(): HasMany
+    {
+        return $this->hasMany(TicketActivity::class);
     }
 }

@@ -3,14 +3,15 @@
 namespace App\Notifications;
 
 use App\Models\Ticket;
+use App\Models\TicketComment;
 use Illuminate\Notifications\Notification;
 
-class TicketStatusChanged extends Notification
+class TicketCommentPosted extends Notification
 {
     public function __construct(
         public readonly Ticket $ticket,
-        public readonly string $oldStatus,
-        public readonly string $newStatus,
+        public readonly TicketComment $comment,
+        public readonly string $commenterName,
     ) {}
 
     /**
@@ -26,13 +27,14 @@ class TicketStatusChanged extends Notification
      */
     public function toArray(object $notifiable): array
     {
+        $tktId = 'TKT-'.(1000 + $this->ticket->id);
+
         return [
-            'type' => 'ticket_status_changed',
+            'type' => 'ticket_comment_posted',
             'ticket_id' => $this->ticket->id,
             'ticket_title' => $this->ticket->title,
-            'old_status' => $this->oldStatus,
-            'new_status' => $this->newStatus,
-            'message' => 'Ticket TKT-'.(1000 + $this->ticket->id)." status changed from {$this->oldStatus} to {$this->newStatus}.",
+            'comment_id' => $this->comment->id,
+            'message' => "{$this->commenterName} commented on {$tktId}: {$this->ticket->title}",
         ];
     }
 }

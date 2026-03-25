@@ -2,8 +2,9 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
+use App\Models\Ticket;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use App\Models\User;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
@@ -27,9 +28,11 @@ class DatabaseSeeder extends Seeder
 
         // Create some tickets
         $users = User::all();
-        \App\Models\Ticket::factory(20)->create([
+        Ticket::factory(20)->create([
             'user_id' => fn () => $users->random()->id,
             'assigned_to' => fn () => fake()->boolean(60) ? $users->random()->id : null,
         ]);
+
+        $this->call(TicketActivitySeeder::class);
     }
 }
