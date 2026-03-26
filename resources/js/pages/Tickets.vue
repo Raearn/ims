@@ -18,6 +18,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -39,11 +40,6 @@ import {
     Trash2,
     ExternalLink,
     UserPlus,
-    Network,
-    HardDrive,
-    Code,
-    Key,
-    Shield,
     Info,
     HelpCircle,
     Pencil,
@@ -65,8 +61,9 @@ import {
     Pin,
     PinOff,
 } from 'lucide-vue-next';
-import { ref, watch, computed, onMounted, onUnmounted, markRaw } from 'vue';
+import { ref, watch, computed, onMounted, onUnmounted } from 'vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
+import { ensureLucideIconsLoaded, resolveLucideIcon } from '@/composables/useLucideIconRegistry';
 import { Ticket, TicketCheck, Loader, Pause, Play, X, Ban, ChevronsUpDown, ChevronUp, ChevronDown, ChevronLeft } from 'lucide-vue-next';
 import { compressImage } from '@/lib/utils';
 
@@ -138,6 +135,7 @@ const checkQueryForTicket = () => {
 onMounted(() => {
     checkCsrfExpired();
     checkQueryForTicket();
+    void ensureLucideIconsLoaded();
 });
 
 watch(() => page.url, () => {
@@ -816,35 +814,22 @@ watch(isCreateModalOpen, (val) => {
 const search = ref('');
 const currentStatus = ref('All');
 const currentPriority = ref('All');
+const currentCategory = ref('All');
 const selectedIds = ref<number[]>([]);
-
-// ── Icon map for dynamic category/priority icons from DB ───────────────────
-const iconMap: Record<string, ReturnType<typeof markRaw>> = {
-    Network: markRaw(Network),
-    HardDrive: markRaw(HardDrive),
-    Code: markRaw(Code),
-    Key: markRaw(Key),
-    Shield: markRaw(Shield),
-    HelpCircle: markRaw(HelpCircle),
-    AlertCircle: markRaw(AlertCircle),
-    AlertTriangle: markRaw(AlertTriangle),
-    ArrowUpCircle: markRaw(ArrowUpCircle),
-    Circle: markRaw(Circle),
-};
 
 const statusOptions = computed(() => ['All', ...props.statuses.map((s) => s.name)]);
 
 const categoryOptions = computed(() =>
     props.categories.map((c) => ({
         ...c,
-        iconComponent: iconMap[c.icon] ?? HelpCircle,
+        iconComponent: resolveLucideIcon(c.icon, HelpCircle),
     })),
 );
 
 const priorityOptions = computed(() =>
     props.priorities.map((p) => ({
         ...p,
-        iconComponent: iconMap[p.icon] ?? Circle,
+        iconComponent: resolveLucideIcon(p.icon, Circle),
     })),
 );
 
@@ -907,6 +892,10 @@ const searchDateFiltered = computed(() => {
         );
     }
 
+    if (currentCategory.value !== 'All') {
+        base = base.filter(t => t.category === currentCategory.value);
+    }
+
     return base;
 });
 
@@ -954,7 +943,7 @@ const PAGE_SIZE_OPTIONS = [5, 10, 25, 50] as const;
 const pageSize = ref(10);
 const currentPage = ref(1);
 
-watch([search, currentStatus, currentPriority, dateFrom, dateTo, sortKey, sortDir, pageSize], () => {
+watch([search, currentStatus, currentPriority, currentCategory, dateFrom, dateTo, sortKey, sortDir, pageSize], () => {
     currentPage.value = 1;
 });
 
@@ -1570,6 +1559,33 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                     </button>
                 </div>
 
+                <!-- Category filter -->
+                <div class="w-[min(11rem,42vw)] shrink-0">
+                    <Select
+                        :model-value="currentCategory"
+                        @update:model-value="(v) => (currentCategory = typeof v === 'string' ? v : 'All')"
+                    >
+                        <SelectTrigger class="h-9 rounded-xl border-border/50 bg-muted/60 shadow-none focus:ring-1 focus:ring-ring">
+                            <SelectValue placeholder="Category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="All">
+                                All categories
+                            </SelectItem>
+                            <SelectItem
+                                v-for="c in categoryOptions"
+                                :key="c.name"
+                                :value="c.name"
+                            >
+                                <span class="flex items-center gap-2">
+                                    <component :is="c.iconComponent" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                    <span>{{ c.name }}</span>
+                                </span>
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
                 <!-- Spacer -->
                 <div class="flex-1" />
 
@@ -1653,8 +1669,8 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                     leave-to-class="opacity-0 translate-x-2"
                 >
                     <button
-                        v-if="currentPriority !== 'All' || currentStatus !== 'All' || search || dateFrom || dateTo"
-                        @click="currentPriority = 'All'; currentStatus = 'All'; search = ''; dateFrom = ''; dateTo = ''"
+                        v-if="currentPriority !== 'All' || currentStatus !== 'All' || currentCategory !== 'All' || search || dateFrom || dateTo"
+                        @click="currentPriority = 'All'; currentStatus = 'All'; currentCategory = 'All'; search = ''; dateFrom = ''; dateTo = ''"
                         class="inline-flex items-center gap-1 shrink-0 rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-[11px] font-semibold text-muted-foreground shadow-sm hover:text-foreground hover:border-border transition-colors"
                     >
                         <X class="h-3 w-3" />
@@ -1684,8 +1700,8 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                             </p>
                         </div>
                         <button
-                            v-if="search || currentStatus !== 'All' || currentPriority !== 'All' || dateFrom || dateTo"
-                            @click="search = ''; currentStatus = 'All'; currentPriority = 'All'; dateFrom = ''; dateTo = ''"
+                            v-if="search || currentStatus !== 'All' || currentPriority !== 'All' || currentCategory !== 'All' || dateFrom || dateTo"
+                            @click="search = ''; currentStatus = 'All'; currentPriority = 'All'; currentCategory = 'All'; dateFrom = ''; dateTo = ''"
                             class="inline-flex items-center gap-1.5 rounded-lg border border-border/60 bg-background px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted transition-colors shadow-sm"
                         >
                             <X class="h-3 w-3" />

@@ -12,27 +12,26 @@ import { type SharedData } from '@/types';
 import { Head, useForm, usePage } from '@inertiajs/vue3';
 import {
     AlertCircle,
-    AlertTriangle,
     ArrowDown,
     ArrowUp,
-    ArrowUpCircle,
     Check,
     CheckCircle2,
-    Circle,
-    Code,
     GripVertical,
-    HardDrive,
     HelpCircle,
-    Key,
     Loader2,
-    Network,
     Plus,
     Search,
     Settings,
-    Shield,
     Trash2,
 } from 'lucide-vue-next';
-import { type Component, computed, markRaw, nextTick, onUnmounted, reactive, ref } from 'vue';
+import {
+    ensureLucideIconsLoaded,
+    lucideAllIconMap,
+    lucideIconsLoading,
+    lucideStaticIconMap,
+    resolveLucideIcon,
+} from '@/composables/useLucideIconRegistry';
+import { computed, nextTick, onUnmounted, reactive, ref } from 'vue';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 interface SettingMeta {
@@ -74,21 +73,7 @@ interface Props {
     statuses: StatusRow[];
 }
 
-// ── Static icon map for trigger buttons (loaded immediately) ──────────────
-const iconMap: Record<string, ReturnType<typeof markRaw>> = {
-    Network: markRaw(Network),
-    HardDrive: markRaw(HardDrive),
-    Code: markRaw(Code),
-    Key: markRaw(Key),
-    Shield: markRaw(Shield),
-    HelpCircle: markRaw(HelpCircle),
-    AlertCircle: markRaw(AlertCircle),
-    AlertTriangle: markRaw(AlertTriangle),
-    ArrowUpCircle: markRaw(ArrowUpCircle),
-    Circle: markRaw(Circle),
-};
-
-const iconOptions = Object.keys(iconMap);
+const iconOptions = Object.keys(lucideStaticIconMap);
 
 const props = defineProps<Props>();
 const page = usePage<SharedData>();
@@ -158,35 +143,13 @@ const activePicker = ref<PickerState | null>(null);
 const iconSearch = ref('');
 const searchInputRef = ref<InstanceType<typeof Input> | null>(null);
 
-// Full Lucide icon map — loaded on first picker open
-const allIconsLoaded = ref(false);
-const allIconsLoading = ref(false);
-const allIconMap = ref<Record<string, Component | ((...args: unknown[]) => unknown)>>({ ...iconMap });
-
-async function ensureIconsLoaded(): Promise<void> {
-    if (allIconsLoaded.value || allIconsLoading.value) { return; }
-    allIconsLoading.value = true;
-    try {
-        const mod = await import('lucide-vue-next');
-        allIconMap.value = Object.fromEntries(
-            Object.entries(mod)
-                .filter(([k, v]) => /^[A-Z]/.test(k) && ! k.endsWith('Icon') && v != null)
-                .map(([k, v]) => [k, markRaw(v as Component)]),
-        );
-        allIconsLoaded.value = true;
-    } finally {
-        allIconsLoading.value = false;
-    }
-}
-
-// Resolve the best component for a given icon name (falls back gracefully)
-function resolveIcon(name: string): Component {
-    return (allIconMap.value[name] ?? iconMap[name] ?? HelpCircle) as Component;
+function resolveIcon(name: string) {
+    return resolveLucideIcon(name, HelpCircle);
 }
 
 const filteredIconNames = computed((): string[] => {
     const q = iconSearch.value.toLowerCase().trim();
-    const names = Object.keys(allIconMap.value).sort();
+    const names = Object.keys(lucideAllIconMap.value).sort();
     if (! q) { return names.slice(0, 25); }
     return names.filter((n) => n.toLowerCase().includes(q)).slice(0, 100);
 });
@@ -210,7 +173,7 @@ async function openPicker(e: MouseEvent, type: 'cat' | 'pri', idx: number): Prom
     iconSearch.value = '';
     activePicker.value = { type, idx, x, y };
 
-    await ensureIconsLoaded();
+    await ensureLucideIconsLoaded();
     await nextTick();
     (searchInputRef.value as HTMLInputElement | null)?.focus?.();
 }
@@ -728,7 +691,7 @@ const priorityChoices = computed(() => priorities.map((p) => p.name).filter(Bool
                                 :title="iconName"
                                 @click="selectIcon(iconName)"
                             >
-                                <component :is="allIconMap[iconName]" class="h-4 w-4 shrink-0" />
+                                <component :is="lucideAllIconMap[iconName]" class="h-4 w-4 shrink-0" />
                                 <span class="w-full truncate text-center text-[8px] leading-tight">{{ iconName }}</span>
                             </button>
 
@@ -741,9 +704,10 @@ const priorityChoices = computed(() => priorities.map((p) => p.name).filter(Bool
                     <!-- Footer hint -->
                     <div class="flex items-center justify-between border-t border-border px-3 py-1.5">
                         <span class="text-[10px] text-muted-foreground/60">
-                            <template v-if="allIconsLoading">Loading all icons…</template>
-                            <template v-else-if="! iconSearch">Showing first 25 · type to search all {{ Object.keys(allIconMap).length }} icons</template>
-                        </span>                        <Loader2 v-if="allIconsLoading" class="h-3 w-3 animate-spin text-muted-foreground/50" />
+                            <template v-if="lucideIconsLoading">Loading all icons…</template>
+                            <template v-else-if="! iconSearch">Showing first 25 · type to search all {{ Object.keys(lucideAllIconMap).length }} icons</template>
+                        </span>
+                        <Loader2 v-if="lucideIconsLoading" class="h-3 w-3 animate-spin text-muted-foreground/50" />
                     </div>
                 </div>
             </div>
