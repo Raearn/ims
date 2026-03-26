@@ -136,7 +136,7 @@ const {
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Dashboard', href: '/dashboard' },
+    { title: 'Dashboard', href: route('dashboard') },
 ];
 
 const totalCategoriesCount = computed(() => categories.reduce((sum, c) => sum + c.count, 0));

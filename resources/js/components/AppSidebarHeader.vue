@@ -4,6 +4,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import ThemeToggle from '@/components/ThemeToggle.vue';
 import NotificationBell from '@/components/NotificationBell.vue';
 import type { BreadcrumbItemType } from '@/types';
+import { Link } from '@inertiajs/vue3';
 
 defineProps<{
     breadcrumbs?: BreadcrumbItemType[];
@@ -25,8 +26,10 @@ defineProps<{
                                     <BreadcrumbPage>{{ item.title }}</BreadcrumbPage>
                                 </template>
                                 <template v-else>
-                                    <BreadcrumbLink :href="item.href">
-                                        {{ item.title }}
+                                    <BreadcrumbLink as-child>
+                                        <Link :href="item.href">
+                                            {{ item.title }}
+                                        </Link>
                                     </BreadcrumbLink>
                                 </template>
                             </BreadcrumbItem>

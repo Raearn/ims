@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/sidebar';
 import { type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { AlertTriangle, Folder, LayoutGrid, ScrollText, Users } from 'lucide-vue-next';
+import { AlertTriangle, Folder, LayoutGrid, ScrollText, Users, Activity, Settings } from 'lucide-vue-next';
 import { computed } from 'vue';
 import AppLogo from './AppLogo.vue';
 
@@ -136,6 +136,26 @@ const dashboardRoute = computed(() =>
                                             <ScrollText class="h-3.5 w-3.5" />
                                         </span>
                                         <span class="font-medium">Audit Log</span>
+                                    </Link>
+                                </SidebarMenuButton>
+                            </SidebarMenuItem>
+                            <SidebarMenuItem>
+                                <SidebarMenuButton as-child :is-active="route().current('diagnostics')">
+                                    <Link :href="route('diagnostics')">
+                                        <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-sidebar-accent shadow-sm ring-1 ring-sidebar-border/50 group-data-[collapsible=icon]:h-7 group-data-[collapsible=icon]:w-7">
+                                            <Activity class="h-3.5 w-3.5" />
+                                        </span>
+                                        <span class="font-medium">Diagnostics</span>
+                                    </Link>
+                                </SidebarMenuButton>
+                            </SidebarMenuItem>
+                            <SidebarMenuItem>
+                                <SidebarMenuButton as-child :is-active="route().current('admin.settings')">
+                                    <Link :href="route('admin.settings')">
+                                        <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-sidebar-accent shadow-sm ring-1 ring-sidebar-border/50 group-data-[collapsible=icon]:h-7 group-data-[collapsible=icon]:w-7">
+                                            <Settings class="h-3.5 w-3.5" />
+                                        </span>
+                                        <span class="font-medium">Settings</span>
                                     </Link>
                                 </SidebarMenuButton>
                             </SidebarMenuItem>

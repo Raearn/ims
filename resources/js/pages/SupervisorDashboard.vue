@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Supervisor Dashboard',
-        href: '/supervisor/dashboard',
+        href: route('supervisor.dashboard'),
     },
 ];
 </script>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, router, useForm } from '@inertiajs/vue3';
+import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/layouts/AppLayout.vue';
 import TicketComments from '@/components/TicketComments.vue';
 import { type BreadcrumbItem } from '@/types';
@@ -65,7 +65,7 @@ import {
     Pin,
     PinOff,
 } from 'lucide-vue-next';
-import { ref, watch, computed, onMounted, onUnmounted } from 'vue';
+import { ref, watch, computed, onMounted, onUnmounted, markRaw } from 'vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import { Ticket, TicketCheck, Loader, Pause, Play, X, Ban, ChevronsUpDown, ChevronUp, ChevronDown, ChevronLeft } from 'lucide-vue-next';
 import { compressImage } from '@/lib/utils';
@@ -101,7 +101,7 @@ async function fetchHistory(ticketId: number): Promise<void> {
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Tickets',
-        href: '/tickets',
+        href: route('tickets'),
     },
 ];
 
@@ -116,7 +116,33 @@ const checkCsrfExpired = () => {
 };
 
 // Fires on full page mount (hard navigation / first load)
-onMounted(checkCsrfExpired);
+const page = usePage();
+
+const checkQueryForTicket = () => {
+    const params = new URLSearchParams(window.location.search);
+    const ticketId = params.get('ticket_id');
+    
+    if (ticketId) {
+        const ticket = props.tickets.find((t) => t.numericId === parseInt(ticketId));
+        if (ticket) {
+            openDetailModal(ticket);
+        }
+        
+        // Clean up the URL
+        params.delete('ticket_id');
+        const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+        window.history.replaceState({}, '', newUrl);
+    }
+};
+
+onMounted(() => {
+    checkCsrfExpired();
+    checkQueryForTicket();
+});
+
+watch(() => page.url, () => {
+    checkQueryForTicket();
+});
 
 // Fires after a preserveState reload (component stays mounted, onMounted won't re-run)
 const removeFinishListener = router.on('finish', checkCsrfExpired);
@@ -142,11 +168,15 @@ const props = defineProps<{
         resolvedInDuration: string | null;
         resolvedAtFormatted: string | null;
         attachmentUrl: string | null;
+        commentsCount: number;
     }[];
     users: {
         id: number;
         name: string;
     }[];
+    categories: { id: number; name: string; icon: string }[];
+    priorities: { id: number; name: string; icon: string; color: string }[];
+    statuses: { id: number; name: string }[];
 }>();
 
 const ticketStats = computed(() => [
@@ -495,7 +525,7 @@ const submitDelete = () => {
 // ──────────────────────────────────────────────────────────────────────────
 
 // ── Change Status modal ────────────────────────────────────────────────────
-const ALL_STATUSES = ['Open', 'In Progress', 'On Hold', 'Resolved', 'Closed'] as const;
+const ALL_STATUSES = computed(() => props.statuses.map((s) => s.name));
 
 const isChangeStatusModalOpen = ref(false);
 const changeStatusTicket = ref<typeof props.tickets[0] | null>(null);
@@ -515,7 +545,7 @@ const filteredChangeStatusUsers = computed(() => {
 
 // Statuses available to pick (all except the ticket's current status)
 const changeStatusOptions = computed(() =>
-    ALL_STATUSES.filter(s => s !== changeStatusTicket.value?.status)
+    ALL_STATUSES.value.filter(s => s !== changeStatusTicket.value?.status)
 );
 
 watch(changeStatusValue, (val) => {
@@ -528,11 +558,16 @@ watch(changeStatusValue, (val) => {
     }
 });
 
-const openChangeStatusModal = (ticket: typeof props.tickets[0]) => {
+const openChangeStatusModal = (ticket: typeof props.tickets[0], defaultStatus?: string) => {
     changeStatusTicket.value = ticket;
     changeStatusHandlerSearch.value = '';
-    // Default to the first non-'Open' option so the watcher never clears pre-existing handlers
-    changeStatusValue.value = changeStatusOptions.value.find(s => s !== 'Open') ?? changeStatusOptions.value[0] ?? '';
+    
+    if (defaultStatus && changeStatusOptions.value.includes(defaultStatus)) {
+        changeStatusValue.value = defaultStatus;
+    } else {
+        // Default to the first non-'Open' option so the watcher never clears pre-existing handlers
+        changeStatusValue.value = changeStatusOptions.value.find(s => s !== 'Open') ?? changeStatusOptions.value[0] ?? '';
+    }
     // Set handlers AFTER status so any watcher side-effects have already resolved
     changeStatusForm.handler_ids = [...ticket.handlerIds];
     changeStatusForm.solution = '';
@@ -782,23 +817,36 @@ const search = ref('');
 const currentStatus = ref('All');
 const currentPriority = ref('All');
 const selectedIds = ref<number[]>([]);
-const statuses = ['All', 'Open', 'In Progress', 'On Hold', 'Resolved', 'Closed'];
 
-const categories = [
-    { name: 'Network', icon: Network },
-    { name: 'Hardware', icon: HardDrive },
-    { name: 'Software', icon: Code },
-    { name: 'Access', icon: Key },
-    { name: 'Security', icon: Shield },
-    { name: 'Others', icon: HelpCircle },
-];
+// ── Icon map for dynamic category/priority icons from DB ───────────────────
+const iconMap: Record<string, ReturnType<typeof markRaw>> = {
+    Network: markRaw(Network),
+    HardDrive: markRaw(HardDrive),
+    Code: markRaw(Code),
+    Key: markRaw(Key),
+    Shield: markRaw(Shield),
+    HelpCircle: markRaw(HelpCircle),
+    AlertCircle: markRaw(AlertCircle),
+    AlertTriangle: markRaw(AlertTriangle),
+    ArrowUpCircle: markRaw(ArrowUpCircle),
+    Circle: markRaw(Circle),
+};
 
-const priorities = [
-    { name: 'Low',      icon: Circle,       color: 'text-muted-foreground', activeBg: 'bg-slate-100 dark:bg-slate-800',    activeText: 'text-slate-600 dark:text-slate-300' },
-    { name: 'Medium',   icon: ArrowUpCircle, color: 'text-blue-500',        activeBg: 'bg-blue-500/10',                    activeText: 'text-blue-600 dark:text-blue-400' },
-    { name: 'High',     icon: AlertTriangle, color: 'text-orange-500',      activeBg: 'bg-orange-500/10',                  activeText: 'text-orange-600 dark:text-orange-400' },
-    { name: 'Critical', icon: AlertCircle,   color: 'text-destructive',     activeBg: 'bg-destructive/10',                 activeText: 'text-destructive' },
-];
+const statusOptions = computed(() => ['All', ...props.statuses.map((s) => s.name)]);
+
+const categoryOptions = computed(() =>
+    props.categories.map((c) => ({
+        ...c,
+        iconComponent: iconMap[c.icon] ?? HelpCircle,
+    })),
+);
+
+const priorityOptions = computed(() =>
+    props.priorities.map((p) => ({
+        ...p,
+        iconComponent: iconMap[p.icon] ?? Circle,
+    })),
+);
 
 const isAllSelected = computed(() =>
     sortedTickets.value.length > 0 &&
@@ -831,8 +879,12 @@ type SortKey = 'id' | 'title' | 'status' | 'priority' | 'createdAt' | 'reporter'
 const sortKey = ref<SortKey | null>(null);
 const sortDir = ref<'asc' | 'desc'>('asc');
 
-const priorityOrder: Record<string, number> = { Critical: 4, High: 3, Medium: 2, Low: 1 };
-const statusOrder: Record<string, number> = { Open: 1, 'In Progress': 2, 'On Hold': 3, Resolved: 4, Closed: 5 };
+const priorityOrder = computed(() =>
+    Object.fromEntries(props.priorities.map((p, i) => [p.name, props.priorities.length - i])),
+);
+const statusOrder = computed(() =>
+    Object.fromEntries(props.statuses.map((s, i) => [s.name, i + 1])),
+);
 
 const dateFrom = ref('');
 const dateTo   = ref('');
@@ -888,8 +940,8 @@ const sortedTickets = computed(() => {
     return [...base].sort((a, b) => {
         let aVal: any = a[sortKey.value!];
         let bVal: any = b[sortKey.value!];
-        if (sortKey.value === 'priority') { aVal = priorityOrder[aVal] ?? 0; bVal = priorityOrder[bVal] ?? 0; }
-        if (sortKey.value === 'status') { aVal = statusOrder[aVal] ?? 0; bVal = statusOrder[bVal] ?? 0; }
+        if (sortKey.value === 'priority') { aVal = priorityOrder.value[aVal] ?? 0; bVal = priorityOrder.value[bVal] ?? 0; }
+        if (sortKey.value === 'status') { aVal = statusOrder.value[aVal] ?? 0; bVal = statusOrder.value[bVal] ?? 0; }
         if (sortKey.value === 'handlers') { aVal = (a.handlers as any[]).length; bVal = (b.handlers as any[]).length; }
         if (aVal < bVal) return sortDir.value === 'asc' ? -1 : 1;
         if (aVal > bVal) return sortDir.value === 'asc' ? 1 : -1;
@@ -1031,22 +1083,18 @@ const getStatusIcon = (status: string) => {
 };
 
 const getPriorityIcon = (priority: string) => {
-    switch (priority) {
-        case 'Critical': return AlertCircle;
-        case 'High': return AlertTriangle;
-        case 'Medium': return ArrowUpCircle;
-        default: return Circle;
-    }
+    const found = priorityOptions.value.find((p) => p.name === priority);
+    return found?.iconComponent ?? Circle;
 };
 
-const getPriorityBadge = (priority: string) => {
-    switch (priority) {
-        case 'Critical': return 'bg-rose-500/15 text-rose-500 border border-rose-500/25';
-        case 'High':     return 'bg-orange-500/15 text-orange-500 border border-orange-500/25';
-        case 'Medium':   return 'bg-blue-500/15 text-blue-500 border border-blue-500/25';
-        case 'Low':      return 'bg-slate-500/10 text-slate-500 border border-slate-500/20';
-        default:         return 'bg-muted text-muted-foreground border border-border';
-    }
+const getPriorityStyle = (priority: string): Record<string, string> => {
+    const found = props.priorities.find((p) => p.name === priority);
+    if (! found) { return {}; }
+    return {
+        backgroundColor: found.color + '26',
+        color: found.color,
+        borderColor: found.color + '40',
+    };
 };
 </script>
 
@@ -1264,7 +1312,7 @@ const getPriorityBadge = (priority: string) => {
                                             <Label class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Category</Label>
                                             <div class="grid grid-cols-3 gap-2">
                                                 <button
-                                                    v-for="cat in categories"
+                                                    v-for="cat in categoryOptions"
                                                     :key="cat.name"
                                                     type="button"
                                                     @click="form.category = cat.name"
@@ -1275,7 +1323,7 @@ const getPriorityBadge = (priority: string) => {
                                                             : 'border-muted hover:border-primary/30 hover:bg-muted/50 text-muted-foreground'
                                                     ]"
                                                 >
-                                                    <component :is="cat.icon" class="h-4 w-4" />
+                                                    <component :is="cat.iconComponent" class="h-4 w-4" />
                                                     <span class="text-[10px] font-bold uppercase truncate w-full text-center">{{ cat.name }}</span>
                                                     <div v-if="form.category === cat.name" class="absolute -top-1.5 -right-1.5">
                                                         <CheckCircle2 class="h-4 w-4 fill-primary text-white" />
@@ -1288,7 +1336,7 @@ const getPriorityBadge = (priority: string) => {
                                             <Label class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Priority Level</Label>
                                             <div class="grid grid-cols-2 gap-2">
                                                 <button
-                                                    v-for="prio in priorities"
+                                                    v-for="prio in priorityOptions"
                                                     :key="prio.name"
                                                     type="button"
                                                     @click="form.priority = prio.name"
@@ -1300,7 +1348,7 @@ const getPriorityBadge = (priority: string) => {
                                                     ]"
                                                 >
                                                     <div :class="['p-1.5 rounded-lg', form.priority === prio.name ? 'bg-background shadow-sm' : 'bg-muted/60']">
-                                                        <component :is="prio.icon" class="h-3.5 w-3.5" :class="prio.color" />
+                                                        <component :is="prio.iconComponent" class="h-3.5 w-3.5" :style="{ color: prio.color }" />
                                                     </div>
                                                     <div class="flex flex-col items-start min-w-0">
                                                         <span :class="['text-xs font-bold', form.priority === prio.name ? 'text-primary' : 'text-muted-foreground']">{{ prio.name }}</span>
@@ -1318,7 +1366,7 @@ const getPriorityBadge = (priority: string) => {
                                             <Label class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Status</Label>
                                             <div class="flex flex-wrap gap-2">
                                                 <button
-                                                    v-for="s in ['Open', 'In Progress', 'On Hold', 'Resolved', 'Closed']"
+                                                    v-for="s in statusOptions.filter(s => s !== 'All')"
                                                     :key="s"
                                                     type="button"
                                                     @click="form.status = s"
@@ -1428,7 +1476,7 @@ const getPriorityBadge = (priority: string) => {
                                             <Button
                                                 v-else
                                                 type="submit"
-                                                :disabled="form.processing || (handlerRequired && form.handler_ids.length === 0) || (form.status === 'Resolved' && isEmptyHtml(form.solution))"
+                                                :disabled="form.processing || (handlerRequired && form.handler_ids.length === 0)"
                                                 class="text-xs font-bold gap-1.5 shadow-md shadow-primary/20"
                                             >
                                                 <span v-if="!form.processing" class="flex items-center gap-1.5">
@@ -1508,7 +1556,7 @@ const getPriorityBadge = (priority: string) => {
                 <!-- Status tabs -->
                 <div class="flex items-center gap-1 overflow-x-auto no-scrollbar rounded-xl bg-muted/60 border border-border/50 p-1 shrink-0">
                     <button
-                        v-for="status in statuses"
+                        v-for="status in statusOptions"
                         :key="status"
                         @click="currentStatus = status"
                         :class="[
@@ -1567,20 +1615,17 @@ const getPriorityBadge = (priority: string) => {
                         <span class="text-[10px] font-bold tabular-nums text-muted-foreground">{{ priorityCounts['All'] ?? 0 }}</span>
                     </button>
                     <button
-                        v-for="p in priorities"
+                        v-for="p in priorityOptions"
                         :key="p.name"
                         @click="currentPriority = p.name"
-                        :class="[
-                            'inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all duration-200 shrink-0',
-                            currentPriority === p.name
-                                ? [p.activeBg, p.activeText, 'shadow-sm ring-1 ring-current/20']
-                                : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
-                        ]"
+                        class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all duration-200 shrink-0"
+                        :class="currentPriority !== p.name ? 'text-muted-foreground hover:text-foreground hover:bg-background/60' : 'shadow-sm ring-1 ring-current/20'"
+                        :style="currentPriority === p.name ? { color: p.color, backgroundColor: p.color + '1a' } : {}"
                     >
                         <component
-                            :is="p.icon"
+                            :is="p.iconComponent"
                             class="h-3 w-3 shrink-0 transition-colors"
-                            :class="currentPriority === p.name ? '' : p.color"
+                            :style="currentPriority !== p.name ? { color: p.color } : {}"
                         />
                         {{ p.name }}
                         <span :class="[
@@ -1705,7 +1750,7 @@ const getPriorityBadge = (priority: string) => {
                                                     <DropdownMenuSeparator />
                                                     <DropdownMenuItem
                                                         v-if="ticket.status !== 'Resolved' && ticket.status !== 'Closed'"
-                                                        @click="ticket.status === 'Open' ? openAssignModal(ticket, 'Resolved') : updateStatus(ticket, 'Resolved')"
+                                                        @click="['Open'].includes(ticket.status) ? openAssignModal(ticket, 'Resolved') : updateStatus(ticket, 'Resolved')"
                                                         :disabled="statusProcessing === ticket.numericId"
                                                         class="text-emerald-600 focus:bg-emerald-50 focus:text-emerald-700 dark:text-emerald-400 dark:focus:bg-emerald-950/40 dark:focus:text-emerald-300"
                                                     >
@@ -1735,7 +1780,7 @@ const getPriorityBadge = (priority: string) => {
 
                                     <!-- Meta chips -->
                                     <div class="flex flex-wrap items-center gap-1.5 mt-2">
-                                        <span :class="['inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase', getPriorityBadge(ticket.priority)]">
+                                        <span class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase border" :style="getPriorityStyle(ticket.priority)">
                                             <component :is="getPriorityIcon(ticket.priority)" class="h-2.5 w-2.5" />
                                             {{ ticket.priority }}
                                         </span>
@@ -1757,6 +1802,10 @@ const getPriorityBadge = (priority: string) => {
                                             <span class="text-[11px] text-muted-foreground truncate">{{ ticket.reporter }}</span>
                                         </div>
                                         <div class="flex items-center gap-1 text-[10px] text-muted-foreground/60 shrink-0">
+                                            <template v-if="ticket.commentsCount > 0">
+                                                <MessageSquare class="h-3 w-3" />
+                                                <span class="mr-1">{{ ticket.commentsCount }}</span>
+                                            </template>
                                             <Clock class="h-3 w-3" />
                                             {{ ticket.createdAt }}
                                         </div>
@@ -1860,7 +1909,7 @@ const getPriorityBadge = (priority: string) => {
                                         <div class="flex flex-col max-w-sm">
                                             <span class="text-sm font-semibold text-foreground group-hover:text-primary transition-colors truncate">{{ ticket.title }}</span>
                                             <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                                                <span :class="['inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase', getPriorityBadge(ticket.priority)]">
+                                                <span class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase border" :style="getPriorityStyle(ticket.priority)">
                                                     <component :is="getPriorityIcon(ticket.priority)" class="h-2.5 w-2.5" />
                                                     {{ ticket.priority }}
                                                 </span>
@@ -1871,6 +1920,13 @@ const getPriorityBadge = (priority: string) => {
                                                     <Clock class="h-2.5 w-2.5" />
                                                     {{ ticket.createdAt }}
                                                 </div>
+                                                <template v-if="ticket.commentsCount > 0">
+                                                    <span class="text-[10px] text-muted-foreground/40">·</span>
+                                                    <div class="flex items-center gap-1 text-[10px] text-muted-foreground/60">
+                                                        <MessageSquare class="h-2.5 w-2.5" />
+                                                        {{ ticket.commentsCount }}
+                                                    </div>
+                                                </template>
                                             </div>
                                         </div>
                                     </td>
@@ -1923,7 +1979,7 @@ const getPriorityBadge = (priority: string) => {
                                         <div class="flex items-center justify-end gap-1">
                                             <button
                                                 v-if="ticket.status !== 'Resolved' && ticket.status !== 'Closed'"
-                                                @click.stop="ticket.status === 'Open' ? openAssignModal(ticket, 'Resolved') : updateStatus(ticket, 'Resolved')"
+                                                @click.stop="['Open'].includes(ticket.status) ? openAssignModal(ticket, 'Resolved') : updateStatus(ticket, 'Resolved')"
                                                 :disabled="statusProcessing === ticket.numericId"
                                                 class="h-7 w-7 inline-flex items-center justify-center rounded-lg text-muted-foreground/0 group-hover:text-emerald-500 hover:bg-emerald-500/10 transition-all duration-150 disabled:opacity-50"
                                                 title="Mark as Resolved"
@@ -1960,7 +2016,7 @@ const getPriorityBadge = (priority: string) => {
                                                     <DropdownMenuSeparator />
                                                     <DropdownMenuItem
                                                         v-if="ticket.status !== 'Resolved' && ticket.status !== 'Closed'"
-                                                        @click="ticket.status === 'Open' ? openAssignModal(ticket, 'Resolved') : updateStatus(ticket, 'Resolved')"
+                                                        @click="['Open'].includes(ticket.status) ? openAssignModal(ticket, 'Resolved') : updateStatus(ticket, 'Resolved')"
                                                         :disabled="statusProcessing === ticket.numericId"
                                                         class="text-emerald-600 focus:bg-emerald-50 focus:text-emerald-700 dark:text-emerald-400 dark:focus:bg-emerald-950/40 dark:focus:text-emerald-300"
                                                     >
@@ -2145,7 +2201,7 @@ const getPriorityBadge = (priority: string) => {
                                 <component :is="getStatusIcon(selectedTicket.status)" class="h-3 w-3" />
                                 {{ selectedTicket.status }}
                             </Badge>
-                            <span :class="['inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase', getPriorityBadge(selectedTicket.priority)]">
+                            <span class="inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase border" :style="getPriorityStyle(selectedTicket.priority)">
                                 <component :is="getPriorityIcon(selectedTicket.priority)" class="h-3 w-3" />
                                 {{ selectedTicket.priority }}
                             </span>
@@ -2504,7 +2560,7 @@ const getPriorityBadge = (priority: string) => {
                             </Button>
                             <Button
                                 type="button"
-                                :disabled="assignForm.processing || assignForm.handler_ids.length === 0 || (assignStatusOverride === 'Resolved' && isEmptyHtml(assignForm.solution))"
+                                :disabled="assignForm.processing || assignForm.handler_ids.length === 0"
                                 @click="submitAssign"
                                 class="text-xs font-bold gap-1.5 shadow-sm shadow-primary/20"
                             >
@@ -2686,7 +2742,7 @@ const getPriorityBadge = (priority: string) => {
                             </Button>
                             <Button
                                 type="button"
-                                :disabled="changeStatusForm.processing || !changeStatusValue || (!['Open', 'Closed'].includes(changeStatusValue) && changeStatusForm.handler_ids.length === 0) || (changeStatusValue === 'Resolved' && isEmptyHtml(changeStatusForm.solution))"
+                                :disabled="changeStatusForm.processing || !changeStatusValue || (!['Open', 'Closed'].includes(changeStatusValue) && changeStatusForm.handler_ids.length === 0)"
                                 @click="submitChangeStatus"
                                 class="text-xs font-bold gap-1.5 shadow-sm shadow-primary/20"
                             >
@@ -2857,7 +2913,7 @@ const getPriorityBadge = (priority: string) => {
                             </Button>
                             <Button
                                 type="button"
-                                :disabled="bulkStatusForm.processing || !bulkStatusValue || (!['Open', 'Closed'].includes(bulkStatusValue) && bulkStatusHandlerIds.length === 0) || (bulkStatusValue === 'Resolved' && isEmptyHtml(bulkStatusSolution.value))"
+                                :disabled="bulkStatusForm.processing || !bulkStatusValue || (!['Open', 'Closed'].includes(bulkStatusValue) && bulkStatusHandlerIds.length === 0)"
                                 @click="submitBulkStatus"
                                 class="text-xs font-bold gap-1.5"
                             >

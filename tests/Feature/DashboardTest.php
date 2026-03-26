@@ -18,6 +18,10 @@ class DashboardTest extends TestCase
 
     public function test_admins_can_visit_the_dashboard()
     {
+        if (config('database.default') !== 'mysql' && config('database.default') !== 'mariadb') {
+            $this->markTestSkipped('This test requires MySQL for TIMESTAMPDIFF function.');
+        }
+
         $user = User::factory()->create(['role' => 'admin']);
         $this->actingAs($user);
 

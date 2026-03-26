@@ -22,7 +22,10 @@ class TicketStatusUpdateTest extends TestCase
         $ticket = Ticket::factory()->create(['status' => 'In Progress']);
 
         $this->actingAs($admin)
-            ->patch(route('tickets.status.update', $ticket), ['status' => 'Resolved'])
+            ->patch(route('tickets.status.update', $ticket), [
+                'status' => 'Resolved',
+                'solution' => 'Test solution',
+            ])
             ->assertRedirect();
 
         $this->assertSame('Resolved', $ticket->fresh()->status);
@@ -47,8 +50,13 @@ class TicketStatusUpdateTest extends TestCase
         foreach (['Open', 'In Progress', 'On Hold', 'Resolved', 'Closed'] as $status) {
             $ticket = Ticket::factory()->create();
 
+            $data = ['status' => $status];
+            if ($status === 'Resolved') {
+                $data['solution'] = 'Test solution';
+            }
+
             $this->actingAs($admin)
-                ->patch(route('tickets.status.update', $ticket), ['status' => $status])
+                ->patch(route('tickets.status.update', $ticket), $data)
                 ->assertRedirect();
 
             $this->assertSame($status, $ticket->fresh()->status);
@@ -102,6 +110,7 @@ class TicketStatusUpdateTest extends TestCase
         $this->actingAs($admin)
             ->patch(route('tickets.status.update', $ticket), [
                 'status' => 'Resolved',
+                'solution' => 'Test solution',
                 'handler_ids' => $handlers->pluck('id')->toArray(),
             ])
             ->assertRedirect();

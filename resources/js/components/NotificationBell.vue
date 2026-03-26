@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { usePage } from '@inertiajs/vue3';
+import { usePage, router } from '@inertiajs/vue3';
 import axios from 'axios';
 import { Bell, Check, CheckCheck, Loader2 } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
@@ -38,7 +38,7 @@ const unreadCount = ref(page.props.unreadNotificationsCount ?? 0);
 async function fetchNotifications() {
     loading.value = true;
     try {
-        const { data } = await axios.get<Notification[]>('/notifications');
+        const { data } = await axios.get<Notification[]>(route('notifications.index'));
         notifications.value = data;
         unreadCount.value = data.filter((n) => !n.read_at).length;
     } finally {
@@ -46,19 +46,24 @@ async function fetchNotifications() {
     }
 }
 
-async function markAsRead(notification: Notification) {
-    if (notification.read_at) {
-        return;
+async function handleNotificationClick(notification: Notification) {
+    if (!notification.read_at) {
+        await axios.post(route('notifications.read', { id: notification.id }));
+        notification.read_at = new Date().toISOString();
+        unreadCount.value = Math.max(0, unreadCount.value - 1);
     }
-    await axios.post(`/notifications/${notification.id}/read`);
-    notification.read_at = new Date().toISOString();
-    unreadCount.value = Math.max(0, unreadCount.value - 1);
+    
+    open.value = false;
+
+    if (notification.data.ticket_id && page.props.auth?.user?.role === 'admin') {
+        router.get(route('tickets'), { ticket_id: notification.data.ticket_id });
+    }
 }
 
 async function markAllAsRead() {
     markingAll.value = true;
     try {
-        await axios.post('/notifications/read-all');
+        await axios.post(route('notifications.read-all'));
         notifications.value.forEach((n) => {
             n.read_at = n.read_at ?? new Date().toISOString();
         });
@@ -141,7 +146,7 @@ onMounted(() => {
                         :key="notification.id"
                         class="flex w-full items-start gap-3 border-b px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-muted/50"
                         :class="{ 'bg-blue-50/60 dark:bg-blue-950/20': !notification.read_at }"
-                        @click="markAsRead(notification)"
+                        @click="handleNotificationClick(notification)"
                     >
                         <span class="mt-0.5 shrink-0 text-base leading-none">
                             {{ notificationIcon(notification.data.type) }}

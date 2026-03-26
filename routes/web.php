@@ -1,13 +1,22 @@
 <?php
 
+use App\Http\Controllers\Admin\SettingsController;
 use App\Models\Ticket;
 use App\Models\TicketActivity;
+use App\Models\TicketCategory;
 use App\Models\TicketComment;
+use App\Models\TicketCommentReaction;
+use App\Models\TicketCommentVote;
+use App\Models\TicketPriority;
+use App\Models\TicketStatus;
 use App\Models\User;
 use App\Notifications\TicketAssigned;
 use App\Notifications\TicketCommentPosted;
+use App\Notifications\TicketCreated;
 use App\Notifications\TicketStatusChanged;
+use Carbon\Carbon;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -365,6 +374,7 @@ Route::get('tickets/by-category/{category}', function (string $category) {
 
 Route::get('tickets', function () {
     $tickets = Ticket::with(['handlers', 'reporter'])
+        ->withCount('comments')
         ->latest()
         ->get();
 
@@ -390,8 +400,12 @@ Route::get('tickets', function () {
                 ? $ticket->resolved_at->diffForHumans($ticket->created_at, CarbonInterface::DIFF_ABSOLUTE, false, 2)
                 : null,
             'resolvedAtFormatted' => $ticket->resolved_at?->format('M d, Y \a\t h:i A'),
+            'commentsCount' => $ticket->comments_count,
         ]),
         'users' => User::select('id', 'name')->orderBy('name')->get(),
+        'categories' => TicketCategory::orderBy('sort_order')->get(['id', 'name', 'icon']),
+        'priorities' => TicketPriority::orderBy('sort_order')->get(['id', 'name', 'icon', 'color']),
+        'statuses' => TicketStatus::orderBy('sort_order')->get(['id', 'name']),
     ]);
 })->middleware(['auth', 'verified', 'role:admin'])->name('tickets');
 
@@ -417,9 +431,9 @@ Route::post('tickets', function () {
     $validated = request()->validate([
         'title' => 'required|string|max:255',
         'description' => 'nullable|string',
-        'category' => 'required|string',
-        'priority' => 'required|string',
-        'status' => 'required|string|in:Open,In Progress,On Hold,Resolved,Closed',
+        'category' => ['required', 'string', Rule::in(TicketCategory::pluck('name')->toArray())],
+        'priority' => ['required', 'string', Rule::in(TicketPriority::pluck('name')->toArray())],
+        'status' => ['required', 'string', Rule::in(TicketStatus::pluck('name')->toArray())],
         'handler_ids' => [
             Rule::requiredIf(fn () => in_array(request('status'), ['In Progress', 'On Hold', 'Resolved'])),
             'nullable',
@@ -427,7 +441,6 @@ Route::post('tickets', function () {
         ],
         'handler_ids.*' => ['exists:users,id'],
         'solution' => [
-            Rule::requiredIf(fn () => request('status') === 'Resolved'),
             'nullable',
             'string',
         ],
@@ -468,6 +481,14 @@ Route::post('tickets', function () {
         ]);
     }
 
+    $admins = User::where('role', 'admin')
+        ->where('id', '!=', auth()->id())
+        ->get();
+
+    foreach ($admins as $admin) {
+        $admin->notify(new TicketCreated($ticket, auth()->user()->name));
+    }
+
     return redirect()->back()->with('success', 'Ticket created successfully.');
 })->middleware(['auth', 'verified', 'role:admin'])->name('tickets.store');
 
@@ -475,11 +496,10 @@ Route::patch('tickets/bulk/status', function () {
     $validated = request()->validate([
         'ticket_ids' => ['required', 'array', 'min:1'],
         'ticket_ids.*' => ['exists:tickets,id'],
-        'status' => ['required', 'string', Rule::in(['Open', 'In Progress', 'On Hold', 'Resolved', 'Closed'])],
+        'status' => ['required', 'string', Rule::in(TicketStatus::pluck('name')->toArray())],
         'handler_ids' => ['nullable', 'array'],
         'handler_ids.*' => ['exists:users,id'],
         'solution' => [
-            Rule::requiredIf(fn () => request('status') === 'Resolved'),
             'nullable',
             'string',
         ],
@@ -563,8 +583,15 @@ Route::patch('tickets/bulk/status', function () {
     // Fire notifications
     foreach ($tickets as $ticket) {
         $oldStatus = $oldStatuses->get($ticket->id);
-        if ($oldStatus !== $newStatus && $ticket->reporter) {
-            $ticket->reporter->notify(new TicketStatusChanged($ticket, $oldStatus, $newStatus));
+        if ($oldStatus !== $newStatus) {
+            $ticket->refresh();
+            $notifiables = User::where('role', 'admin')->get();
+            if ($ticket->reporter) {
+                $notifiables->push($ticket->reporter);
+            }
+            $notifiables->unique('id')->each(function ($notifiable) use ($ticket, $oldStatus, $newStatus) {
+                $notifiable->notify(new TicketStatusChanged($ticket, $oldStatus, $newStatus));
+            });
         }
     }
 
@@ -672,11 +699,10 @@ Route::delete('tickets/{ticket}', function (Ticket $ticket) {
 
 Route::patch('tickets/{ticket}/status', function (Ticket $ticket) {
     $validated = request()->validate([
-        'status' => ['required', 'string', Rule::in(['Open', 'In Progress', 'On Hold', 'Resolved', 'Closed'])],
+        'status' => ['required', 'string', Rule::in(TicketStatus::pluck('name')->toArray())],
         'handler_ids' => ['nullable', 'array'],
         'handler_ids.*' => ['exists:users,id'],
         'solution' => [
-            Rule::requiredIf(fn () => request('status') === 'Resolved'),
             'nullable',
             'string',
         ],
@@ -722,10 +748,13 @@ Route::patch('tickets/{ticket}/status', function (Ticket $ticket) {
 
     if ($oldStatus !== $newStatus) {
         $ticket->refresh();
-        $reporter = $ticket->reporter;
-        if ($reporter) {
-            $reporter->notify(new TicketStatusChanged($ticket, $oldStatus, $newStatus));
+        $notifiables = User::where('role', 'admin')->get();
+        if ($ticket->reporter) {
+            $notifiables->push($ticket->reporter);
         }
+        $notifiables->unique('id')->each(function ($notifiable) use ($ticket, $oldStatus, $newStatus) {
+            $notifiable->notify(new TicketStatusChanged($ticket, $oldStatus, $newStatus));
+        });
     }
 
     return redirect()->back()->with('success', 'Ticket status updated.');
@@ -735,9 +764,8 @@ Route::patch('tickets/{ticket}/handlers', function (Ticket $ticket) {
     $validated = request()->validate([
         'handler_ids' => ['required', 'array', 'min:1'],
         'handler_ids.*' => ['exists:users,id'],
-        'status' => ['nullable', 'string', Rule::in(['In Progress', 'On Hold', 'Resolved'])],
+        'status' => ['nullable', 'string', Rule::in(TicketStatus::pluck('name')->where(fn ($n) => $n !== 'Open')->values()->toArray())],
         'solution' => [
-            Rule::requiredIf(fn () => request('status') === 'Resolved'),
             'nullable',
             'string',
         ],
@@ -796,10 +824,13 @@ Route::patch('tickets/{ticket}/handlers', function (Ticket $ticket) {
 
     if ($newStatus && $oldStatus !== $newStatus) {
         $ticket->refresh();
-        $reporter = $ticket->reporter;
-        if ($reporter) {
-            $reporter->notify(new TicketStatusChanged($ticket, $oldStatus, $newStatus));
+        $notifiables = User::where('role', 'admin')->get();
+        if ($ticket->reporter) {
+            $notifiables->push($ticket->reporter);
         }
+        $notifiables->unique('id')->each(function ($notifiable) use ($ticket, $oldStatus, $newStatus) {
+            $notifiable->notify(new TicketStatusChanged($ticket, $oldStatus, $newStatus));
+        });
     }
 
     return redirect()->back()->with('success', 'Handlers updated successfully.');
@@ -809,9 +840,9 @@ Route::put('tickets/{ticket}', function (Ticket $ticket) {
     $validated = request()->validate([
         'title' => 'required|string|max:255',
         'description' => 'nullable|string',
-        'category' => 'required|string',
-        'priority' => 'required|string',
-        'status' => 'required|string|in:Open,In Progress,On Hold,Resolved,Closed',
+        'category' => ['required', 'string', Rule::in(TicketCategory::pluck('name')->toArray())],
+        'priority' => ['required', 'string', Rule::in(TicketPriority::pluck('name')->toArray())],
+        'status' => ['required', 'string', Rule::in(TicketStatus::pluck('name')->toArray())],
         'handler_ids' => [
             Rule::requiredIf(fn () => in_array(request('status'), ['In Progress', 'On Hold', 'Resolved'])),
             'nullable',
@@ -819,7 +850,6 @@ Route::put('tickets/{ticket}', function (Ticket $ticket) {
         ],
         'handler_ids.*' => ['exists:users,id'],
         'solution' => [
-            Rule::requiredIf(fn () => request('status') === 'Resolved'),
             'nullable',
             'string',
         ],
@@ -883,13 +913,16 @@ Route::put('tickets/{ticket}', function (Ticket $ticket) {
         ]);
     }
 
-    // Notify reporter of status change
+    // Notify reporter and admins of status change
     if ($oldStatus !== $newStatus) {
         $ticket->refresh();
-        $reporter = $ticket->reporter;
-        if ($reporter) {
-            $reporter->notify(new TicketStatusChanged($ticket, $oldStatus, $newStatus));
+        $notifiables = User::where('role', 'admin')->get();
+        if ($ticket->reporter) {
+            $notifiables->push($ticket->reporter);
         }
+        $notifiables->unique('id')->each(function ($notifiable) use ($ticket, $oldStatus, $newStatus) {
+            $notifiable->notify(new TicketStatusChanged($ticket, $oldStatus, $newStatus));
+        });
     }
 
     return redirect()->back()->with('success', 'Ticket updated successfully.');
@@ -1066,7 +1099,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         $subscribed = $ticket->subscribers()->where('user_id', $userId)->exists();
 
         $comments = $ticket->comments()
-            ->with(['user', 'reactions.user', 'votes'])
+            ->with(['user', 'reactions.user', 'votes.user'])
             ->orderBy('created_at', 'asc')
             ->get()
             ->map(function ($comment) use ($userId) {
@@ -1100,6 +1133,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
                     'isPinned' => (bool) $comment->is_pinned,
                     'upvotes' => $comment->votes->where('type', 'up')->count(),
                     'downvotes' => $comment->votes->where('type', 'down')->count(),
+                    'upvoters' => $comment->votes->where('type', 'up')->map(fn ($v) => $v->user?->name ?? 'Unknown')->values()->all(),
+                    'downvoters' => $comment->votes->where('type', 'down')->map(fn ($v) => $v->user?->name ?? 'Unknown')->values()->all(),
                     'userVote' => $comment->votes->where('user_id', $userId)->first()?->type ?? null,
                 ];
             });
@@ -1127,11 +1162,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Auto-subscribe the commenter so they hear about future replies
         $ticket->subscribers()->syncWithoutDetaching([$user->id]);
 
-        // Notify all subscribers except the commenter
-        $ticket->subscribers()
-            ->where('user_id', '!=', $user->id)
-            ->get()
-            ->each(fn ($subscriber) => $subscriber->notify(
+        // Notify all subscribers and all admins, except the commenter
+        $subscribers = $ticket->subscribers()->get();
+        $admins = User::where('role', 'admin')->get();
+
+        $subscribers->merge($admins)
+            ->unique('id')
+            ->reject(fn ($notifiable) => $notifiable->id === $user->id)
+            ->each(fn ($notifiable) => $notifiable->notify(
                 new TicketCommentPosted($ticket, $comment, $user->name)
             ));
 
@@ -1156,6 +1194,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             'isPinned' => false,
             'upvotes' => 0,
             'downvotes' => 0,
+            'upvoters' => [],
+            'downvoters' => [],
             'userVote' => null,
         ], 201);
     })->name('tickets.comments.store');
@@ -1240,19 +1280,37 @@ Route::middleware(['auth', 'verified'])->group(function () {
         $userId = auth()->id();
 
         $existing = $comment->votes()->where('user_id', $userId)->first();
+        $action = '';
 
         if ($existing?->type === $type) {
             $existing->delete();
+            $action = $type === 'up' ? 'upvote_removed' : 'downvote_removed';
         } else {
             $comment->votes()->updateOrCreate(
                 ['user_id' => $userId],
                 ['type' => $type]
             );
+            if ($existing) {
+                $action = 'vote_changed';
+            } else {
+                $action = $type === 'up' ? 'upvote_added' : 'downvote_added';
+            }
         }
+
+        TicketActivity::create([
+            'ticket_id' => $comment->ticket_id,
+            'user_id' => $userId,
+            'action' => $action,
+            'old_value' => $existing?->type,
+            'new_value' => str_ends_with($action, 'removed') ? null : $type,
+            'created_at' => now(),
+        ]);
 
         return response()->json([
             'upvotes' => $comment->votes()->where('type', 'up')->count(),
             'downvotes' => $comment->votes()->where('type', 'down')->count(),
+            'upvoters' => $comment->votes()->where('type', 'up')->with('user')->get()->map(fn ($v) => $v->user?->name ?? 'Unknown')->values()->all(),
+            'downvoters' => $comment->votes()->where('type', 'down')->with('user')->get()->map(fn ($v) => $v->user?->name ?? 'Unknown')->values()->all(),
             'userVote' => $comment->votes()->where('user_id', $userId)->value('type') ?? null,
         ]);
     })->name('ticket-comments.vote');
@@ -1295,8 +1353,16 @@ Route::get('audit-log', function () {
     if ($userId = request('user_id')) {
         $query->where('user_id', $userId);
     }
-    if ($ticketId = request('ticket_id')) {
-        $query->where('ticket_id', $ticketId);
+    if ($search = request('search')) {
+        $query->where(function ($q) use ($search) {
+            $q->where('ticket_id', 'like', "%{$search}%")
+                ->orWhereHas('ticket', function ($q) use ($search) {
+                    $q->where('title', 'like', "%{$search}%");
+                })
+                ->orWhere('action', 'like', "%{$search}%")
+                ->orWhere('old_value', 'like', "%{$search}%")
+                ->orWhere('new_value', 'like', "%{$search}%");
+        });
     }
     if ($from = request('from')) {
         $query->whereDate('created_at', '>=', $from);
@@ -1321,10 +1387,182 @@ Route::get('audit-log', function () {
             'createdAt' => $a->created_at->diffForHumans(),
             'createdAtFormatted' => $a->created_at->format('M d, Y \a\t h:i A'),
         ]),
-        'filters' => request()->only(['action', 'user_id', 'ticket_id', 'from', 'to']),
+        'filters' => request()->only(['action', 'user_id', 'search', 'from', 'to']),
         'users' => User::select('id', 'name')->orderBy('name')->get(),
     ]);
 })->middleware(['auth', 'verified', 'role:admin'])->name('audit-log');
+
+// ── Diagnostics ────────────────────────────────────────────────────────────
+Route::get('diagnostics', function () {
+    // Collect database statistics based on IMS context
+    // Assuming 'Lockers' don't exist in our current context, let's adapt to Tickets and Users.
+    // If you actually meant something else by 'Lockers' or 'Requests', let me know!
+    // But since the image says 'Issues' (Tickets) and 'Users', we'll get those.
+
+    $userStats = [
+        'total' => User::count(),
+        'admins' => User::where('role', 'admin')->count(),
+        'supervisors' => User::where('role', 'supervisor')->count(),
+        'technicals' => User::where('role', 'technical')->count(),
+    ];
+
+    $ticketStats = [
+        'total' => Ticket::count(),
+        'open' => Ticket::where('status', 'Open')->count(),
+        'in_progress' => Ticket::where('status', 'In Progress')->count(),
+        'on_hold' => Ticket::where('status', 'On Hold')->count(),
+        'resolved' => Ticket::where('status', 'Resolved')->count(),
+        'closed' => Ticket::where('status', 'Closed')->count(),
+    ];
+
+    $commentStats = [
+        'total' => TicketComment::count(),
+        'reactions' => TicketCommentReaction::count(),
+        'votes' => TicketCommentVote::count(),
+    ];
+
+    $auditLogCount = TicketActivity::count();
+
+    // System Logs
+    $laravelLogPath = storage_path('logs/laravel.log');
+    $laravelLog = file_exists($laravelLogPath)
+        ? implode("\n", array_slice(file($laravelLogPath), -50))
+        : 'No log file found.';
+
+    $phpErrorLogPath = 'C:\\xampp\\apache\\logs\\error.log';
+    $phpErrorLog = file_exists($phpErrorLogPath)
+        ? implode("\n", array_slice(file($phpErrorLogPath), -50))
+        : 'No log file found or error_log not set.';
+
+    // DB Size
+    $dbName = DB::connection()->getDatabaseName();
+    $dbSizeRaw = DB::selectOne("
+        SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) AS 'size_mb' 
+        FROM information_schema.TABLES 
+        WHERE table_schema = ?
+    ", [$dbName]);
+    $dbSize = round((float) ($dbSizeRaw->size_mb ?? 0), 2);
+
+    $backupsDisk = Storage::disk('backups');
+    $backupsTotalBytes = collect($backupsDisk->files())
+        ->filter(fn (string $file) => str_ends_with($file, '.sql'))
+        ->sum(fn (string $file) => $backupsDisk->size($file));
+    $backupsTotalSizeMb = round($backupsTotalBytes / 1024 / 1024, 2);
+
+    return Inertia::render('Diagnostics', [
+        'phpVersion' => phpversion(),
+        'laravelVersion' => app()->version(),
+        'environment' => app()->environment(),
+        'debugMode' => config('app.debug'),
+        'dbConnection' => config('database.default'),
+        'dbName' => $dbName,
+        'dbSizeMb' => $dbSize,
+        'backupsTotalSizeMb' => $backupsTotalSizeMb,
+        'cacheDriver' => config('cache.default'),
+        'queueDriver' => config('queue.default'),
+        'serverInfo' => php_uname(),
+        'timezone' => config('app.timezone'),
+        'serverTime' => now()->format('n/j/Y, g:i:s A'),
+        'storageWritable' => is_writable(storage_path()),
+        'dbStats' => [
+            'users' => $userStats,
+            'tickets' => $ticketStats,
+            'comments' => $commentStats,
+            'auditLogCount' => $auditLogCount,
+        ],
+        'logs' => [
+            'laravel' => [
+                'path' => $laravelLogPath,
+                'content' => $laravelLog,
+                'size' => file_exists($laravelLogPath) ? round(filesize($laravelLogPath) / 1024 / 1024, 2).' MB' : '0 MB',
+            ],
+            'php' => [
+                'path' => $phpErrorLogPath,
+                'content' => $phpErrorLog,
+                'size' => file_exists($phpErrorLogPath) ? round(filesize($phpErrorLogPath) / 1024 / 1024, 2).' MB' : '0 MB',
+            ],
+        ],
+        'backups' => collect(Storage::disk('backups')->files())
+            ->filter(fn (string $file) => str_ends_with($file, '.sql'))
+            ->map(function (string $file) {
+                $disk = Storage::disk('backups');
+
+                return [
+                    'name' => basename($file),
+                    'size' => round($disk->size($file) / 1024 / 1024, 2).' MB',
+                    'date' => Carbon::createFromTimestamp($disk->lastModified($file))->format('Y-m-d H:i:s'),
+                ];
+            })
+            ->sortByDesc('date')
+            ->values(),
+    ]);
+})->middleware(['auth', 'verified', 'role:admin'])->name('diagnostics');
+
+Route::post('diagnostics/backup', function () {
+    $disk = Storage::disk('backups');
+    $filename = 'ims-backup-'.now()->format('Y-m-d-H-i-s').'.sql';
+    $backupsDir = storage_path('app/backups');
+    if (! is_dir($backupsDir)) {
+        mkdir($backupsDir, 0755, true);
+    }
+    $path = $disk->path($filename);
+
+    // Using mysqldump directly since it's an XAMPP setup usually
+    $dbName = DB::connection()->getDatabaseName();
+    $dbUser = config('database.connections.mysql.username');
+    $dbPass = config('database.connections.mysql.password');
+    $dbHost = config('database.connections.mysql.host');
+
+    $passwordArg = $dbPass ? "-p\"{$dbPass}\"" : '';
+    $command = "C:\\xampp\\mysql\\bin\\mysqldump -h {$dbHost} -u {$dbUser} {$passwordArg} {$dbName} > \"{$path}\" 2>&1";
+
+    exec($command, $output, $returnVar);
+
+    if ($returnVar !== 0) {
+        return back()->with('error', 'Backup failed: '.implode("\n", $output));
+    }
+
+    return back()->with('success', 'Backup created successfully.');
+})->middleware(['auth', 'verified', 'role:admin'])->name('diagnostics.backup');
+
+Route::delete('diagnostics/backup/{filename}', function (string $filename) {
+    $filename = basename($filename);
+    $disk = Storage::disk('backups');
+    if ($disk->exists($filename)) {
+        $disk->delete($filename);
+
+        return back()->with('success', 'Backup deleted.');
+    }
+
+    return back()->with('error', 'Backup not found.');
+})->middleware(['auth', 'verified', 'role:admin'])->name('diagnostics.backup.delete');
+
+Route::get('diagnostics/backup/{filename}/download', function (string $filename) {
+    $filename = basename($filename);
+    $disk = Storage::disk('backups');
+    if ($disk->exists($filename)) {
+        return $disk->download($filename);
+    }
+    abort(404);
+})->middleware(['auth', 'verified', 'role:admin'])->name('diagnostics.backup.download');
+
+Route::get('diagnostics/phpinfo', function () {
+    return Inertia::render('PhpInfo');
+})->middleware(['auth', 'verified', 'role:admin'])->name('diagnostics.phpinfo');
+
+Route::get('diagnostics/phpinfo/data', function () {
+    phpinfo();
+    exit;
+})->middleware(['auth', 'verified', 'role:admin'])->name('diagnostics.phpinfo.data');
+
+// ── Admin Settings ─────────────────────────────────────────────────────────
+Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
+    Route::get('admin/settings', [SettingsController::class, 'index'])->name('admin.settings');
+    Route::put('admin/settings', [SettingsController::class, 'update'])->name('admin.settings.update');
+    Route::put('admin/ticket-categories', [SettingsController::class, 'updateCategories'])->name('admin.ticket-categories.update');
+    Route::put('admin/ticket-priorities', [SettingsController::class, 'updatePriorities'])->name('admin.ticket-priorities.update');
+    Route::put('admin/ticket-statuses', [SettingsController::class, 'updateStatuses'])->name('admin.ticket-statuses.update');
+});
 
 require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';

@@ -10,6 +10,7 @@ import {
     CheckCircle2,
     ChevronLeft,
     ChevronRight,
+    ExternalLink,
     FilePenLine,
     Flag,
     GitBranch,
@@ -20,7 +21,10 @@ import {
     Pin,
     PinOff,
     ScrollText,
+    Search,
     Smile,
+    ThumbsDown,
+    ThumbsUp,
     Trash2,
     UserCog,
     UserMinus,
@@ -63,7 +67,7 @@ const props = defineProps<{
     filters: {
         action?: string;
         user_id?: string;
-        ticket_id?: string;
+        search?: string;
         from?: string;
         to?: string;
     };
@@ -71,14 +75,14 @@ const props = defineProps<{
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Dashboard', href: '/dashboard' },
-    { title: 'Audit Log', href: '/audit-log' },
+    { title: 'Dashboard', href: route('dashboard') },
+    { title: 'Audit Log', href: route('audit-log') },
 ];
 
 // ── Filter state ───────────────────────────────────────────────────────────
 const filterAction   = ref(props.filters.action ?? '');
 const filterUserId   = ref(props.filters.user_id ?? '');
-const filterTicketId = ref(props.filters.ticket_id ?? '');
+const filterSearch   = ref(props.filters.search ?? '');
 const filterFrom     = ref(props.filters.from ?? '');
 const filterTo       = ref(props.filters.to ?? '');
 
@@ -95,6 +99,11 @@ const ALL_ACTIONS = [
     'comment_unpinned',
     'reaction_added',
     'reaction_removed',
+    'upvote_added',
+    'upvote_removed',
+    'downvote_added',
+    'downvote_removed',
+    'vote_changed',
     'ticket_deleted',
     'user_login',
     'user_logout',
@@ -116,6 +125,11 @@ const ACTION_LABELS: Record<string, string> = {
     comment_unpinned:  'Comment Unpinned',
     reaction_added:    'Reaction Added',
     reaction_removed:  'Reaction Removed',
+    upvote_added:      'Upvote Added',
+    upvote_removed:    'Upvote Removed',
+    downvote_added:    'Downvote Added',
+    downvote_removed:  'Downvote Removed',
+    vote_changed:      'Vote Changed',
     ticket_deleted:    'Ticket Deleted',
     user_login:        'User Login',
     user_logout:       'User Logout',
@@ -139,6 +153,11 @@ const ACTIVITY_CONFIG: Record<string, { icon: IconComponent; classes: string }> 
     comment_unpinned:  { icon: PinOff,        classes: 'bg-muted text-muted-foreground border-border/50' },
     reaction_added:    { icon: Smile,         classes: 'bg-pink-500/10 text-pink-600 dark:text-pink-400 border-pink-500/20' },
     reaction_removed:  { icon: Smile,         classes: 'bg-muted text-muted-foreground border-border/50' },
+    upvote_added:      { icon: ThumbsUp,      classes: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' },
+    upvote_removed:    { icon: ThumbsUp,      classes: 'bg-muted text-muted-foreground border-border/50' },
+    downvote_added:    { icon: ThumbsDown,    classes: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' },
+    downvote_removed:  { icon: ThumbsDown,    classes: 'bg-muted text-muted-foreground border-border/50' },
+    vote_changed:      { icon: ThumbsUp,      classes: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' },
     ticket_deleted:    { icon: Trash2,        classes: 'bg-rose-600/10 text-rose-700 dark:text-rose-400 border-rose-600/20' },
     user_login:        { icon: LogIn,         classes: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' },
     user_logout:       { icon: LogOut,        classes: 'bg-muted text-muted-foreground border-border/50' },
@@ -158,7 +177,7 @@ const getActionLabel = (action: string): string =>
 
 // ── Filter apply / clear ───────────────────────────────────────────────────
 const hasActiveFilters = computed(() =>
-    !!(filterAction.value || filterUserId.value || filterTicketId.value || filterFrom.value || filterTo.value),
+    !!(filterAction.value || filterUserId.value || filterSearch.value || filterFrom.value || filterTo.value),
 );
 
 function applyFilters(): void {
@@ -167,32 +186,39 @@ function applyFilters(): void {
         {
             action:    filterAction.value || undefined,
             user_id:   filterUserId.value || undefined,
-            ticket_id: filterTicketId.value || undefined,
+            search:    filterSearch.value || undefined,
             from:      filterFrom.value || undefined,
             to:        filterTo.value || undefined,
         },
-        { preserveState: true, replace: true },
+        { preserveState: true, replace: true, preserveScroll: true },
     );
 }
 
 function clearFilters(): void {
     filterAction.value   = '';
     filterUserId.value   = '';
-    filterTicketId.value = '';
+    filterSearch.value   = '';
     filterFrom.value     = '';
     filterTo.value       = '';
     router.get(route('audit-log'), {}, { preserveState: false });
 }
 
-// Debounce ticket_id text input
-let ticketDebounce: ReturnType<typeof setTimeout> | null = null;
-watch(filterTicketId, () => {
-    if (ticketDebounce) clearTimeout(ticketDebounce);
-    ticketDebounce = setTimeout(applyFilters, 400);
+// Debounce search input for real-time feel
+let searchDebounce: ReturnType<typeof setTimeout> | null = null;
+watch(filterSearch, () => {
+    if (searchDebounce) clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(applyFilters, 250);
 });
 
 // Immediately apply when select/date inputs change
 watch([filterAction, filterUserId, filterFrom, filterTo], applyFilters);
+
+// ── Row interaction ──────────────────────────────────────────────────────────
+const openTicket = (ticketId: number | null) => {
+    if (ticketId) {
+        router.get(route('tickets'), { ticket_id: ticketId });
+    }
+};
 
 // ── Pagination helper ──────────────────────────────────────────────────────
 const pageLinks = computed(() =>
@@ -230,86 +256,102 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
             </div>
 
             <!-- Filter bar -->
-            <Card class="shadow-none border border-border/50">
-                <CardContent class="px-4 py-3">
-                    <div class="flex flex-wrap items-end gap-3">
-                        <!-- Action type -->
-                        <div class="flex flex-col gap-1 min-w-[180px]">
-                            <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Action</span>
-                            <select
-                                v-model="filterAction"
-                                class="h-8 rounded-md border border-input bg-background px-2.5 text-xs font-medium text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-0"
-                            >
-                                <option value="">All actions</option>
-                                <option v-for="a in ALL_ACTIONS" :key="a" :value="a">
-                                    {{ getActionLabel(a) }}
-                                </option>
-                            </select>
-                        </div>
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                <!-- Search by anything -->
+                <div class="relative w-full sm:w-64 shrink-0">
+                    <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
+                    <Input
+                        v-model="filterSearch"
+                        type="text"
+                        placeholder="Search logs..."
+                        class="h-9 pl-9 w-full bg-background shadow-sm border-border/60 transition-colors focus-visible:border-primary"
+                    />
+                    <!-- Clear search shortcut hint -->
+                    <button
+                        v-if="filterSearch"
+                        type="button"
+                        @click="filterSearch = ''"
+                        class="absolute right-2.5 top-1/2 -translate-y-1/2 flex h-4 w-4 items-center justify-center rounded text-muted-foreground/40 hover:text-foreground transition-colors"
+                        aria-label="Clear search"
+                    >
+                        <X class="h-3.5 w-3.5" />
+                    </button>
+                </div>
 
-                        <!-- Actor -->
-                        <div class="flex flex-col gap-1 min-w-[160px]">
-                            <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Actor</span>
-                            <select
-                                v-model="filterUserId"
-                                class="h-8 rounded-md border border-input bg-background px-2.5 text-xs font-medium text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-0"
-                            >
-                                <option value="">All users</option>
-                                <option v-for="u in users" :key="u.id" :value="String(u.id)">
-                                    {{ u.name }}
-                                </option>
-                            </select>
-                        </div>
+                <!-- Right side filters -->
+                <div class="flex flex-wrap items-end gap-3 w-full sm:w-auto">
+                    <!-- Action type -->
+                    <div class="flex flex-col gap-1 min-w-[160px] flex-1 sm:flex-none">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Action</span>
+                        <select
+                            v-model="filterAction"
+                            class="h-9 rounded-md border border-border/60 bg-background px-3 text-xs font-medium text-foreground shadow-sm transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                        >
+                            <option value="">All actions</option>
+                            <option v-for="a in ALL_ACTIONS" :key="a" :value="a">
+                                {{ getActionLabel(a) }}
+                            </option>
+                        </select>
+                    </div>
 
-                        <!-- Ticket ID -->
-                        <div class="flex flex-col gap-1 min-w-[120px]">
-                            <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Ticket #</span>
-                            <Input
-                                v-model="filterTicketId"
-                                type="number"
-                                min="1"
-                                placeholder="e.g. 1001"
-                                class="h-8 text-xs"
+                    <!-- Actor -->
+                    <div class="flex flex-col gap-1 min-w-[140px] flex-1 sm:flex-none">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Actor</span>
+                        <select
+                            v-model="filterUserId"
+                            class="h-9 rounded-md border border-border/60 bg-background px-3 text-xs font-medium text-foreground shadow-sm transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                        >
+                            <option value="">All users</option>
+                            <option v-for="u in users" :key="u.id" :value="String(u.id)">
+                                {{ u.name }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <!-- Date range -->
+                    <div class="flex flex-col gap-1 flex-1 sm:flex-none">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Date Range</span>
+                        <div class="flex items-center gap-1.5 h-9 rounded-md border border-border/60 bg-background px-2.5 shadow-sm transition-colors focus-within:border-primary focus-within:ring-1 focus-within:ring-primary">
+                            <input
+                                v-model="filterFrom"
+                                type="date"
+                                :max="filterTo || undefined"
+                                class="w-[105px] bg-transparent text-xs font-medium text-foreground placeholder:text-muted-foreground/50 focus:outline-none cursor-pointer [color-scheme:light] dark:[color-scheme:dark]"
+                            />
+                            <span class="text-muted-foreground/40 text-xs font-medium select-none">to</span>
+                            <input
+                                v-model="filterTo"
+                                type="date"
+                                :min="filterFrom || undefined"
+                                class="w-[105px] bg-transparent text-xs font-medium text-foreground placeholder:text-muted-foreground/50 focus:outline-none cursor-pointer [color-scheme:light] dark:[color-scheme:dark]"
                             />
                         </div>
-
-                        <!-- Date from -->
-                        <div class="flex flex-col gap-1">
-                            <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">From</span>
-                            <Input v-model="filterFrom" type="date" class="h-8 text-xs" />
-                        </div>
-
-                        <!-- Date to -->
-                        <div class="flex flex-col gap-1">
-                            <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">To</span>
-                            <Input v-model="filterTo" type="date" class="h-8 text-xs" />
-                        </div>
-
-                        <!-- Clear -->
-                        <Button
-                            v-if="hasActiveFilters"
-                            variant="ghost"
-                            size="sm"
-                            class="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground self-end"
-                            @click="clearFilters"
-                        >
-                            <X class="h-3.5 w-3.5" />
-                            Clear
-                        </Button>
                     </div>
-                </CardContent>
-            </Card>
+
+                    <!-- Clear all -->
+                    <Button
+                        v-if="hasActiveFilters"
+                        variant="ghost"
+                        size="sm"
+                        class="h-9 gap-1.5 text-xs text-muted-foreground hover:text-foreground shrink-0"
+                        @click="clearFilters"
+                    >
+                        <X class="h-3.5 w-3.5" />
+                        Clear
+                    </Button>
+                </div>
+            </div>
 
             <!-- Table -->
             <Card class="shadow-none border border-border/50 overflow-hidden">
                 <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
+                    <table class="w-full text-sm table-fixed">
                         <thead>
                             <tr class="border-b border-border/50 bg-muted/30">
-                                <th class="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Date / Time</th>
-                                <th class="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Actor</th>
-                                <th class="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Action</th>
-                                <th class="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Ticket</th>
+                                <th class="w-40 px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Date / Time</th>
+                                <th class="w-48 px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Actor</th>
+                                <th class="w-40 px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Action</th>
+                                <th class="w-64 px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Ticket</th>
                                 <th class="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Change</th>
                             </tr>
                         </thead>
@@ -321,9 +363,14 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                                     <div class="flex flex-col items-center gap-3 text-muted-foreground/60">
                                         <History class="h-10 w-10" />
                                         <p class="text-sm font-medium">No activity found</p>
-                                        <p v-if="hasActiveFilters" class="text-xs">
-                                            Try clearing the filters to see all events.
-                                        </p>
+                                        <div v-if="hasActiveFilters" class="flex flex-col items-center gap-3">
+                                            <p class="text-xs">
+                                                No events match your current filter criteria.
+                                            </p>
+                                            <Button variant="outline" size="sm" @click="clearFilters" class="h-8 text-xs font-medium">
+                                                Clear Filters
+                                            </Button>
+                                        </div>
                                     </div>
                                 </td>
                             </tr>
@@ -332,7 +379,11 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                             <tr
                                 v-for="entry in activities.data"
                                 :key="entry.id"
-                                class="hover:bg-muted/20 transition-colors"
+                                :class="[
+                                    'transition-colors group',
+                                    entry.ticketId ? 'cursor-pointer hover:bg-muted/40' : 'hover:bg-muted/20'
+                                ]"
+                                @click="openTicket(entry.ticketId)"
                             >
                                 <!-- Date -->
                                 <td class="px-4 py-3 whitespace-nowrap">
@@ -369,17 +420,20 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
 
                                 <!-- Change old → new -->
                                 <td class="px-4 py-3">
-                                    <div class="flex items-center gap-1.5 flex-wrap">
-                                        <span
-                                            v-if="entry.oldValue"
-                                            class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold bg-destructive/10 text-destructive/80 line-through"
-                                        >{{ entry.oldValue }}</span>
-                                        <ChevronRight v-if="entry.oldValue && entry.newValue" class="h-3 w-3 text-muted-foreground/40 shrink-0" />
-                                        <span
-                                            v-if="entry.newValue"
-                                            class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                                        >{{ entry.newValue }}</span>
-                                        <span v-if="!entry.oldValue && !entry.newValue" class="text-[10px] text-muted-foreground/40">—</span>
+                                    <div class="flex items-center justify-between gap-4">
+                                        <div class="flex items-center gap-1.5 flex-wrap">
+                                            <span
+                                                v-if="entry.oldValue"
+                                                class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold bg-destructive/10 text-destructive/80 line-through"
+                                            >{{ entry.oldValue }}</span>
+                                            <ChevronRight v-if="entry.oldValue && entry.newValue" class="h-3 w-3 text-muted-foreground/40 shrink-0" />
+                                            <span
+                                                v-if="entry.newValue"
+                                                class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                            >{{ entry.newValue }}</span>
+                                            <span v-if="!entry.oldValue && !entry.newValue" class="text-[10px] text-muted-foreground/40">—</span>
+                                        </div>
+                                        <ExternalLink v-if="entry.ticketId" class="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-200 shrink-0" />
                                     </div>
                                 </td>
                             </tr>

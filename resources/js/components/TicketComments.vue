@@ -2,7 +2,9 @@
 import { ref, watch, onMounted, onUnmounted, computed, nextTick } from 'vue';
 import { usePage } from '@inertiajs/vue3';
 import CommentEditor from '@/components/CommentEditor.vue';
-import { Trash2, SmilePlus, SendHorizonal, MessageSquare, Bell, BellOff, MessageCirclePlus, Crown, ShieldCheck, Headset, UserRound, Mail, CornerDownRight, ArrowBigUp, ArrowBigDown, RotateCcw, Pin } from 'lucide-vue-next';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Trash2, SmilePlus, SendHorizonal, MessageSquare, Bell, BellOff, MessageCirclePlus, Crown, ShieldCheck, Headset, UserRound, Mail, CornerDownRight, ArrowBigUp, ArrowBigDown, RotateCcw, Pin, Users } from 'lucide-vue-next';
 
 const props = defineProps<{ ticketId: number; reporterId?: number }>();
 
@@ -14,6 +16,7 @@ interface Comment {
     parentId: number | null;
     isPinned: boolean;
     upvotes: number; downvotes: number; userVote: 'up' | 'down' | null;
+    upvoters: string[]; downvoters: string[];
 }
 
 const page     = usePage();
@@ -27,6 +30,7 @@ const subscribed             = ref(false);
 const newBody                = ref('');
 const openEmojiPickerFor     = ref<number | null>(null);
 const pendingDeleteId        = ref<number | null>(null);
+const interactionsModalComment = ref<Comment | null>(null);
 const newCommentId           = ref<number | null>(null);
 const activeUserCard         = ref<number | null>(null);
 const lastCommentRef         = ref<HTMLElement | null>(null);
@@ -234,6 +238,8 @@ async function voteComment(commentId: number, type: 'up' | 'down') {
         comment.upvotes  = data.upvotes;
         comment.downvotes = data.downvotes;
         comment.userVote = data.userVote;
+        comment.upvoters = data.upvoters ?? [];
+        comment.downvoters = data.downvoters ?? [];
         if (sortOrder.value === 'relevant') pendingRefresh.value = true;
     }
 }
@@ -364,6 +370,12 @@ async function submitReply(parentComment: Comment) {
 }
 
 function closePopovers() {
+    openEmojiPickerFor.value = null;
+    activeUserCard.value = null;
+}
+
+function openInteractionsModal(comment: Comment) {
+    interactionsModalComment.value = comment;
     openEmojiPickerFor.value = null;
     activeUserCard.value = null;
 }
@@ -711,6 +723,12 @@ watch(() => props.ticketId, loadComments);
                         >
                             <Pin class="h-3.5 w-3.5" />
                         </button>
+                        <!-- Interactions Info -->
+                        <div v-if="comment.upvotes > 0 || comment.downvotes > 0 || comment.reactions.length > 0" class="relative">
+                            <button type="button" @click="openInteractionsModal(comment)" class="flex h-6 w-6 items-center justify-center rounded transition-colors text-muted-foreground hover:text-foreground hover:bg-muted" title="View interactions">
+                                <Users class="h-3.5 w-3.5" />
+                            </button>
+                        </div>
                         <!-- Emoji picker -->
                         <div class="relative">
                             <button type="button" @click="toggleEmojiPicker(comment.id)" class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title="Add reaction">
@@ -855,6 +873,12 @@ watch(() => props.ticketId, loadComments);
 
                         <!-- Hover action bar for reply -->
                         <div class="absolute top-1.5 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150 bg-background/90 backdrop-blur-sm border border-border/40 rounded-lg px-1 py-0.5 shadow-sm" @click.stop>
+                            <!-- Interactions Info -->
+                            <div v-if="reply.upvotes > 0 || reply.downvotes > 0 || reply.reactions.length > 0" class="relative">
+                                <button type="button" @click="openInteractionsModal(reply)" class="flex h-6 w-6 items-center justify-center rounded transition-colors text-muted-foreground hover:text-foreground hover:bg-muted" title="View interactions">
+                                    <Users class="h-3.5 w-3.5" />
+                                </button>
+                            </div>
                             <div class="relative">
                                 <button type="button" @click="toggleEmojiPicker(reply.id)" class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title="Add reaction">
                                     <SmilePlus class="h-3.5 w-3.5" />
@@ -934,6 +958,102 @@ watch(() => props.ticketId, loadComments);
         </Transition>
 
     </div>
+
+    <!-- Interactions Modal -->
+    <Dialog :open="interactionsModalComment !== null" @update:open="(val) => { if (!val) interactionsModalComment = null; }">
+        <DialogContent class="sm:max-w-[425px] p-0 overflow-hidden gap-0">
+            <DialogHeader class="p-4 pb-0 border-b border-border/40 bg-muted/20">
+                <DialogTitle class="text-base font-bold flex items-center gap-2">
+                    <Users class="h-4 w-4 text-muted-foreground" />
+                    Interactions
+                </DialogTitle>
+                <DialogDescription class="text-xs text-muted-foreground mt-1 mb-3">
+                    People who reacted to <span class="font-medium text-foreground">{{ interactionsModalComment?.userName }}</span>'s comment.
+                </DialogDescription>
+            </DialogHeader>
+
+            <div class="px-4 py-3 bg-background" v-if="interactionsModalComment">
+                <Tabs defaultValue="all" class="w-full">
+                    <TabsList class="w-full justify-start h-9 p-1 bg-muted/40 rounded-lg overflow-x-auto flex-nowrap hide-scrollbar">
+                        <TabsTrigger value="all" class="text-xs px-3 h-7 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm">All</TabsTrigger>
+                        <TabsTrigger v-if="interactionsModalComment.upvotes > 0" value="upvotes" class="text-xs px-3 h-7 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm flex items-center gap-1.5">
+                            <ArrowBigUp class="h-3.5 w-3.5 text-indigo-500" />
+                            <span class="tabular-nums">{{ interactionsModalComment.upvotes }}</span>
+                        </TabsTrigger>
+                        <TabsTrigger v-if="interactionsModalComment.downvotes > 0" value="downvotes" class="text-xs px-3 h-7 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm flex items-center gap-1.5">
+                            <ArrowBigDown class="h-3.5 w-3.5 text-orange-500" />
+                            <span class="tabular-nums">{{ interactionsModalComment.downvotes }}</span>
+                        </TabsTrigger>
+                        <TabsTrigger v-for="rxn in interactionsModalComment.reactions" :key="rxn.emoji" :value="rxn.emoji" class="text-xs px-3 h-7 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm flex items-center gap-1.5">
+                            <span>{{ rxn.emoji }}</span>
+                            <span class="tabular-nums">{{ rxn.count }}</span>
+                        </TabsTrigger>
+                    </TabsList>
+
+                    <div class="mt-4 max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar">
+                        <!-- All Tab -->
+                        <TabsContent value="all" class="mt-0 focus-visible:outline-none flex flex-col gap-4">
+                            <div v-if="interactionsModalComment.upvotes > 0">
+                                <h4 class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1.5"><ArrowBigUp class="h-3.5 w-3.5 text-indigo-500" /> Upvotes</h4>
+                                <div class="flex flex-col gap-1.5">
+                                    <div v-for="user in interactionsModalComment.upvoters" :key="user" class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-muted/40 transition-colors">
+                                        <div :class="['h-6 w-6 rounded-full text-[10px] font-bold flex items-center justify-center border shrink-0 select-none', getAvatarColor(user)]">{{ user.split(' ').map((w: string) => w[0]?.toUpperCase() ?? '').slice(0, 2).join('') }}</div>
+                                        <span class="text-sm font-medium text-foreground">{{ user }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div v-if="interactionsModalComment.downvotes > 0">
+                                <h4 class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1.5"><ArrowBigDown class="h-3.5 w-3.5 text-orange-500" /> Downvotes</h4>
+                                <div class="flex flex-col gap-1.5">
+                                    <div v-for="user in interactionsModalComment.downvoters" :key="user" class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-muted/40 transition-colors">
+                                        <div :class="['h-6 w-6 rounded-full text-[10px] font-bold flex items-center justify-center border shrink-0 select-none', getAvatarColor(user)]">{{ user.split(' ').map((w: string) => w[0]?.toUpperCase() ?? '').slice(0, 2).join('') }}</div>
+                                        <span class="text-sm font-medium text-foreground">{{ user }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div v-for="rxn in interactionsModalComment.reactions" :key="rxn.emoji">
+                                <h4 class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1.5"><span class="text-base leading-none">{{ rxn.emoji }}</span> Reactions</h4>
+                                <div class="flex flex-col gap-1.5">
+                                    <div v-for="user in rxn.users" :key="user" class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-muted/40 transition-colors">
+                                        <div :class="['h-6 w-6 rounded-full text-[10px] font-bold flex items-center justify-center border shrink-0 select-none', getAvatarColor(user)]">{{ user.split(' ').map((w: string) => w[0]?.toUpperCase() ?? '').slice(0, 2).join('') }}</div>
+                                        <span class="text-sm font-medium text-foreground">{{ user }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </TabsContent>
+
+                        <!-- Specific Tabs -->
+                        <TabsContent v-if="interactionsModalComment.upvotes > 0" value="upvotes" class="mt-0 focus-visible:outline-none">
+                            <div class="flex flex-col gap-1.5">
+                                <div v-for="user in interactionsModalComment.upvoters" :key="user" class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-muted/40 transition-colors">
+                                    <div :class="['h-6 w-6 rounded-full text-[10px] font-bold flex items-center justify-center border shrink-0 select-none', getAvatarColor(user)]">{{ user.split(' ').map((w: string) => w[0]?.toUpperCase() ?? '').slice(0, 2).join('') }}</div>
+                                    <span class="text-sm font-medium text-foreground">{{ user }}</span>
+                                </div>
+                            </div>
+                        </TabsContent>
+                        
+                        <TabsContent v-if="interactionsModalComment.downvotes > 0" value="downvotes" class="mt-0 focus-visible:outline-none">
+                            <div class="flex flex-col gap-1.5">
+                                <div v-for="user in interactionsModalComment.downvoters" :key="user" class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-muted/40 transition-colors">
+                                    <div :class="['h-6 w-6 rounded-full text-[10px] font-bold flex items-center justify-center border shrink-0 select-none', getAvatarColor(user)]">{{ user.split(' ').map((w: string) => w[0]?.toUpperCase() ?? '').slice(0, 2).join('') }}</div>
+                                    <span class="text-sm font-medium text-foreground">{{ user }}</span>
+                                </div>
+                            </div>
+                        </TabsContent>
+
+                        <TabsContent v-for="rxn in interactionsModalComment.reactions" :key="rxn.emoji" :value="rxn.emoji" class="mt-0 focus-visible:outline-none">
+                            <div class="flex flex-col gap-1.5">
+                                <div v-for="user in rxn.users" :key="user" class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-muted/40 transition-colors">
+                                    <div :class="['h-6 w-6 rounded-full text-[10px] font-bold flex items-center justify-center border shrink-0 select-none', getAvatarColor(user)]">{{ user.split(' ').map((w: string) => w[0]?.toUpperCase() ?? '').slice(0, 2).join('') }}</div>
+                                    <span class="text-sm font-medium text-foreground">{{ user }}</span>
+                                </div>
+                            </div>
+                        </TabsContent>
+                    </div>
+                </Tabs>
+            </div>
+        </DialogContent>
+    </Dialog>
 </template>
 
 <style scoped>

@@ -47,6 +47,17 @@ return [
             'report' => false,
         ],
 
+        /*
+         * Database dumps from Diagnostics (mysqldump). Not under the default
+         * "local" disk, which uses storage/app/private for Laravel 11+.
+         */
+        'backups' => [
+            'driver' => 'local',
+            'root' => storage_path('app/backups'),
+            'throw' => false,
+            'report' => false,
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),
