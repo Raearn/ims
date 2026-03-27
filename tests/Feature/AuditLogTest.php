@@ -78,6 +78,24 @@ class AuditLogTest extends TestCase
                 ->has('activities.links')
                 ->has('filters')
                 ->has('users')
+                ->has('users.0', fn ($u) => $u->has('id')->has('name')->has('role'))
+            );
+    }
+
+    public function test_audit_log_actor_filter_users_ordered_admin_supervisor_technical_then_name(): void
+    {
+        $admin = User::factory()->admin()->create(['name' => 'Zoe Admin']);
+        $supervisor = User::factory()->supervisor()->create(['name' => 'Amy Supervisor']);
+        $technical = User::factory()->create(['role' => 'technical', 'name' => 'Bob Technical']);
+
+        $this->actingAs($admin)
+            ->get(route('audit-log'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('users', 3)
+                ->where('users.0.id', $admin->id)
+                ->where('users.1.id', $supervisor->id)
+                ->where('users.2.id', $technical->id)
             );
     }
 
@@ -106,6 +124,8 @@ class AuditLogTest extends TestCase
                     ->has('oldValue')
                     ->has('newValue')
                     ->has('userName')
+                    ->has('userRole')
+                    ->where('userRole', 'admin')
                     ->has('userId')
                     ->has('ticketId')
                     ->has('ticketTitle')
@@ -256,6 +276,7 @@ class AuditLogTest extends TestCase
             ->get(route('audit-log', ['ticket_id' => $ticketA->id]))
             ->assertOk()
             ->assertInertia(fn ($page) => $page
+                ->where('filters.ticket_id', (string) $ticketA->id)
                 ->where('activities.data', fn ($data) =>
                     // Every row must belong to ticketA, none to ticketB
                     collect($data)->every(fn ($row) => $row['ticketId'] === $ticketA->id)
@@ -287,5 +308,51 @@ class AuditLogTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->where('activities.current_page', 2)
             );
+    }
+
+    // ── Ticket detail JSON (audit log row → modal) ────────────────────────────
+
+    public function test_admin_can_fetch_ticket_detail_json_for_audit_modal(): void
+    {
+        $admin = $this->admin();
+        $ticket = Ticket::factory()->create(['title' => 'Modal ticket']);
+
+        $response = $this->actingAs($admin)
+            ->getJson(route('tickets.detail-json', $ticket));
+
+        $response->assertOk()
+            ->assertJsonStructure([
+                'ticket' => [
+                    'numericId', 'id', 'title', 'description', 'status', 'priority',
+                    'category', 'handlerIds', 'handlers', 'reporter', 'reporterId',
+                    'attachmentUrl', 'createdAt', 'createdAtFormatted', 'createdAtRaw',
+                    'solution', 'resolvedInDuration', 'resolvedAtFormatted', 'commentsCount',
+                ],
+                'priorities',
+            ])
+            ->assertJsonPath('ticket.numericId', $ticket->id)
+            ->assertJsonPath('ticket.title', 'Modal ticket');
+
+        $this->assertIsArray($response->json('priorities'));
+    }
+
+    public function test_supervisor_cannot_fetch_ticket_detail_json(): void
+    {
+        $supervisor = User::factory()->create(['role' => 'supervisor']);
+        $ticket = Ticket::factory()->create();
+
+        $this->actingAs($supervisor)
+            ->getJson(route('tickets.detail-json', $ticket))
+            ->assertRedirect();
+    }
+
+    public function test_technical_user_cannot_fetch_ticket_detail_json(): void
+    {
+        $technical = User::factory()->create(['role' => 'technical']);
+        $ticket = Ticket::factory()->create();
+
+        $this->actingAs($technical)
+            ->getJson(route('tickets.detail-json', $ticket))
+            ->assertForbidden();
     }
 }

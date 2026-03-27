@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/layouts/AppLayout.vue';
-import TicketComments from '@/components/TicketComments.vue';
+import TicketDetailModal from '@/components/TicketDetailModal.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -45,55 +45,18 @@ import {
     Pencil,
     Save,
     Upload,
-    ImageIcon,
     SlidersHorizontal,
     ChevronRight,
     Lock,
     RefreshCcw,
     Download,
-    History,
-    GitBranch,
-    Flag,
     MessageSquare,
-    UserMinus,
-    Smile,
-    FilePenLine,
-    Pin,
-    PinOff,
 } from 'lucide-vue-next';
 import { ref, watch, computed, onMounted, onUnmounted } from 'vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
-import { ensureLucideIconsLoaded, resolveLucideIcon } from '@/composables/useLucideIconRegistry';
-import { Ticket, TicketCheck, Loader, Pause, Play, X, Ban, ChevronsUpDown, ChevronUp, ChevronDown, ChevronLeft } from 'lucide-vue-next';
+import { ensureLucideIconsLoaded, lucideAllIconMap, resolveLucideIcon } from '@/composables/useLucideIconRegistry';
+import { Ticket, TicketCheck, Loader, X, ChevronsUpDown, ChevronUp, ChevronDown, ChevronLeft } from 'lucide-vue-next';
 import { compressImage } from '@/lib/utils';
-
-interface ActivityEntry {
-    id: number;
-    action: string;
-    oldValue: string | null;
-    newValue: string | null;
-    userName: string;
-    createdAt: string;
-    createdAtFormatted: string;
-}
-
-// ── Detail modal history tab ───────────────────────────────────────────────
-const detailTab = ref<'overview' | 'history'>('overview');
-const activityLog = ref<ActivityEntry[]>([]);
-const activityLoading = ref(false);
-const historyFetchedFor = ref<number | null>(null);
-
-async function fetchHistory(ticketId: number): Promise<void> {
-    if (historyFetchedFor.value === ticketId) return;
-    activityLoading.value = true;
-    try {
-        const res = await fetch(route('tickets.history', { ticket: ticketId }));
-        activityLog.value = await res.json();
-        historyFetchedFor.value = ticketId;
-    } finally {
-        activityLoading.value = false;
-    }
-}
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -118,15 +81,26 @@ const page = usePage();
 const checkQueryForTicket = () => {
     const params = new URLSearchParams(window.location.search);
     const ticketId = params.get('ticket_id');
+    const create = params.get('create');
     
+    let urlChanged = false;
+
     if (ticketId) {
         const ticket = props.tickets.find((t) => t.numericId === parseInt(ticketId));
         if (ticket) {
             openDetailModal(ticket);
         }
-        
-        // Clean up the URL
         params.delete('ticket_id');
+        urlChanged = true;
+    }
+
+    if (create === 'true') {
+        isCreateModalOpen.value = true;
+        params.delete('create');
+        urlChanged = true;
+    }
+    
+    if (urlChanged) {
         const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
         window.history.replaceState({}, '', newUrl);
     }
@@ -174,77 +148,47 @@ const props = defineProps<{
     }[];
     categories: { id: number; name: string; icon: string }[];
     priorities: { id: number; name: string; icon: string; color: string }[];
-    statuses: { id: number; name: string }[];
+    statuses: {
+        id: number;
+        name: string;
+        icon: string;
+        color: string;
+        handler_requirement: 'none' | 'optional' | 'required';
+    }[];
 }>();
 
-const ticketStats = computed(() => [
-    {
-        label: 'Total',
-        status: 'All',
-        value: preStatusFiltered.value.length,
-        icon: Ticket,
-        colorClass: 'text-primary',
-        bgClass: 'bg-primary/10',
-        borderActive: 'border-primary/40',
-        glowClass: 'shadow-primary/20',
-        ringClass: 'ring-primary/20',
-    },
-    {
-        label: 'Open',
-        status: 'Open',
-        value: preStatusFiltered.value.filter(t => t.status === 'Open').length,
-        icon: AlertTriangle,
-        colorClass: 'text-rose-500',
-        bgClass: 'bg-rose-500/10',
-        borderActive: 'border-rose-500/40',
-        glowClass: 'shadow-rose-500/20',
-        ringClass: 'ring-rose-500/20',
-    },
-    {
-        label: 'In Progress',
-        status: 'In Progress',
-        value: preStatusFiltered.value.filter(t => t.status === 'In Progress').length,
-        icon: Play,
-        colorClass: 'text-blue-500',
-        bgClass: 'bg-blue-500/10',
-        borderActive: 'border-blue-500/40',
-        glowClass: 'shadow-blue-500/20',
-        ringClass: 'ring-blue-500/20',
-    },
-    {
-        label: 'On Hold',
-        status: 'On Hold',
-        value: preStatusFiltered.value.filter(t => t.status === 'On Hold').length,
-        icon: Pause,
-        colorClass: 'text-amber-500',
-        bgClass: 'bg-amber-500/10',
-        borderActive: 'border-amber-500/40',
-        glowClass: 'shadow-amber-500/20',
-        ringClass: 'ring-amber-500/20',
-    },
-    {
-        label: 'Resolved',
-        status: 'Resolved',
-        value: preStatusFiltered.value.filter(t => t.status === 'Resolved').length,
-        icon: CheckCircle2,
-        colorClass: 'text-emerald-500',
-        bgClass: 'bg-emerald-500/10',
-        borderActive: 'border-emerald-500/40',
-        glowClass: 'shadow-emerald-500/20',
-        ringClass: 'ring-emerald-500/20',
-    },
-    {
-        label: 'Closed',
-        status: 'Closed',
-        value: preStatusFiltered.value.filter(t => t.status === 'Closed').length,
-        icon: Ban,
-        colorClass: 'text-slate-500',
-        bgClass: 'bg-slate-500/10',
-        borderActive: 'border-slate-500/40',
-        glowClass: 'shadow-slate-500/20',
-        ringClass: 'ring-slate-500/20',
-    },
-]);
+type StatusHandlerRequirement = 'none' | 'optional' | 'required';
+
+function statusHandlerRequirement(statusName: string): StatusHandlerRequirement {
+    const row = props.statuses.find((s) => s.name === statusName);
+    return row?.handler_requirement ?? 'required';
+}
+
+function isStatusNoHandlers(statusName: string): boolean {
+    return statusHandlerRequirement(statusName) === 'none';
+}
+
+function isStatusHandlerRequired(statusName: string): boolean {
+    return statusHandlerRequirement(statusName) === 'required';
+}
+
+function isStatusHandlerOptional(statusName: string): boolean {
+    return statusHandlerRequirement(statusName) === 'optional';
+}
+
+const defaultNewTicketStatusName = computed(
+    () => props.statuses.find((s) => s.handler_requirement === 'none')?.name ?? props.statuses[0]?.name ?? 'Open',
+);
+
+const firstRequiredStatusName = computed(
+    () => props.statuses.find((s) => s.handler_requirement === 'required')?.name ?? props.statuses[1]?.name ?? 'In Progress',
+);
+
+const primaryQueueStatusName = computed(
+    () => props.statuses.find((s) => s.handler_requirement === 'none')?.name ?? 'Open',
+);
+
+const assignModalTargetStatuses = computed(() => props.statuses.filter((s) => s.handler_requirement === 'required'));
 
 const isCreateModalOpen = ref(false);
 const currentStep = ref(1);
@@ -254,27 +198,6 @@ const selectedTicket = ref<typeof props.tickets[0] | null>(null);
 const editingTicket = ref<typeof props.tickets[0] | null>(null);
 const attachmentPreview = ref<string | null>(null);
 const attachmentCompression = ref<{ before: number; after: number } | null>(null);
-
-// ── History tab watches (depend on isDetailModalOpen + selectedTicket) ─────
-watch(
-    () => detailTab.value,
-    (tab) => {
-        if (tab === 'history' && selectedTicket.value) {
-            fetchHistory(selectedTicket.value.numericId);
-        }
-    },
-);
-
-watch(
-    () => isDetailModalOpen.value,
-    (open) => {
-        if (!open) {
-            detailTab.value = 'overview';
-            historyFetchedFor.value = null;
-            activityLog.value = [];
-        }
-    },
-);
 
 const isDraggingOver = ref(false);
 
@@ -337,15 +260,13 @@ const form = useForm({
     description: '',
     priority: 'Medium',
     category: 'Software',
-    status: 'Open',
+    status: props.statuses.find((s) => s.handler_requirement === 'none')?.name ?? props.statuses[0]?.name ?? 'Open',
     handler_ids: [] as number[],
     solution: '',
     attachment: null as File | null,
 });
 
-const handlerRequired = computed(() =>
-    ['In Progress', 'On Hold', 'Resolved'].includes(form.status)
-);
+const handlerRequired = computed(() => isStatusHandlerRequired(form.status));
 
 const isEmptyHtml = (html: string): boolean => !html.replace(/<[^>]*>/g, '').trim();
 
@@ -356,7 +277,9 @@ const isAssignModalOpen = ref(false);
 const assigningTicket = ref<typeof props.tickets[0] | null>(null);
 const assignHandlerSearch = ref('');
 // When the ticket is Open, admin must also pick a new status before saving
-const assignStatusOverride = ref<string>('In Progress');
+const assignStatusOverride = ref<string>(
+    props.statuses.find((s) => s.handler_requirement === 'required')?.name ?? 'In Progress',
+);
 
 const assignForm = useForm({
     handler_ids: [] as number[],
@@ -370,22 +293,22 @@ const filteredAssignUsers = computed(() => {
 });
 
 // defaultStatus is used when opening from an Open ticket (e.g. 'Resolved' via Mark as Resolved)
-const openAssignModal = (ticket: typeof props.tickets[0], defaultStatus = 'In Progress') => {
+const openAssignModal = (ticket: typeof props.tickets[0], defaultStatus?: string) => {
     assigningTicket.value = ticket;
     assignForm.handler_ids = [...ticket.handlerIds];
     assignHandlerSearch.value = '';
-    assignStatusOverride.value = defaultStatus;
+    assignStatusOverride.value = defaultStatus ?? firstRequiredStatusName.value;
     isAssignModalOpen.value = true;
 };
 
 const submitAssign = () => {
     if (!assigningTicket.value) return;
     const ticket = assigningTicket.value;
-    const isOpen = ticket.status === 'Open';
+    const isQueueTicket = isStatusNoHandlers(ticket.status);
     assignForm
         .transform(data => ({
             handler_ids: data.handler_ids,
-            ...(isOpen ? { status: assignStatusOverride.value } : {}),
+            ...(isQueueTicket ? { status: assignStatusOverride.value } : {}),
             ...(assignStatusOverride.value === 'Resolved' || ticket.status === 'Resolved'
                 ? { solution: data.solution }
                 : {}),
@@ -403,7 +326,7 @@ watch(isAssignModalOpen, (val) => {
     if (!val) {
         assignHandlerSearch.value = '';
         assigningTicket.value = null;
-        assignStatusOverride.value = 'In Progress';
+        assignStatusOverride.value = firstRequiredStatusName.value;
         assignForm.solution = '';
     }
 });
@@ -428,7 +351,9 @@ const updateStatus = (ticket: typeof props.tickets[0], status: string) => {
 // ── Bulk actions ──────────────────────────────────────────────────────────
 // Bulk Change Status
 const isBulkStatusModalOpen = ref(false);
-const bulkStatusValue = ref('In Progress');
+const bulkStatusValue = ref(
+    props.statuses.find((s) => s.handler_requirement === 'required')?.name ?? 'In Progress',
+);
 const bulkStatusHandlerSearch = ref('');
 const bulkStatusHandlerIds = ref<number[]>([]);
 const bulkStatusSolution = ref('');
@@ -442,14 +367,14 @@ const filteredBulkStatusUsers = computed(() => {
 const bulkStatusForm = useForm({ status: '' });
 
 const openBulkStatusModal = () => {
-    bulkStatusValue.value = 'In Progress';
+    bulkStatusValue.value = firstRequiredStatusName.value;
     bulkStatusHandlerIds.value = [];
     bulkStatusHandlerSearch.value = '';
     isBulkStatusModalOpen.value = true;
 };
 
 watch(bulkStatusValue, (val) => {
-    if (val === 'Open') {
+    if (isStatusNoHandlers(val)) {
         bulkStatusHandlerIds.value = [];
         bulkStatusHandlerSearch.value = '';
     }
@@ -471,7 +396,7 @@ const submitBulkStatus = () => {
         .transform(() => ({
             status: bulkStatusValue.value,
             ticket_ids: selectedIds.value,
-            handler_ids: bulkStatusValue.value === 'Open' ? [] : bulkStatusHandlerIds.value,
+            handler_ids: isStatusNoHandlers(bulkStatusValue.value) ? [] : bulkStatusHandlerIds.value,
             ...(bulkStatusValue.value === 'Resolved' ? { solution: bulkStatusSolution.value } : {}),
         }))
         .patch(route('tickets.bulk.status'), {
@@ -563,11 +488,15 @@ const openChangeStatusModal = (ticket: typeof props.tickets[0], defaultStatus?: 
     if (defaultStatus && changeStatusOptions.value.includes(defaultStatus)) {
         changeStatusValue.value = defaultStatus;
     } else {
-        // Default to the first non-'Open' option so the watcher never clears pre-existing handlers
-        changeStatusValue.value = changeStatusOptions.value.find(s => s !== 'Open') ?? changeStatusOptions.value[0] ?? '';
+        // Default to the first status that can carry handlers so the watcher never clears pre-existing handlers
+        changeStatusValue.value =
+            changeStatusOptions.value.find((s) => !isStatusNoHandlers(s)) ?? changeStatusOptions.value[0] ?? '';
     }
-    // Set handlers AFTER status so any watcher side-effects have already resolved
-    changeStatusForm.handler_ids = [...ticket.handlerIds];
+    if (! isStatusNoHandlers(changeStatusValue.value)) {
+        changeStatusForm.handler_ids = [...ticket.handlerIds];
+    } else {
+        changeStatusForm.handler_ids = [];
+    }
     changeStatusForm.solution = '';
     isChangeStatusModalOpen.value = true;
 };
@@ -674,14 +603,26 @@ const exportToExcel = async () => {
             };
         });
 
-        // ── Status / priority color maps ────────────────────────────────
-        const statusColors: Record<string, string> = {
-            'Open':        'FFFEE2E2',
-            'In Progress': 'FFFEF9C3',
-            'On Hold':     'FFFCE7F3',
-            'Resolved':    'FFD1FAE5',
-            'Closed':      'FFF1F5F9',
+        const hexToExcelSoftFill = (hex: string): string | undefined => {
+            const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+            if (! m) {
+                return undefined;
+            }
+            const n = parseInt(m[1], 16);
+            const r = (n >> 16) & 255;
+            const g = (n >> 8) & 255;
+            const b = n & 255;
+            const mix = (c: number) => Math.round(c * 0.12 + 255 * 0.88);
+            const h = (x: number) => x.toString(16).padStart(2, '0').toUpperCase();
+            return `FF${h(mix(r))}${h(mix(g))}${h(mix(b))}`;
         };
+        const statusColors: Record<string, string> = {};
+        for (const s of props.statuses) {
+            const argb = hexToExcelSoftFill(s.color);
+            if (argb) {
+                statusColors[s.name] = argb;
+            }
+        }
         const priorityColors: Record<string, string> = {
             'Critical': 'FFFEE2E2',
             'High':     'FFFFEEDD',
@@ -802,6 +743,7 @@ watch(isCreateModalOpen, (val) => {
     if (val && !editingTicket.value) {
         currentStep.value = 1;
         form.reset();
+        form.status = defaultNewTicketStatusName.value;
         attachmentPreview.value = null;
     }
     if (!val) {
@@ -908,6 +850,49 @@ const preStatusFiltered = computed(() => {
     return base;
 });
 
+/** Stat card row: either the fixed “All” summary or a DB-driven status */
+type TicketStatRow = {
+    label: string;
+    status: string;
+    value: number;
+    icon: object;
+    accentHex?: string;
+    colorClass: string;
+    bgClass: string;
+    borderActive: string;
+    glowClass: string;
+    ringClass: string;
+};
+
+const ticketStats = computed((): TicketStatRow[] => {
+    void lucideAllIconMap.value;
+    const allCount = preStatusFiltered.value.length;
+    const allRow: TicketStatRow = {
+        label: 'Total',
+        status: 'All',
+        value: allCount,
+        icon: Ticket,
+        colorClass: 'text-primary',
+        bgClass: 'bg-primary/10',
+        borderActive: 'border-primary/40',
+        glowClass: 'shadow-primary/20',
+        ringClass: 'ring-primary/20',
+    };
+    const statusRows: TicketStatRow[] = props.statuses.map((s) => ({
+        label: s.name,
+        status: s.name,
+        value: preStatusFiltered.value.filter((t) => t.status === s.name).length,
+        icon: resolveLucideIcon(s.icon, Circle),
+        accentHex: s.color,
+        colorClass: '',
+        bgClass: '',
+        borderActive: '',
+        glowClass: '',
+        ringClass: '',
+    }));
+    return [allRow, ...statusRows];
+});
+
 // Excludes priority filter → drives priority-chip counts (they ARE the priority filter).
 const prePriorityFiltered = computed(() => {
     let base = searchDateFiltered.value;
@@ -996,80 +981,47 @@ const getInitials = (name: string) => {
     return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
 };
 
-// ── Activity history helpers ───────────────────────────────────────────────
-type Component = typeof History;
+const statusOptionsLocal = computed(() => {
+    void lucideAllIconMap.value;
+    return props.statuses.map((s) => ({
+        ...s,
+        iconComponent: resolveLucideIcon(s.icon, Circle),
+    }));
+});
 
-const ACTIVITY_CONFIG: Record<string, { icon: Component; classes: string; verb: string }> = {
-    created:           { icon: FilePenLine, classes: 'bg-primary/10 border-primary/20 text-primary', verb: 'created this ticket' },
-    status_changed:    { icon: GitBranch,   classes: 'bg-blue-500/10 border-blue-500/20 text-blue-500', verb: 'changed status' },
-    priority_changed:  { icon: Flag,        classes: 'bg-amber-500/10 border-amber-500/20 text-amber-500', verb: 'changed priority' },
-    solution_updated:  { icon: CheckCircle2, classes: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500', verb: 'updated the solution' },
-    handler_assigned:  { icon: UserPlus,    classes: 'bg-violet-500/10 border-violet-500/20 text-violet-500', verb: 'assigned handler(s)' },
-    handler_removed:   { icon: UserMinus,   classes: 'bg-rose-500/10 border-rose-500/20 text-rose-500', verb: 'removed handler(s)' },
-    comment_posted:    { icon: MessageSquare, classes: 'bg-sky-500/10 border-sky-500/20 text-sky-500', verb: 'posted a comment' },
-    comment_deleted:   { icon: Trash2,      classes: 'bg-rose-500/10 border-rose-500/20 text-rose-500', verb: 'deleted a comment' },
-    comment_pinned:    { icon: Pin,         classes: 'bg-amber-500/10 border-amber-500/20 text-amber-500', verb: 'pinned a comment' },
-    comment_unpinned:  { icon: PinOff,      classes: 'bg-muted border-border/50 text-muted-foreground', verb: 'unpinned a comment' },
-    reaction_added:    { icon: Smile,       classes: 'bg-pink-500/10 border-pink-500/20 text-pink-500', verb: 'reacted' },
-    reaction_removed:  { icon: Smile,       classes: 'bg-muted border-border/50 text-muted-foreground', verb: 'removed a reaction' },
-};
+function getStatusMeta(status: string) {
+    return statusOptionsLocal.value.find((s) => s.name === status);
+}
 
-const getActivityIcon = (action: string): Component =>
-    (ACTIVITY_CONFIG[action]?.icon ?? History) as Component;
+function getStatusStyle(status: string): Record<string, string> {
+    const found = getStatusMeta(status);
+    if (! found?.color) {
+        return {};
+    }
+    return {
+        backgroundColor: found.color + '26',
+        color: found.color,
+        borderColor: found.color + '40',
+    };
+}
 
-const getActivityIconClass = (action: string): string =>
-    ACTIVITY_CONFIG[action]?.classes ?? 'bg-muted border-border/50 text-muted-foreground';
+function getStatusIcon(status: string) {
+    return getStatusMeta(status)?.iconComponent ?? Circle;
+}
 
-const getActivityLabel = (entry: ActivityEntry): string => {
-    const verb = ACTIVITY_CONFIG[entry.action]?.verb ?? entry.action.replace(/_/g, ' ');
-    if (entry.action === 'handler_assigned' && entry.newValue) {
-        return `assigned ${entry.newValue}`;
-    }
-    if (entry.action === 'handler_removed' && entry.oldValue) {
-        return `removed ${entry.oldValue}`;
-    }
-    if (entry.action === 'reaction_added' && entry.newValue) {
-        return `reacted with ${entry.newValue}`;
-    }
-    if (['comment_posted', 'comment_deleted'].includes(entry.action)) {
-        const snippet = (entry.newValue ?? entry.oldValue)?.trim();
-        return snippet ? `${verb}: "${snippet}"` : verb;
-    }
-    return verb;
-};
+function statusStripeGradientStyle(status: string): Record<string, string> {
+    const c = getStatusMeta(status)?.color ?? '#94a3b8';
+    return {
+        background: `linear-gradient(to bottom, ${c}cc, ${c}66, transparent)`,
+    };
+}
 
-const getStatusColor = (status: string) => {
-    switch (status) {
-        case 'Open': return 'bg-rose-500/15 text-rose-500 border-rose-500/30';
-        case 'In Progress': return 'bg-blue-500/15 text-blue-500 border-blue-500/30';
-        case 'On Hold': return 'bg-amber-500/15 text-amber-500 border-amber-500/30';
-        case 'Resolved': return 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30';
-        case 'Closed': return 'bg-slate-500/15 text-slate-500 border-slate-500/30';
-        default: return 'bg-secondary text-secondary-foreground';
-    }
-};
-
-const getStatusLeftBorder = (status: string) => {
-    switch (status) {
-        case 'Open': return 'border-l-rose-500';
-        case 'In Progress': return 'border-l-blue-500';
-        case 'On Hold': return 'border-l-amber-500';
-        case 'Resolved': return 'border-l-emerald-500';
-        case 'Closed': return 'border-l-slate-400';
-        default: return 'border-l-border';
-    }
-};
-
-const getStatusIcon = (status: string) => {
-    switch (status) {
-        case 'Open': return AlertTriangle;
-        case 'In Progress': return Play;
-        case 'On Hold': return Pause;
-        case 'Resolved': return CheckCircle2;
-        case 'Closed': return Ban;
-        default: return Circle;
-    }
-};
+function statCardActiveAccentStyle(hex: string): Record<string, string> {
+    return {
+        borderColor: `${hex}99`,
+        boxShadow: `0 4px 14px ${hex}35, 0 0 0 2px ${hex}30`,
+    };
+}
 
 const getPriorityIcon = (priority: string) => {
     const found = priorityOptions.value.find((p) => p.name === priority);
@@ -1121,14 +1073,14 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                     <div class="flex items-center gap-2.5">
                         <h2 class="text-xl font-bold tracking-tight sm:text-2xl">Tickets</h2>
                         <span
-                            v-if="ticketStats.find(s => s.status === 'Open')?.value ?? 0 > 0"
+                            v-if="ticketStats.find(s => s.status === primaryQueueStatusName)?.value ?? 0 > 0"
                             class="inline-flex items-center gap-1 rounded-full bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 text-[10px] font-bold text-rose-500"
                         >
                             <span class="relative flex h-1.5 w-1.5">
                                 <span class="animate-ping absolute h-full w-full rounded-full bg-rose-400 opacity-75" />
                                 <span class="relative rounded-full h-1.5 w-1.5 bg-rose-500" />
                             </span>
-                            {{ ticketStats.find(s => s.status === 'Open')?.value }} open
+                            {{ ticketStats.find(s => s.status === primaryQueueStatusName)?.value }} open
                         </span>
                     </div>
                     <p class="text-xs text-muted-foreground sm:text-sm">Manage and track all incident tickets.</p>
@@ -1362,9 +1314,10 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                                                     :class="[
                                                         'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-bold border-2 transition-all',
                                                         form.status === s
-                                                            ? [getStatusColor(s), 'border-current shadow-sm']
+                                                            ? 'border-current shadow-sm'
                                                             : 'border-muted text-muted-foreground hover:border-primary/30 hover:bg-muted/50'
                                                     ]"
+                                                    :style="form.status === s ? getStatusStyle(s) : {}"
                                                 >
                                                     <component :is="getStatusIcon(s)" class="h-3 w-3" />
                                                     {{ s }}
@@ -1373,7 +1326,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                                         </div>
 
                                         <!-- Handlers -->
-                                        <div v-if="form.status !== 'Open'" class="grid gap-2">
+                                        <div v-if="!isStatusNoHandlers(form.status)" class="grid gap-2">
                                             <Label class="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                                                 Handlers
                                                 <span v-if="handlerRequired" class="ml-1 text-destructive">*</span>
@@ -1494,27 +1447,50 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                     :class="[
                         'group relative flex flex-col gap-2.5 rounded-xl border bg-card px-4 py-3.5 text-left transition-all duration-200 active:scale-[0.97] hover:shadow-md overflow-hidden',
                         currentStatus === stat.status
-                            ? ['border shadow-md ring-2', stat.borderActive, stat.glowClass, stat.ringClass]
+                            ? stat.accentHex
+                                ? 'border shadow-md ring-2 ring-transparent'
+                                : ['border shadow-md ring-2', stat.borderActive, stat.glowClass, stat.ringClass]
                             : 'border-border/60 hover:border-border'
                     ]"
+                    :style="currentStatus === stat.status && stat.accentHex ? statCardActiveAccentStyle(stat.accentHex) : {}"
                 >
                     <!-- Active pip -->
-                    <div :class="['absolute left-0 inset-y-3 w-[3px] rounded-r-full transition-all duration-200', currentStatus === stat.status ? stat.bgClass.replace('/10', '') : 'opacity-0']" />
+                    <div
+                        class="absolute left-0 inset-y-3 w-[3px] rounded-r-full transition-all duration-200"
+                        :class="[
+                            currentStatus === stat.status && !stat.accentHex ? stat.bgClass.replace('/10', '') : '',
+                            currentStatus === stat.status ? '' : 'opacity-0',
+                        ]"
+                        :style="currentStatus === stat.status && stat.accentHex ? { backgroundColor: stat.accentHex } : {}"
+                    />
 
                     <!-- Icon + value row -->
                     <div class="flex items-center gap-3">
-                        <div :class="['flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-transform duration-200 group-hover:scale-110 relative', stat.bgClass]">
-                            <component :is="stat.icon" class="h-4 w-4" :class="stat.colorClass" />
-                            <!-- Pulsing ring for Open tickets -->
+                        <div
+                            class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-transform duration-200 group-hover:scale-110 relative"
+                            :class="stat.accentHex ? '' : stat.bgClass"
+                            :style="stat.accentHex ? { backgroundColor: stat.accentHex + '26' } : {}"
+                        >
+                            <component
+                                :is="stat.icon"
+                                class="h-4 w-4"
+                                :class="stat.accentHex ? '' : stat.colorClass"
+                                :style="stat.accentHex ? { color: stat.accentHex } : {}"
+                            />
                             <span
-                                v-if="stat.status === 'Open' && stat.value > 0"
+                                v-if="stat.status === primaryQueueStatusName && stat.value > 0"
                                 class="absolute inset-0 rounded-lg animate-ping opacity-30"
-                                :class="stat.bgClass"
+                                :class="stat.accentHex ? '' : stat.bgClass"
+                                :style="stat.accentHex ? { backgroundColor: stat.accentHex + '40' } : {}"
                             />
                         </div>
                         <div class="min-w-0 flex-1">
                             <p class="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide truncate">{{ stat.label }}</p>
-                            <p :class="['text-2xl font-bold leading-none tabular-nums mt-0.5', stat.colorClass]">{{ stat.value }}</p>
+                            <p
+                                class="text-2xl font-bold leading-none tabular-nums mt-0.5"
+                                :class="stat.accentHex ? '' : stat.colorClass"
+                                :style="stat.accentHex ? { color: stat.accentHex } : {}"
+                            >{{ stat.value }}</p>
                         </div>
                     </div>
 
@@ -1523,11 +1499,18 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                         <div class="h-1 w-full rounded-full bg-muted/50 overflow-hidden">
                             <div
                                 class="h-full rounded-full transition-all duration-700 ease-out"
-                                :class="stat.bgClass.replace('/10', '/70')"
-                                :style="{ width: `${ticketStats[0].value > 0 ? Math.round((stat.value / ticketStats[0].value) * 100) : 0}%` }"
+                                :class="stat.accentHex ? '' : stat.bgClass.replace('/10', '/70')"
+                                :style="{
+                                    width: `${ticketStats[0].value > 0 ? Math.round((stat.value / ticketStats[0].value) * 100) : 0}%`,
+                                    ...(stat.accentHex ? { backgroundColor: stat.accentHex + 'b3' } : {}),
+                                }"
                             />
                         </div>
-                        <span class="text-[10px] font-semibold tabular-nums" :class="stat.colorClass + '/70'">
+                        <span
+                            class="text-[10px] font-semibold tabular-nums"
+                            :class="stat.accentHex ? '' : stat.colorClass + '/70'"
+                            :style="stat.accentHex ? { color: stat.accentHex + 'cc' } : {}"
+                        >
                             {{ ticketStats[0].value > 0 ? Math.round((stat.value / ticketStats[0].value) * 100) : 0 }}%
                         </span>
                     </template>
@@ -1721,7 +1704,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                             ]"
                         >
                             <!-- Colored left stripe -->
-                            <div :class="['w-1 shrink-0 rounded-none', 'bg-gradient-to-b', getStatusLeftBorder(ticket.status).replace('border-l-', 'from-').concat('/70 to-transparent')]" />
+                            <div class="w-1 shrink-0 rounded-none" :style="statusStripeGradientStyle(ticket.status)" />
 
                             <div class="flex flex-1 items-start gap-3 px-4 py-3.5 min-w-0">
                                 <!-- Checkbox -->
@@ -1738,7 +1721,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                                     <div class="flex items-center justify-between gap-2 mb-1.5">
                                         <div class="flex items-center gap-1.5 flex-wrap">
                                             <span class="text-[10px] font-mono font-bold text-muted-foreground/60">{{ ticket.id }}</span>
-                                            <Badge variant="outline" :class="['inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 border', getStatusColor(ticket.status)]">
+                                            <Badge variant="outline" :class="['inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 border']" :style="getStatusStyle(ticket.status)">
                                                 <component :is="getStatusIcon(ticket.status)" class="h-2.5 w-2.5 shrink-0" />
                                                 {{ ticket.status }}
                                             </Badge>
@@ -1766,7 +1749,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                                                     <DropdownMenuSeparator />
                                                     <DropdownMenuItem
                                                         v-if="ticket.status !== 'Resolved' && ticket.status !== 'Closed'"
-                                                        @click="['Open'].includes(ticket.status) ? openAssignModal(ticket, 'Resolved') : updateStatus(ticket, 'Resolved')"
+                                                        @click="isStatusNoHandlers(ticket.status) ? openAssignModal(ticket, 'Resolved') : updateStatus(ticket, 'Resolved')"
                                                         :disabled="statusProcessing === ticket.numericId"
                                                         class="text-emerald-600 focus:bg-emerald-50 focus:text-emerald-700 dark:text-emerald-400 dark:focus:bg-emerald-950/40 dark:focus:text-emerald-300"
                                                     >
@@ -1985,7 +1968,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                                         </div>
                                     </td>
                                     <td class="px-4 py-3.5">
-                                        <Badge variant="outline" :class="['inline-flex items-center gap-1 whitespace-nowrap text-[10px] font-bold px-2 py-1 border', getStatusColor(ticket.status)]">
+                                        <Badge variant="outline" :class="['inline-flex items-center gap-1 whitespace-nowrap text-[10px] font-bold px-2 py-1 border']" :style="getStatusStyle(ticket.status)">
                                             <component :is="getStatusIcon(ticket.status)" class="h-3 w-3 shrink-0" />
                                             {{ ticket.status }}
                                         </Badge>
@@ -1995,7 +1978,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                                         <div class="flex items-center justify-end gap-1">
                                             <button
                                                 v-if="ticket.status !== 'Resolved' && ticket.status !== 'Closed'"
-                                                @click.stop="['Open'].includes(ticket.status) ? openAssignModal(ticket, 'Resolved') : updateStatus(ticket, 'Resolved')"
+                                                @click.stop="isStatusNoHandlers(ticket.status) ? openAssignModal(ticket, 'Resolved') : updateStatus(ticket, 'Resolved')"
                                                 :disabled="statusProcessing === ticket.numericId"
                                                 class="h-7 w-7 inline-flex items-center justify-center rounded-lg text-muted-foreground/0 group-hover:text-emerald-500 hover:bg-emerald-500/10 transition-all duration-150 disabled:opacity-50"
                                                 title="Mark as Resolved"
@@ -2032,7 +2015,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                                                     <DropdownMenuSeparator />
                                                     <DropdownMenuItem
                                                         v-if="ticket.status !== 'Resolved' && ticket.status !== 'Closed'"
-                                                        @click="['Open'].includes(ticket.status) ? openAssignModal(ticket, 'Resolved') : updateStatus(ticket, 'Resolved')"
+                                                        @click="isStatusNoHandlers(ticket.status) ? openAssignModal(ticket, 'Resolved') : updateStatus(ticket, 'Resolved')"
                                                         :disabled="statusProcessing === ticket.numericId"
                                                         class="text-emerald-600 focus:bg-emerald-50 focus:text-emerald-700 dark:text-emerald-400 dark:focus:bg-emerald-950/40 dark:focus:text-emerald-300"
                                                     >
@@ -2203,215 +2186,13 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
             </Transition>
         </Teleport>
 
-        <!-- View Details Modal -->
-        <Dialog v-model:open="isDetailModalOpen">
-            <DialogContent class="sm:max-w-[580px] p-0 overflow-hidden border-none shadow-2xl max-h-[92dvh] flex flex-col" v-if="selectedTicket">
-                <!-- Header -->
-                <div class="bg-primary/5 px-5 pt-5 pb-4 border-b border-primary/10">
-                    <DialogHeader>
-                        <div class="flex items-center gap-2 mb-2 flex-wrap">
-                            <Badge variant="outline" class="bg-primary/10 text-primary border-primary/20 px-2 py-0 text-[10px] font-bold uppercase tracking-wider">
-                                {{ selectedTicket.id }}
-                            </Badge>
-                            <Badge variant="outline" :class="['inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 border', getStatusColor(selectedTicket.status)]">
-                                <component :is="getStatusIcon(selectedTicket.status)" class="h-3 w-3" />
-                                {{ selectedTicket.status }}
-                            </Badge>
-                            <span class="inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase border" :style="getPriorityStyle(selectedTicket.priority)">
-                                <component :is="getPriorityIcon(selectedTicket.priority)" class="h-3 w-3" />
-                                {{ selectedTicket.priority }}
-                            </span>
-                        </div>
-                        <DialogTitle class="text-base font-bold tracking-tight leading-snug sm:text-lg">
-                            {{ selectedTicket.title }}
-                        </DialogTitle>
-                        <DialogDescription class="text-muted-foreground/70 text-xs mt-0.5">
-                            Submitted {{ selectedTicket.createdAtFormatted }}
-                        </DialogDescription>
-                    </DialogHeader>
-                </div>
-
-                <!-- Body (scrollable) -->
-                <div class="modal-body overflow-y-auto flex-1 flex flex-col">
-                    <!-- Tab switcher -->
-                    <div class="flex items-center gap-1 px-5 pt-4 pb-0 border-b border-border/40">
-                        <button
-                            @click="detailTab = 'overview'"
-                            :class="[
-                                'flex items-center gap-1.5 px-3 py-2 text-xs font-semibold border-b-2 -mb-px transition-colors',
-                                detailTab === 'overview'
-                                    ? 'border-primary text-primary'
-                                    : 'border-transparent text-muted-foreground hover:text-foreground',
-                            ]"
-                        >
-                            <Info class="h-3.5 w-3.5" /> Overview
-                        </button>
-                        <button
-                            @click="detailTab = 'history'"
-                            :class="[
-                                'flex items-center gap-1.5 px-3 py-2 text-xs font-semibold border-b-2 -mb-px transition-colors',
-                                detailTab === 'history'
-                                    ? 'border-primary text-primary'
-                                    : 'border-transparent text-muted-foreground hover:text-foreground',
-                            ]"
-                        >
-                            <History class="h-3.5 w-3.5" /> History
-                        </button>
-                    </div>
-
-                    <!-- Overview tab -->
-                    <div v-if="detailTab === 'overview'" class="px-5 py-5 grid gap-4">
-                        <!-- Meta grid -->
-                        <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-                        <div class="flex flex-col gap-1 rounded-xl bg-muted/40 px-3 py-2.5 border border-border/40">
-                            <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Category</span>
-                            <span class="text-sm font-semibold text-foreground">{{ selectedTicket.category }}</span>
-                        </div>
-                        <div class="flex flex-col gap-1 rounded-xl bg-muted/40 px-3 py-2.5 border border-border/40">
-                            <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Reporter</span>
-                            <div class="flex items-center gap-1.5">
-                                <div class="h-5 w-5 rounded-full bg-muted flex items-center justify-center text-[9px] font-bold border border-border/50 shrink-0">
-                                    {{ getInitials(selectedTicket.reporter) }}
-                                </div>
-                                <span class="text-sm font-semibold text-foreground truncate">{{ selectedTicket.reporter }}</span>
-                            </div>
-                        </div>
-                        <div class="flex flex-col gap-1 rounded-xl bg-muted/40 px-3 py-2.5 border border-border/40 col-span-2 sm:col-span-1">
-                            <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Handlers</span>
-                            <div v-if="selectedTicket.handlers.length > 0" class="flex flex-wrap gap-1 mt-0.5">
-                                <span
-                                    v-for="h in selectedTicket.handlers"
-                                    :key="h.id"
-                                    class="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-semibold border border-border/50"
-                                >
-                                    <span class="h-3.5 w-3.5 rounded-full bg-muted-foreground/20 flex items-center justify-center text-[8px] font-bold shrink-0">{{ getInitials(h.name) }}</span>
-                                    {{ h.name }}
-                                </span>
-                            </div>
-                            <span v-else class="text-sm text-muted-foreground/50 italic">Unassigned</span>
-                        </div>
-                    </div>
-
-                    <!-- Description -->
-                    <div class="flex flex-col gap-2">
-                        <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Description</span>
-                        <div
-                            v-if="selectedTicket.description"
-                            class="rounded-xl border border-border/40 bg-muted/20 px-4 py-3 text-sm text-foreground leading-relaxed prose prose-sm max-w-none dark:prose-invert"
-                            v-html="selectedTicket.description"
-                        />
-                        <div v-else class="rounded-xl border border-dashed border-border/40 bg-muted/10 px-4 py-5 text-center text-sm text-muted-foreground/60 italic">
-                            No description provided.
-                        </div>
-                    </div>
-
-                    <!-- Solution -->
-                    <div v-if="selectedTicket.solution" class="flex flex-col gap-2">
-                        <div class="flex items-center gap-1.5">
-                            <CheckCircle2 class="h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400" />
-                            <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Solution</span>
-                        </div>
-                        <div
-                            class="rounded-xl border border-emerald-200 dark:border-emerald-500/25 bg-emerald-50 dark:bg-emerald-500/10 px-4 py-3 text-sm text-foreground leading-relaxed prose prose-sm max-w-none dark:prose-invert"
-                            v-html="selectedTicket.solution"
-                        />
-                    </div>
-
-                    <!-- Attachment -->
-                    <div v-if="selectedTicket.attachmentUrl" class="flex flex-col gap-2">
-                        <div class="flex items-center gap-1.5">
-                            <ImageIcon class="h-3.5 w-3.5 text-muted-foreground" />
-                            <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Attachment</span>
-                        </div>
-                        <a :href="selectedTicket.attachmentUrl" target="_blank" class="block rounded-xl overflow-hidden border border-border/50 bg-muted/20 hover:opacity-90 transition-opacity">
-                            <img :src="selectedTicket.attachmentUrl" alt="Ticket attachment" class="w-full max-h-52 object-contain" />
-                        </a>
-                    </div>
-
-                    <!-- Timeline -->
-                    <div class="flex flex-col gap-1.5">
-                        <div class="flex items-center gap-2 text-xs text-muted-foreground/70">
-                            <Clock class="h-3.5 w-3.5 shrink-0" />
-                            <span>Opened {{ selectedTicket.createdAt }}</span>
-                            <span class="text-muted-foreground/40">·</span>
-                            <span>{{ selectedTicket.createdAtFormatted }}</span>
-                        </div>
-                        <div v-if="selectedTicket.resolvedAtFormatted" class="flex items-center gap-2 text-xs">
-                            <CheckCircle2 class="h-3.5 w-3.5 shrink-0 text-emerald-500 dark:text-emerald-400" />
-                            <span class="text-emerald-600 dark:text-emerald-400 font-medium">Resolved in {{ selectedTicket.resolvedInDuration }}</span>
-                            <span class="text-muted-foreground/40">·</span>
-                            <span class="text-muted-foreground/70">{{ selectedTicket.resolvedAtFormatted }}</span>
-                        </div>
-                    </div>
-
-                    <!-- Comments -->
-                    <TicketComments :ticket-id="selectedTicket.numericId" :reporter-id="selectedTicket.reporterId" />
-                    </div><!-- end overview tab -->
-
-                    <!-- History tab -->
-                    <div v-if="detailTab === 'history'" class="px-5 py-5">
-                        <!-- Loading skeleton -->
-                        <div v-if="activityLoading" class="flex flex-col gap-3">
-                            <div v-for="i in 5" :key="i" class="flex items-start gap-3 animate-pulse">
-                                <div class="h-7 w-7 rounded-full bg-muted shrink-0 mt-0.5"></div>
-                                <div class="flex-1 flex flex-col gap-1.5 pt-1">
-                                    <div class="h-3 bg-muted rounded w-3/4"></div>
-                                    <div class="h-2.5 bg-muted/60 rounded w-1/2"></div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Empty state -->
-                        <div v-else-if="activityLog.length === 0" class="flex flex-col items-center justify-center py-10 gap-2 text-center">
-                            <History class="h-8 w-8 text-muted-foreground/30" />
-                            <p class="text-sm text-muted-foreground/60">No activity recorded yet.</p>
-                        </div>
-
-                        <!-- Timeline -->
-                        <div v-else class="relative">
-                            <!-- vertical line -->
-                            <div class="absolute left-3.5 top-4 bottom-4 w-px bg-border/50"></div>
-
-                            <div class="flex flex-col gap-0">
-                                <div
-                                    v-for="entry in activityLog"
-                                    :key="entry.id"
-                                    class="flex items-start gap-3 relative py-2.5 group"
-                                >
-                                    <!-- Icon bubble -->
-                                    <div :class="['h-7 w-7 rounded-full flex items-center justify-center shrink-0 z-10 border', getActivityIconClass(entry.action)]">
-                                        <component :is="getActivityIcon(entry.action)" class="h-3.5 w-3.5" />
-                                    </div>
-
-                                    <!-- Content -->
-                                    <div class="flex-1 min-w-0 pt-0.5">
-                                        <p class="text-xs font-medium text-foreground leading-snug">
-                                            <span class="font-semibold">{{ entry.userName }}</span>
-                                            {{ getActivityLabel(entry) }}
-                                        </p>
-                                        <div v-if="(entry.oldValue || entry.newValue) && !['comment_posted','comment_deleted','comment_pinned','comment_unpinned','reaction_added','reaction_removed'].includes(entry.action)" class="flex items-center gap-1.5 mt-1 flex-wrap">
-                                            <span v-if="entry.oldValue" class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold bg-destructive/10 text-destructive/80 line-through">{{ entry.oldValue }}</span>
-                                            <ChevronRight v-if="entry.oldValue && entry.newValue" class="h-3 w-3 text-muted-foreground/50 shrink-0" />
-                                            <span v-if="entry.newValue" class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">{{ entry.newValue }}</span>
-                                        </div>
-                                        <p class="text-[10px] text-muted-foreground/50 mt-0.5" :title="entry.createdAtFormatted">{{ entry.createdAt }}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div><!-- end history tab -->
-                </div><!-- end modal-body -->
-
-                <DialogFooter class="px-5 py-4 bg-muted/20 border-t border-border/50 flex items-center gap-2">
-                    <Button variant="outline" @click="openEditModal(selectedTicket!); isDetailModalOpen = false" class="text-xs font-bold gap-1.5">
-                        <Pencil class="h-3.5 w-3.5" /> Edit
-                    </Button>
-                    <Button variant="outline" @click="isDetailModalOpen = false" class="ml-auto text-xs font-bold">
-                        Close
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+        <TicketDetailModal
+            v-model="isDetailModalOpen"
+            :ticket="selectedTicket"
+            :priorities="priorities"
+            :statuses="statuses"
+            @edit="(t) => openEditModal(t as typeof props.tickets[0])"
+        />
 
         <!-- ── Assign Handler Modal ───────────────────────────────── -->
         <Dialog v-model:open="isAssignModalOpen">
@@ -2424,14 +2205,14 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                                 {{ assigningTicket.id }}
                             </Badge>
                             <!-- Current status -->
-                            <Badge variant="outline" :class="['inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 border', getStatusColor(assigningTicket.status)]">
+                            <Badge variant="outline" :class="['inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 border']" :style="getStatusStyle(assigningTicket.status)">
                                 <component :is="getStatusIcon(assigningTicket.status)" class="h-3 w-3" />
                                 {{ assigningTicket.status }}
                             </Badge>
                             <!-- Arrow + new status preview (Open tickets only) -->
-                            <template v-if="assigningTicket.status === 'Open'">
+                            <template v-if="isStatusNoHandlers(assigningTicket.status)">
                                 <span class="text-muted-foreground/40 text-xs">→</span>
-                                <Badge variant="outline" :class="['inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 border', getStatusColor(assignStatusOverride)]">
+                                <Badge variant="outline" :class="['inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 border']" :style="getStatusStyle(assignStatusOverride)">
                                     <component :is="getStatusIcon(assignStatusOverride)" class="h-3 w-3" />
                                     {{ assignStatusOverride }}
                                 </Badge>
@@ -2439,7 +2220,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                         </div>
                         <DialogTitle class="text-base font-bold tracking-tight leading-snug flex items-center gap-2">
                             <UserPlus class="h-4 w-4 text-primary shrink-0" />
-                            {{ assigningTicket.status === 'Open' ? 'Assign Handler & Update Status' : 'Assign Handlers' }}
+                            {{ isStatusNoHandlers(assigningTicket.status) ? 'Assign Handler & Update Status' : 'Assign Handlers' }}
                         </DialogTitle>
                         <DialogDescription class="text-xs text-muted-foreground/80 truncate mt-0.5">
                             {{ assigningTicket.title }}
@@ -2451,26 +2232,27 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                 <div class="modal-body flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-5">
 
                     <!-- ① Status picker — only for Open tickets -->
-                    <div v-if="assigningTicket.status === 'Open'" class="flex flex-col gap-2.5">
+                    <div v-if="isStatusNoHandlers(assigningTicket.status)" class="flex flex-col gap-2.5">
                         <div class="flex items-center gap-2">
                             <p class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Set New Status</p>
                             <span class="inline-flex items-center rounded-md bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-rose-500">Required</span>
                         </div>
                         <div class="flex flex-wrap gap-2">
                             <button
-                                v-for="s in ['In Progress', 'On Hold', 'Resolved']"
-                                :key="s"
+                                v-for="s in assignModalTargetStatuses"
+                                :key="s.name"
                                 type="button"
-                                @click="assignStatusOverride = s"
+                                @click="assignStatusOverride = s.name"
                                 :class="[
                                     'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-bold border-2 transition-all',
-                                    assignStatusOverride === s
-                                        ? [getStatusColor(s), 'border-current shadow-sm scale-[1.03]']
+                                    assignStatusOverride === s.name
+                                        ? 'border-current shadow-sm scale-[1.03]'
                                         : 'border-muted text-muted-foreground hover:border-primary/30 hover:bg-muted/50'
                                 ]"
+                                :style="assignStatusOverride === s.name ? getStatusStyle(s.name) : {}"
                             >
-                                <component :is="getStatusIcon(s)" class="h-3 w-3" />
-                                {{ s }}
+                                <component :is="getStatusIcon(s.name)" class="h-3 w-3" />
+                                {{ s.name }}
                             </button>
                         </div>
                         <div class="h-px bg-border/50" />
@@ -2555,7 +2337,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                 </div>
 
                 <!-- Solution (required when assigning to Resolved) -->
-                <div v-if="assignStatusOverride === 'Resolved' || (!assigningTicket?.status.includes('Open') && assigningTicket?.status === 'Resolved')" class="px-5 grid gap-2">
+                <div v-if="assignStatusOverride === 'Resolved'" class="px-5 grid gap-2">
                     <Label class="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                         Solution <span class="ml-1 text-destructive">*</span>
                     </Label>
@@ -2582,7 +2364,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                             >
                                 <span v-if="!assignForm.processing" class="flex items-center gap-1.5">
                                     <UserPlus class="h-3.5 w-3.5" />
-                                    {{ assigningTicket.status === 'Open' ? 'Assign & Update' : 'Save Handlers' }}
+                                    {{ isStatusNoHandlers(assigningTicket.status) ? 'Assign & Update' : 'Save Handlers' }}
                                 </span>
                                 <span v-else class="flex items-center gap-1.5">
                                     Saving… <span class="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -2604,13 +2386,13 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                             <Badge variant="outline" class="bg-primary/10 text-primary border-primary/20 px-2 py-0 text-[10px] font-bold uppercase tracking-wider">
                                 {{ changeStatusTicket.id }}
                             </Badge>
-                            <Badge variant="outline" :class="['inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 border', getStatusColor(changeStatusTicket.status)]">
+                            <Badge variant="outline" :class="['inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 border']" :style="getStatusStyle(changeStatusTicket.status)">
                                 <component :is="getStatusIcon(changeStatusTicket.status)" class="h-3 w-3" />
                                 {{ changeStatusTicket.status }}
                             </Badge>
                             <template v-if="changeStatusValue">
                                 <span class="text-muted-foreground/40 text-xs">→</span>
-                                <Badge variant="outline" :class="['inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 border', getStatusColor(changeStatusValue)]">
+                                <Badge variant="outline" :class="['inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 border']" :style="getStatusStyle(changeStatusValue)">
                                     <component :is="getStatusIcon(changeStatusValue)" class="h-3 w-3" />
                                     {{ changeStatusValue }}
                                 </Badge>
@@ -2641,9 +2423,10 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                                 :class="[
                                     'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-bold border-2 transition-all',
                                     changeStatusValue === s
-                                        ? [getStatusColor(s), 'border-current shadow-sm scale-[1.03]']
+                                        ? 'border-current shadow-sm scale-[1.03]'
                                         : 'border-muted text-muted-foreground hover:border-primary/30 hover:bg-muted/50'
                                 ]"
+                                :style="changeStatusValue === s ? getStatusStyle(s) : {}"
                             >
                                 <component :is="getStatusIcon(s)" class="h-3 w-3" />
                                 {{ s }}
@@ -2652,10 +2435,10 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                     </div>
 
                     <!-- ② Handler section — hidden when new status is Open -->
-                    <div v-if="changeStatusValue !== 'Open'" class="h-px bg-border/50" />
+                    <div v-if="changeStatusValue && !isStatusNoHandlers(changeStatusValue)" class="h-px bg-border/50" />
 
                     <!-- Currently assigned tags -->
-                    <div v-if="changeStatusValue !== 'Open'" class="flex flex-col gap-2">
+                    <div v-if="changeStatusValue && !isStatusNoHandlers(changeStatusValue)" class="flex flex-col gap-2">
                         <p class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                             {{ changeStatusForm.handler_ids.length > 0 ? 'Currently Assigned' : 'No Handlers Yet' }}
                         </p>
@@ -2681,17 +2464,17 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                         <div v-else class="flex items-center gap-2 rounded-xl border border-dashed border-border/50 bg-muted/10 px-4 py-3">
                             <UserPlus class="h-4 w-4 text-muted-foreground/40 shrink-0" />
                             <p class="text-xs text-muted-foreground/60 italic">
-                                {{ changeStatusValue === 'Closed' ? 'No handlers assigned. Optionally add one below.' : 'At least one handler is required for this status.' }}
+                                {{ isStatusHandlerOptional(changeStatusValue) ? 'No handlers assigned. Optionally add one below.' : 'At least one handler is required for this status.' }}
                             </p>
                         </div>
                     </div>
 
                     <!-- Search + user list -->
-                    <div v-if="changeStatusValue !== 'Open'" class="flex flex-col gap-2">
+                    <div v-if="changeStatusValue && !isStatusNoHandlers(changeStatusValue)" class="flex flex-col gap-2">
                         <p class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                             Update Handlers
-                            <span v-if="changeStatusValue === 'Closed'" class="normal-case font-normal text-muted-foreground/50">(optional)</span>
-                            <span v-else class="inline-flex items-center rounded-md bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-rose-500">Required</span>
+                            <span v-if="isStatusHandlerOptional(changeStatusValue)" class="normal-case font-normal text-muted-foreground/50">(optional)</span>
+                            <span v-else-if="isStatusHandlerRequired(changeStatusValue)" class="inline-flex items-center rounded-md bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-rose-500">Required</span>
                         </p>
                         <div class="relative">
                             <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
@@ -2758,7 +2541,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                             </Button>
                             <Button
                                 type="button"
-                                :disabled="changeStatusForm.processing || !changeStatusValue || (!['Open', 'Closed'].includes(changeStatusValue) && changeStatusForm.handler_ids.length === 0)"
+                                :disabled="changeStatusForm.processing || !changeStatusValue || (isStatusHandlerRequired(changeStatusValue) && changeStatusForm.handler_ids.length === 0)"
                                 @click="submitChangeStatus"
                                 class="text-xs font-bold gap-1.5 shadow-sm shadow-primary/20"
                             >
@@ -2804,28 +2587,29 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                                 :class="[
                                     'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-bold border-2 transition-all',
                                     bulkStatusValue === s
-                                        ? [getStatusColor(s), 'border-current shadow-sm scale-[1.03]']
+                                        ? 'border-current shadow-sm scale-[1.03]'
                                         : 'border-muted text-muted-foreground hover:border-primary/30 hover:bg-muted/50'
                                 ]"
+                                :style="bulkStatusValue === s ? getStatusStyle(s) : {}"
                             >
                                 <component :is="getStatusIcon(s)" class="h-3 w-3" />
                                 {{ s }}
                             </button>
                         </div>
                         <!-- Open notice -->
-                        <div v-if="bulkStatusValue === 'Open'" class="flex items-start gap-2.5 rounded-xl border border-rose-500/20 bg-rose-500/5 px-3.5 py-2.5">
+                        <div v-if="isStatusNoHandlers(bulkStatusValue)" class="flex items-start gap-2.5 rounded-xl border border-rose-500/20 bg-rose-500/5 px-3.5 py-2.5">
                             <AlertTriangle class="h-3.5 w-3.5 text-rose-500 shrink-0 mt-0.5" />
                             <p class="text-xs text-rose-600 dark:text-rose-400 leading-relaxed">
-                                All handlers will be <span class="font-semibold">removed</span> from the selected tickets when setting status to Open.
+                                All handlers will be <span class="font-semibold">removed</span> from the selected tickets when using a status that does not use handlers.
                             </p>
                         </div>
                     </div>
 
                     <!-- ② Handler section — hidden when new status is Open -->
-                    <div v-if="bulkStatusValue !== 'Open'" class="h-px bg-border/50" />
+                    <div v-if="!isStatusNoHandlers(bulkStatusValue)" class="h-px bg-border/50" />
 
                     <!-- Currently selected handler tags -->
-                    <div v-if="bulkStatusValue !== 'Open'" class="flex flex-col gap-2">
+                    <div v-if="!isStatusNoHandlers(bulkStatusValue)" class="flex flex-col gap-2">
                         <p class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                             {{ bulkStatusHandlerIds.length > 0 ? 'Selected Handlers' : 'No Handlers Selected' }}
                         </p>
@@ -2851,17 +2635,17 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                         <div v-else class="flex items-center gap-2 rounded-xl border border-dashed border-border/50 bg-muted/10 px-4 py-3">
                             <UserPlus class="h-4 w-4 text-muted-foreground/40 shrink-0" />
                             <p class="text-xs text-muted-foreground/60 italic">
-                                {{ bulkStatusValue === 'Closed' ? 'No handlers. Optionally assign one below.' : 'At least one handler is required for this status.' }}
+                                {{ isStatusHandlerOptional(bulkStatusValue) ? 'No handlers. Optionally assign one below.' : 'At least one handler is required for this status.' }}
                             </p>
                         </div>
                     </div>
 
                     <!-- Search + user list -->
-                    <div v-if="bulkStatusValue !== 'Open'" class="flex flex-col gap-2">
+                    <div v-if="!isStatusNoHandlers(bulkStatusValue)" class="flex flex-col gap-2">
                         <p class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                             Assign Handlers
-                            <span v-if="bulkStatusValue === 'Closed'" class="normal-case font-normal text-muted-foreground/50">(optional)</span>
-                            <span v-else class="inline-flex items-center rounded-md bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-rose-500">Required</span>
+                            <span v-if="isStatusHandlerOptional(bulkStatusValue)" class="normal-case font-normal text-muted-foreground/50">(optional)</span>
+                            <span v-else-if="isStatusHandlerRequired(bulkStatusValue)" class="inline-flex items-center rounded-md bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-rose-500">Required</span>
                         </p>
                         <div class="relative">
                             <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
@@ -2917,7 +2701,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                 <DialogFooter class="px-5 py-4 bg-muted/20 border-t border-border/50">
                     <div class="flex w-full items-center justify-between gap-2">
                         <p class="text-xs text-muted-foreground">
-                            <template v-if="bulkStatusValue !== 'Open'">
+                            <template v-if="!isStatusNoHandlers(bulkStatusValue)">
                                 <span class="font-semibold text-foreground">{{ bulkStatusHandlerIds.length }}</span>
                                 handler{{ bulkStatusHandlerIds.length !== 1 ? 's' : '' }} selected
                             </template>
@@ -2929,7 +2713,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                             </Button>
                             <Button
                                 type="button"
-                                :disabled="bulkStatusForm.processing || !bulkStatusValue || (!['Open', 'Closed'].includes(bulkStatusValue) && bulkStatusHandlerIds.length === 0)"
+                                :disabled="bulkStatusForm.processing || !bulkStatusValue || (isStatusHandlerRequired(bulkStatusValue) && bulkStatusHandlerIds.length === 0)"
                                 @click="submitBulkStatus"
                                 class="text-xs font-bold gap-1.5"
                             >

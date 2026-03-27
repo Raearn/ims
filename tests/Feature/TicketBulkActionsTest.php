@@ -21,12 +21,14 @@ class TicketBulkActionsTest extends TestCase
     public function test_admin_can_bulk_update_status(): void
     {
         $admin = $this->admin();
+        $handler = User::factory()->create();
         $tickets = Ticket::factory()->count(3)->create(['status' => 'Open']);
 
         $this->actingAs($admin)
             ->patch(route('tickets.bulk.status'), [
                 'ticket_ids' => $tickets->pluck('id')->toArray(),
                 'status' => 'In Progress',
+                'handler_ids' => [$handler->id],
             ])
             ->assertRedirect();
 

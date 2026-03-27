@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { useEditor, EditorContent } from '@tiptap/vue-3';
 import StarterKit from '@tiptap/starter-kit';
-import Underline from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
 import Placeholder from '@tiptap/extension-placeholder';
 import { watch } from 'vue';
@@ -19,7 +18,6 @@ const editor = useEditor({
     content: props.modelValue,
     extensions: [
         StarterKit,
-        Underline,
         TextAlign.configure({ types: ['heading', 'paragraph'] }),
         Placeholder.configure({ placeholder: props.placeholder ?? 'Write a description...' }),
     ],

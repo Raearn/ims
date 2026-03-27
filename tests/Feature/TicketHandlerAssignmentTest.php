@@ -151,4 +151,23 @@ class TicketHandlerAssignmentTest extends TestCase
 
         $response->assertForbidden();
     }
+
+    public function test_changing_status_to_open_via_handlers_route_clears_handlers_even_if_payload_stale(): void
+    {
+        $admin = $this->admin();
+        $handler = User::factory()->create();
+        $ticket = Ticket::factory()->create(['status' => 'On Hold']);
+        $ticket->handlers()->sync([$handler->id]);
+
+        $this->actingAs($admin)->patch(
+            route('tickets.handlers.update', $ticket),
+            [
+                'handler_ids' => [$handler->id],
+                'status' => 'Open',
+            ]
+        )->assertRedirect();
+
+        $this->assertSame('Open', $ticket->fresh()->status);
+        $this->assertCount(0, $ticket->fresh()->handlers);
+    }
 }

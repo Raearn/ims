@@ -134,4 +134,19 @@ class TicketStatusUpdateTest extends TestCase
         $this->assertSame('On Hold', $ticket->fresh()->status);
         $this->assertCount(1, $ticket->fresh()->handlers);
     }
+
+    public function test_changing_status_to_open_clears_handlers_when_handler_ids_omitted(): void
+    {
+        $admin = $this->admin();
+        $handler = User::factory()->create();
+        $ticket = Ticket::factory()->create(['status' => 'On Hold']);
+        $ticket->handlers()->sync([$handler->id]);
+
+        $this->actingAs($admin)
+            ->patch(route('tickets.status.update', $ticket), ['status' => 'Open'])
+            ->assertRedirect();
+
+        $this->assertSame('Open', $ticket->fresh()->status);
+        $this->assertCount(0, $ticket->fresh()->handlers);
+    }
 }

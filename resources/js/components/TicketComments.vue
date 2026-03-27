@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, computed, nextTick } from 'vue';
 import { usePage } from '@inertiajs/vue3';
+import { laravelFetch } from '@/lib/laravelFetch';
 import CommentEditor from '@/components/CommentEditor.vue';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -94,35 +95,8 @@ function toggleUserCard(id: number) {
     openEmojiPickerFor.value = null;
 }
 
-function getCsrfToken(): string {
-    const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
-    return match ? decodeURIComponent(match[1]) : '';
-}
-
-async function refreshCsrf(): Promise<void> {
-    // Any same-origin GET refreshes the XSRF-TOKEN cookie
-    await fetch(window.location.pathname, { method: 'GET', credentials: 'same-origin' });
-}
-
-async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
-    const doFetch = () => fetch(url, {
-        ...options,
-        credentials: 'same-origin',
-        headers: {
-            'Accept': 'application/json',
-            ...options.headers,
-            'X-XSRF-TOKEN': getCsrfToken(),
-        },
-    });
-
-    let res = await doFetch();
-
-    if (res.status === 419) {
-        await refreshCsrf();
-        res = await doFetch();
-    }
-
-    return res;
+function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
+    return laravelFetch(url, options);
 }
 
 async function loadComments() {

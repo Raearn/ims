@@ -18,7 +18,7 @@ import ThemeToggle from '@/components/ThemeToggle.vue';
 import { getInitials } from '@/composables/useInitials';
 import type { BreadcrumbItem, NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, Menu, Search } from 'lucide-vue-next';
+import { BookOpen, Folder, LayoutGrid, Menu, Search, Plus, Ticket, UserPlus } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 interface Props {
@@ -41,7 +41,7 @@ const activeItemStyles = computed(() => (url: string) => (isCurrentRoute(url) ? 
 const mainNavItems: NavItem[] = [
     {
         title: 'Dashboard',
-        href: '/dashboard',
+        href: route('dashboard'),
         icon: LayoutGrid,
     },
 ];
@@ -148,6 +148,29 @@ const rightNavItems: NavItem[] = [];
                             </template>
                         </div>
                     </div>
+
+                    <DropdownMenu>
+                        <DropdownMenuTrigger as-child>
+                            <Button variant="ghost" size="icon" class="relative h-9 w-9 cursor-pointer hover:bg-muted focus-visible:ring-1">
+                                <Plus class="size-5" />
+                                <span class="sr-only">Quick Actions</span>
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" class="w-48">
+                            <DropdownMenuItem as-child class="cursor-pointer">
+                                <Link :href="route('tickets', { create: 'true' })" class="flex items-center w-full">
+                                    <Ticket class="mr-2 h-4 w-4" />
+                                    <span>Add New Ticket</span>
+                                </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem as-child class="cursor-pointer">
+                                <Link :href="route('users', { create: 'true' })" class="flex items-center w-full">
+                                    <UserPlus class="mr-2 h-4 w-4" />
+                                    <span>Add New User</span>
+                                </Link>
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
 
                     <DropdownMenu>
                         <DropdownMenuTrigger :as-child="true">

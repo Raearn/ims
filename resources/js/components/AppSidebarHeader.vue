@@ -5,6 +5,9 @@ import ThemeToggle from '@/components/ThemeToggle.vue';
 import NotificationBell from '@/components/NotificationBell.vue';
 import type { BreadcrumbItemType } from '@/types';
 import { Link } from '@inertiajs/vue3';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
+import { Plus, Ticket, UserPlus } from 'lucide-vue-next';
 
 defineProps<{
     breadcrumbs?: BreadcrumbItemType[];
@@ -40,6 +43,29 @@ defineProps<{
             </template>
         </div>
         <div class="flex items-center gap-2">
+            <DropdownMenu>
+                <DropdownMenuTrigger as-child>
+                    <Button variant="ghost" size="icon" class="relative h-9 w-9 cursor-pointer hover:bg-muted focus-visible:ring-1">
+                        <Plus class="size-5" />
+                        <span class="sr-only">Quick Actions</span>
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" class="w-48">
+                    <DropdownMenuItem as-child class="cursor-pointer">
+                        <Link :href="route('tickets', { create: 'true' })" class="flex items-center w-full">
+                            <Ticket class="mr-2 h-4 w-4" />
+                            <span>Add New Ticket</span>
+                        </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem as-child class="cursor-pointer">
+                        <Link :href="route('users', { create: 'true' })" class="flex items-center w-full">
+                            <UserPlus class="mr-2 h-4 w-4" />
+                            <span>Add New User</span>
+                        </Link>
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
+
             <NotificationBell />
             <ThemeToggle />
         </div>

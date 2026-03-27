@@ -9,7 +9,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { AlertCircle, AlertTriangle, ArrowUpCircle, Ban, CheckCircle2, ChevronDown, ChevronUp, ChevronsUpDown, Circle, Clock, Crown, Headset, Pause, Pencil, Play, Plus, Search, ShieldCheck, Trash2, UserRound, Users, X } from 'lucide-vue-next';
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch, onMounted } from 'vue';
 
 interface TicketSummary {
     id: number;
@@ -176,6 +176,16 @@ watch(isDetailModalOpen, (val) => {
 
 // ── Create modal ───────────────────────────────────────────────────────────
 const isCreateModalOpen = ref(false);
+
+onMounted(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('create') === 'true') {
+        isCreateModalOpen.value = true;
+        params.delete('create');
+        const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+        window.history.replaceState({}, '', newUrl);
+    }
+});
 
 const createForm = useForm({
     name: '',

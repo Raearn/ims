@@ -20,37 +20,6 @@ class SettingSeeder extends Seeder
                 'type' => 'string',
                 'group' => 'general',
             ],
-            [
-                'key' => 'app_description',
-                'value' => 'Internal helpdesk and incident tracking platform.',
-                'type' => 'string',
-                'group' => 'general',
-            ],
-            [
-                'key' => 'contact_email',
-                'value' => 'support@example.com',
-                'type' => 'string',
-                'group' => 'general',
-            ],
-            [
-                'key' => 'maintenance_mode',
-                'value' => '0',
-                'type' => 'boolean',
-                'group' => 'general',
-            ],
-            [
-                'key' => 'allow_registration',
-                'value' => '1',
-                'type' => 'boolean',
-                'group' => 'general',
-            ],
-            // ── Tickets ───────────────────────────────────────────────
-            [
-                'key' => 'auto_close_resolved_after_days',
-                'value' => '7',
-                'type' => 'integer',
-                'group' => 'tickets',
-            ],
             // ── Appearance ────────────────────────────────────────────
             [
                 'key' => 'default_theme',

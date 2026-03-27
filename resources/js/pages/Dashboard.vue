@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import TicketComments from '@/components/TicketComments.vue';
@@ -13,10 +14,12 @@ import { VisAxis, VisLine, VisXYContainer, VisArea } from '@unovis/vue';
 import { ChartCrosshair } from '@/components/ui/chart';
 import DonutChart from '@/components/DonutChart.vue';
 import { CurveType } from '@unovis/ts';
-import { AlertCircle, AlertTriangle, ArrowUpCircle, Ban, CheckCircle2, Circle, Clock, ImageIcon, Pause, Play, TrendingUp, BarChart2, PieChart, TrendingDown, Flame, RefreshCcw, ChevronRight, ArrowUpRight, UserPlus, MoreHorizontal, Search, X, MessageSquare, Crown, ShieldCheck, Headset, UserRound } from 'lucide-vue-next';
+import { AlertCircle, AlertTriangle, ArrowUpCircle, Ban, CheckCircle2, Circle, Clock, ImageIcon, Pause, Play, TrendingUp, BarChart2, PieChart, TrendingDown, Flame, RefreshCcw, ChevronRight, ArrowUpRight, UserPlus, MoreHorizontal, Search, X, MessageSquare, Crown, ShieldCheck, Headset, UserRound, Settings, Database, FileText } from 'lucide-vue-next';
 import { cn } from '@/lib/utils';
+import { laravelFetch } from '@/lib/laravelFetch';
 import Sparkline from '@/components/Sparkline.vue';
-import { ref, computed, watch } from 'vue';
+import { ensureLucideIconsLoaded, resolveLucideIcon } from '@/composables/useLucideIconRegistry';
+import { ref, computed, watch, onMounted } from 'vue';
 
 interface Stat {
     title: string;
@@ -24,7 +27,10 @@ interface Stat {
     description: string;
     trend: string;
     isUp: boolean;
+    /** When false, trend badge omits the directional arrow (e.g. "—" or non-comparable). */
+    showTrendArrow?: boolean;
     sparkline: number[];
+    sparklineValueSuffix?: string;
     stroke: string;
     textColor: string;
     cardBg: string;
@@ -109,12 +115,25 @@ interface SeverityTicket {
 }
 
 interface ChartTrend {
-    value: number;
+    /** Percentage change when comparable; null when prior baseline was zero. */
+    value: number | null;
     isUp: boolean;
+    display: string;
+    showTrendArrow: boolean;
+}
+
+interface TicketStatusConfig {
+    id: number;
+    name: string;
+    icon: string;
+    color: string;
+    handler_requirement: 'none' | 'optional' | 'required';
 }
 
 const {
     stats,
+    period,
+    sparklineLabels,
     trendData,
     chartTrend,
     severities,
@@ -123,8 +142,11 @@ const {
     recentActivity,
     recentComments,
     users,
+    statuses,
 } = defineProps<{
     stats: Stat[];
+    period: string;
+    sparklineLabels: string[];
     trendData: TrendPoint[];
     chartTrend: ChartTrend;
     severities: ChartItem[];
@@ -133,7 +155,33 @@ const {
     recentActivity: ActivityItem[];
     recentComments: RecentComment[];
     users: User[];
+    statuses: TicketStatusConfig[];
 }>();
+
+const dashboardFirstRequiredStatusName = computed(
+    () => statuses.find((s) => s.handler_requirement === 'required')?.name ?? 'In Progress',
+);
+
+function dashboardStatusHexStyle(statusName: string): Record<string, string> {
+    const hex = statuses.find((s) => s.name === statusName)?.color;
+    if (! hex) {
+        return {};
+    }
+    return {
+        backgroundColor: `${hex}26`,
+        color: hex,
+        borderColor: `${hex}40`,
+    };
+}
+
+function dashboardStatusIcon(statusName: string) {
+    const iconName = statuses.find((s) => s.name === statusName)?.icon;
+    return resolveLucideIcon(iconName ?? 'Circle', Circle);
+}
+
+onMounted(() => {
+    void ensureLucideIconsLoaded();
+});
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: route('dashboard') },
@@ -165,14 +213,12 @@ const statColors = [
 
 const categoryChartType = ref<'bar' | 'donut'>('bar');
 const severityChartType = ref<'bar' | 'donut'>('donut');
-const selectedRange     = ref<7 | 30>(7);
 
 const displayData = computed(() => {
-    const sliced = selectedRange.value === 7 ? trendData.slice(-7) : trendData;
-    return sliced.map((d, i) => ({
+    return trendData.map((d, i) => ({
         ...d,
         x: i,
-        displayLabel: selectedRange.value === 7 ? d.day : d.date,
+        displayLabel: d.day + ' - ' + d.date,
     }));
 });
 
@@ -186,8 +232,7 @@ const xTickValues = computed(() => displayData.value.map(d => d.x));
 const xTickFormat = (x: number) => {
     const d = displayData.value[Math.round(x)];
     if (!d) return '';
-    // 7D → "Mon" / 30D → "Mar 1"
-    return selectedRange.value === 7 ? d.day : d.date;
+    return trendData.length <= 14 ? d.day : d.date;
 };
 
 const totalCreated  = computed(() => displayData.value.reduce((s, d) => s + d.created, 0));
@@ -356,7 +401,9 @@ const openCommentTicketDetail = (comment: RecentComment) => {
 const isAssignModalOpen    = ref(false);
 const assigningTicket      = ref<ActivityItem | null>(null);
 const assignHandlerSearch  = ref('');
-const assignStatusOverride = ref<string>('In Progress');
+const assignStatusOverride = ref<string>(
+    statuses.find((s) => s.handler_requirement === 'required')?.name ?? 'In Progress',
+);
 
 // ── Severity drill-down modal ───────────────────────────────────────────────
 const severityModalOpen     = ref(false);
@@ -370,9 +417,7 @@ async function openSeverityModal(priority: string) {
     severityModalOpen.value     = true;
     severityModalLoading.value  = true;
     try {
-        const res = await fetch(route('tickets.by-priority', { priority }), {
-            headers: { 'Accept': 'application/json' },
-        });
+        const res = await laravelFetch(route('tickets.by-priority', { priority }));
         if (res.ok) severityModalTickets.value = await res.json();
     } finally {
         severityModalLoading.value = false;
@@ -390,9 +435,7 @@ async function openCategoryModal(category: string) {
     categoryModalOpen.value    = true;
     categoryModalLoading.value = true;
     try {
-        const res = await fetch(route('tickets.by-category', { category }), {
-            headers: { 'Accept': 'application/json' },
-        });
+        const res = await laravelFetch(route('tickets.by-category', { category }));
         if (res.ok) categoryModalTickets.value = await res.json();
     } finally {
         categoryModalLoading.value = false;
@@ -405,17 +448,32 @@ const assignForm = useForm({
     solution: '',
 });
 
+const assignModalTargetStatuses = computed(() => {
+    const ticket = assigningTicket.value;
+    if (ticket?.status) {
+        return statuses.filter((s) => s.name !== ticket.status);
+    }
+
+    return statuses.filter((s) => s.handler_requirement === 'required');
+});
+
+const assignTargetRequiresHandlers = computed(() => {
+    const req = statuses.find((s) => s.name === assignStatusOverride.value)?.handler_requirement;
+
+    return req === 'required';
+});
+
 const filteredAssignUsers = computed(() => {
     if (!assignHandlerSearch.value.trim()) return users;
     const q = assignHandlerSearch.value.toLowerCase();
     return users.filter(u => u.name.toLowerCase().includes(q));
 });
 
-const openAssignModal = (ticket: ActivityItem, defaultStatus = 'In Progress') => {
+const openAssignModal = (ticket: ActivityItem, defaultStatus?: string) => {
     assigningTicket.value   = ticket;
     assignForm.handler_ids  = [...ticket.handlerIds];
     assignHandlerSearch.value  = '';
-    assignStatusOverride.value = defaultStatus;
+    assignStatusOverride.value = defaultStatus ?? dashboardFirstRequiredStatusName.value;
     isAssignModalOpen.value    = true;
 };
 
@@ -436,11 +494,17 @@ const submitAssign = () => {
         });
 };
 
+watch(assignStatusOverride, (name) => {
+    if (statuses.find((s) => s.name === name)?.handler_requirement === 'none') {
+        assignForm.handler_ids = [];
+    }
+});
+
 watch(isAssignModalOpen, (val) => {
     if (!val) {
         assignHandlerSearch.value  = '';
         assigningTicket.value      = null;
-        assignStatusOverride.value = 'In Progress';
+        assignStatusOverride.value = dashboardFirstRequiredStatusName.value;
         assignForm.solution        = '';
     }
 });
@@ -457,14 +521,41 @@ watch(isAssignModalOpen, (val) => {
                     <h2 class="text-xl font-bold tracking-tight sm:text-2xl">Dashboard</h2>
                     <p class="text-sm text-muted-foreground">Overview of incidents and system activity.</p>
                 </div>
-                <button
-                    @click="refresh"
-                    :disabled="isRefreshing"
-                    class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 bg-background text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40 disabled:pointer-events-none shrink-0"
-                    title="Refresh"
-                >
-                    <RefreshCcw class="h-3.5 w-3.5" :class="{ 'animate-spin': isRefreshing }" />
-                </button>
+                <div class="flex items-center gap-2">
+                    <Select :model-value="period" @update:model-value="(v) => router.get(route('dashboard'), { period: v }, { preserveState: true, replace: true })">
+                        <SelectTrigger class="w-[140px] h-9">
+                            <SelectValue placeholder="Select period" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectGroup>
+                                <SelectItem value="7d">Last 7 Days</SelectItem>
+                                <SelectItem value="30d">Last 30 Days</SelectItem>
+                                <SelectItem value="this_month">This Month</SelectItem>
+                                <SelectItem value="last_month">Last Month</SelectItem>
+                                <SelectItem value="ytd">Year to Date</SelectItem>
+                                <SelectItem value="all">All Time</SelectItem>
+                            </SelectGroup>
+                        </SelectContent>
+                    </Select>
+                    <button
+                        @click="refresh"
+                        :disabled="isRefreshing"
+                        class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 bg-background text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40 disabled:pointer-events-none shrink-0"
+                        title="Refresh"
+                    >
+                        <RefreshCcw class="h-3.5 w-3.5" :class="{ 'animate-spin': isRefreshing }" />
+                    </button>
+                    <a
+                        :href="route('dashboard.export-pdf', { period })"
+                        target="_blank"
+                        rel="noopener"
+                        class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border/60 bg-background px-3 text-sm font-medium text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground"
+                        title="Export analytics report as PDF"
+                    >
+                        <FileText class="h-3.5 w-3.5" />
+                        Export PDF
+                    </a>
+                </div>
             </div>
 
             <!-- Stats Grid -->
@@ -482,14 +573,25 @@ watch(isAssignModalOpen, (val) => {
                             </div>
                             <!-- Sparkline -->
                             <div class="h-12 w-24">
-                                <Sparkline :data="stat.sparkline" :stroke="stat.stroke" :width="96" :height="48" />
+                                <Sparkline
+                                    :data="stat.sparkline"
+                                    :labels="sparklineLabels"
+                                    :value-suffix="stat.sparklineValueSuffix ?? ''"
+                                    :stroke="stat.stroke"
+                                    :width="96"
+                                    :height="48"
+                                />
                             </div>
                         </div>
                         <div class="mt-4 flex items-center gap-2">
                             <span class="text-xs text-muted-foreground">{{ stat.description }}</span>
                             <Badge variant="outline" :class="cn('border-none px-1.5 py-0.5 text-[10px] font-bold h-5 shadow-sm bg-white/60 dark:bg-black/20', statColors[idx]?.text)">
                                 {{ stat.trend }}
-                                <TrendingUp class="ml-0.5 h-3.5 w-3.5" :class="stat.isUp ? '' : 'rotate-180'" />
+                                <TrendingUp
+                                    v-if="stat.showTrendArrow !== false"
+                                    class="ml-0.5 h-3.5 w-3.5"
+                                    :class="stat.isUp ? '' : 'rotate-180'"
+                                />
                             </Badge>
                         </div>
                     </CardContent>
@@ -591,19 +693,7 @@ watch(isAssignModalOpen, (val) => {
                                 <p class="mt-0.5 text-sm text-muted-foreground">
                                     <span class="font-semibold text-rose-500">{{ totalCreated }}</span> new ·
                                     <span class="font-semibold text-emerald-500">{{ totalResolved }}</span> resolved
-                                    <span class="opacity-60">(last {{ selectedRange }}d)</span>
                                 </p>
-                            </div>
-                            <!-- Range toggle -->
-                            <div class="flex items-center gap-0.5 rounded-lg bg-muted p-1 shrink-0">
-                                <button
-                                    v-for="r in ([7, 30] as const)"
-                                    :key="r"
-                                    @click="selectedRange = r"
-                                    :class="['flex h-7 items-center justify-center rounded-md px-2.5 text-xs font-semibold transition-all', selectedRange === r ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground']"
-                                >
-                                    {{ r }}D
-                                </button>
                             </div>
                         </div>
                         <!-- Legend -->
@@ -634,12 +724,12 @@ watch(isAssignModalOpen, (val) => {
                         <!-- Chart + interactive overlay -->
                         <div class="relative h-[180px] w-full min-w-0 sm:h-[220px]">
                             <!-- Unovis chart -->
-                            <VisXYContainer :data="displayData" class="h-full w-full" :duration="350" :class="selectedRange === 30 ? 'range-30' : 'range-7'">
+                            <VisXYContainer :data="displayData" class="h-full w-full" :duration="350" :class="trendData.length > 14 ? 'range-30' : 'range-7'">
                                 <VisAxis type="x" :x="(d: TrendPoint) => d.x" :grid-line="false" :tick-line="false" :domain-line="false" :tick-format="xTickFormat" :tick-values="xTickValues" />
                                 <VisAxis type="y" :grid-line="true" :tick-line="false" :domain-line="false" />
-                                <!-- Areas (7D only) -->
-                                <VisArea v-if="selectedRange === 7" :x="(d: TrendPoint) => d.x" :y="(d: TrendPoint) => d.created" color="url(#roseGradient)" :opacity="1" :curve-type="CurveType.MonotoneX" />
-                                <VisArea v-if="selectedRange === 7" :x="(d: TrendPoint) => d.x" :y="(d: TrendPoint) => d.resolved" color="url(#emeraldGradient)" :opacity="1" :curve-type="CurveType.MonotoneX" />
+                                <!-- Areas -->
+                                <VisArea v-if="trendData.length <= 14" :x="(d: TrendPoint) => d.x" :y="(d: TrendPoint) => d.created" color="url(#roseGradient)" :opacity="1" :curve-type="CurveType.MonotoneX" />
+                                <VisArea v-if="trendData.length <= 14" :x="(d: TrendPoint) => d.x" :y="(d: TrendPoint) => d.resolved" color="url(#emeraldGradient)" :opacity="1" :curve-type="CurveType.MonotoneX" />
                                 <!-- Lines -->
                                 <VisLine :x="(d: TrendPoint) => d.x" :y="(d: TrendPoint) => d.created" color="#f43f5e" :stroke-width="2" :curve-type="CurveType.MonotoneX" />
                                 <VisLine :x="(d: TrendPoint) => d.x" :y="(d: TrendPoint) => d.resolved" color="#10b981" :stroke-width="2" :curve-type="CurveType.MonotoneX" />
@@ -654,13 +744,24 @@ watch(isAssignModalOpen, (val) => {
                     </CardContent>
                     <div class="mt-3 flex flex-col gap-1 border-t border-border/50 p-4 sm:p-6">
                         <div class="flex flex-wrap items-center gap-2 text-sm font-medium">
-                            <template v-if="chartTrend.value > 0">
-                                {{ chartTrend.isUp ? 'Trending up' : 'Trending down' }} by {{ chartTrend.value }}% this week
-                                <TrendingUp class="h-4 w-4" :class="chartTrend.isUp ? 'text-rose-500' : 'text-emerald-500 rotate-180'" />
+                            <template v-if="chartTrend.value != null && chartTrend.value > 0">
+                                {{ chartTrend.isUp ? 'Trending up' : 'Trending down' }} by {{ chartTrend.value }}% vs prior period
+                                <TrendingUp
+                                    v-if="chartTrend.showTrendArrow"
+                                    class="h-4 w-4"
+                                    :class="chartTrend.isUp ? 'text-rose-500' : 'text-emerald-500 rotate-180'"
+                                />
                             </template>
-                            <template v-else>No change from last week</template>
+                            <template v-else-if="chartTrend.display === 'New'">
+                                Higher volume than the prior period (no tickets in the prior window to compare).
+                                <TrendingUp v-if="chartTrend.showTrendArrow" class="h-4 w-4 text-rose-500" />
+                            </template>
+                            <template v-else-if="chartTrend.display === '—'">
+                                Not enough data to compare with the prior period.
+                            </template>
+                            <template v-else>No change from previous period</template>
                         </div>
-                        <p class="text-xs text-muted-foreground">New incidents compared to previous week (Mon – Sun)</p>
+                        <p class="text-xs text-muted-foreground">New incidents compared to previous period</p>
                     </div>
                 </Card>
 
@@ -1012,13 +1113,21 @@ watch(isAssignModalOpen, (val) => {
                             <Badge variant="outline" class="bg-primary/10 text-primary border-primary/20 px-2 py-0 text-[10px] font-bold uppercase tracking-wider">
                                 {{ assigningTicket.tktId }}
                             </Badge>
-                            <Badge variant="outline" :class="['inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 border', getStatusColor('Open')]">
-                                <component :is="getStatusIcon('Open')" class="h-3 w-3" />
-                                Open
+                            <Badge
+                                variant="outline"
+                                :class="['inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 border']"
+                                :style="dashboardStatusHexStyle(assigningTicket.status ?? 'Open')"
+                            >
+                                <component :is="dashboardStatusIcon(assigningTicket.status ?? 'Open')" class="h-3 w-3" />
+                                {{ assigningTicket.status ?? 'Open' }}
                             </Badge>
                             <span class="text-muted-foreground/40 text-xs">→</span>
-                            <Badge variant="outline" :class="['inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 border', getStatusColor(assignStatusOverride)]">
-                                <component :is="getStatusIcon(assignStatusOverride)" class="h-3 w-3" />
+                            <Badge
+                                variant="outline"
+                                :class="['inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 border']"
+                                :style="dashboardStatusHexStyle(assignStatusOverride)"
+                            >
+                                <component :is="dashboardStatusIcon(assignStatusOverride)" class="h-3 w-3" />
                                 {{ assignStatusOverride }}
                             </Badge>
                         </div>
@@ -1043,19 +1152,20 @@ watch(isAssignModalOpen, (val) => {
                         </div>
                         <div class="flex flex-wrap gap-2">
                             <button
-                                v-for="s in ['In Progress', 'On Hold', 'Resolved']"
-                                :key="s"
+                                v-for="s in assignModalTargetStatuses"
+                                :key="s.name"
                                 type="button"
-                                @click="assignStatusOverride = s"
+                                @click="assignStatusOverride = s.name"
                                 :class="[
                                     'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-bold border-2 transition-all',
-                                    assignStatusOverride === s
-                                        ? [getStatusColor(s), 'border-current shadow-sm scale-[1.03]']
+                                    assignStatusOverride === s.name
+                                        ? 'border-current shadow-sm scale-[1.03]'
                                         : 'border-muted text-muted-foreground hover:border-primary/30 hover:bg-muted/50'
                                 ]"
+                                :style="assignStatusOverride === s.name ? dashboardStatusHexStyle(s.name) : {}"
                             >
-                                <component :is="getStatusIcon(s)" class="h-3 w-3" />
-                                {{ s }}
+                                <component :is="dashboardStatusIcon(s.name)" class="h-3 w-3" />
+                                {{ s.name }}
                             </button>
                         </div>
                         <div class="h-px bg-border/50" />
@@ -1161,7 +1271,7 @@ watch(isAssignModalOpen, (val) => {
                             </Button>
                             <Button
                                 type="button"
-                                :disabled="assignForm.processing || assignForm.handler_ids.length === 0 || (assignStatusOverride === 'Resolved' && isEmptyHtml(assignForm.solution))"
+                                :disabled="assignForm.processing || (assignTargetRequiresHandlers && assignForm.handler_ids.length === 0) || (assignStatusOverride === 'Resolved' && isEmptyHtml(assignForm.solution))"
                                 @click="submitAssign"
                                 class="text-xs font-bold gap-1.5 shadow-sm shadow-primary/20"
                             >
@@ -1189,7 +1299,9 @@ watch(isAssignModalOpen, (val) => {
                             <component :is="getPriorityIcon(severityModalPriority)" class="h-4 w-4 text-muted-foreground" />
                             <DialogTitle class="text-base font-bold">{{ severityModalPriority }} Priority Tickets</DialogTitle>
                         </div>
-                        <p class="text-xs text-muted-foreground">All tickets with {{ severityModalPriority.toLowerCase() }} severity</p>
+                        <DialogDescription class="text-xs text-muted-foreground">
+                            All tickets with {{ severityModalPriority.toLowerCase() }} severity
+                        </DialogDescription>
                     </DialogHeader>
                 </div>
 
@@ -1259,7 +1371,9 @@ watch(isAssignModalOpen, (val) => {
                             <BarChart2 class="h-4 w-4 text-muted-foreground" />
                             <DialogTitle class="text-base font-bold">{{ categoryModalName }} Tickets</DialogTitle>
                         </div>
-                        <p class="text-xs text-muted-foreground">All tickets in the {{ categoryModalName }} category</p>
+                        <DialogDescription class="text-xs text-muted-foreground">
+                            All tickets in the {{ categoryModalName }} category
+                        </DialogDescription>
                     </DialogHeader>
                 </div>
 

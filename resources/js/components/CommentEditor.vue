@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { useEditor, EditorContent } from '@tiptap/vue-3';
 import StarterKit from '@tiptap/starter-kit';
-import Underline from '@tiptap/extension-underline';
 import Placeholder from '@tiptap/extension-placeholder';
 import Image from '@tiptap/extension-image';
 import { ref, watch } from 'vue';
@@ -10,6 +9,7 @@ import {
     List, ListOrdered, ImageIcon, Undo, Redo,
 } from 'lucide-vue-next';
 import { compressImage } from '@/lib/utils';
+import { laravelFetch } from '@/lib/laravelFetch';
 
 const props = defineProps<{ modelValue: string; placeholder?: string }>();
 const emit = defineEmits<{ 'update:modelValue': [value: string]; 'focus': [] }>();
@@ -23,7 +23,6 @@ const editor = useEditor({
     content: props.modelValue,
     extensions: [
         StarterKit,
-        Underline,
         Placeholder.configure({ placeholder: props.placeholder ?? 'Write a comment...' }),
         Image.configure({ inline: false, allowBase64: false }),
     ],
@@ -64,13 +63,8 @@ async function handleImageUpload(event: Event) {
         const form = new FormData();
         form.append('image', compressed);
 
-        const xsrfToken = document.cookie.match(/XSRF-TOKEN=([^;]+)/)?.[1] ?? '';
-        const response = await fetch(route('comments.images.store'), {
+        const response = await laravelFetch(route('comments.images.store'), {
             method: 'POST',
-            headers: {
-                'X-XSRF-TOKEN': decodeURIComponent(xsrfToken),
-                'Accept': 'application/json',
-            },
             body: form,
         });
 

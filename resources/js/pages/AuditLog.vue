@@ -3,7 +3,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import AppLayout from '@/layouts/AppLayout.vue';
+import TicketDetailModal, { type TicketDetail } from '@/components/TicketDetailModal.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
 import {
@@ -15,6 +17,7 @@ import {
     Flag,
     GitBranch,
     History,
+    ListFilter,
     LogIn,
     LogOut,
     MessageSquare,
@@ -22,6 +25,9 @@ import {
     PinOff,
     ScrollText,
     Search,
+    Crown,
+    Headset,
+    ShieldCheck,
     Smile,
     ThumbsDown,
     ThumbsUp,
@@ -29,10 +35,13 @@ import {
     UserCog,
     UserMinus,
     UserPlus,
+    UserRound,
+    Users,
     UserX,
     X,
 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
+import { laravelFetch } from '@/lib/laravelFetch';
 
 interface ActivityRow {
     id: number;
@@ -40,6 +49,7 @@ interface ActivityRow {
     oldValue: string | null;
     newValue: string | null;
     userName: string;
+    userRole: string | null;
     userId: number | null;
     ticketId: number | null;
     ticketTitle: string;
@@ -70,9 +80,13 @@ const props = defineProps<{
         search?: string;
         from?: string;
         to?: string;
+        ticket_id?: string;
     };
-    users: { id: number; name: string }[];
+    users: { id: number; name: string; role: string }[];
+    statuses: { id: number; name: string; icon: string; color: string; handler_requirement?: string }[];
 }>();
+
+const FILTER_ALL = '__all__';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: route('dashboard') },
@@ -175,6 +189,84 @@ const getActivityIconClass = (action: string): string =>
 const getActionLabel = (action: string): string =>
     ACTION_LABELS[action] ?? action.replace(/_/g, ' ');
 
+const selectedActor = computed(() => {
+    if (!filterUserId.value) {
+        return null;
+    }
+    return props.users.find((u) => String(u.id) === filterUserId.value) ?? null;
+});
+
+/** Matches `Users.vue` role badges and icons. */
+function getRoleBadgeClass(role: string): string {
+    switch (role) {
+        case 'admin':
+            return 'bg-rose-500/15 text-rose-500 border-rose-500/30';
+        case 'supervisor':
+            return 'bg-amber-500/15 text-amber-500 border-amber-500/30';
+        case 'technical':
+            return 'bg-blue-500/15 text-blue-500 border-blue-500/30';
+        default:
+            return 'bg-muted text-muted-foreground border-border';
+    }
+}
+
+function getRoleIcon(role: string): IconComponent {
+    switch (role) {
+        case 'admin':
+            return Crown;
+        case 'supervisor':
+            return ShieldCheck;
+        case 'technical':
+            return Headset;
+        default:
+            return UserRound;
+    }
+}
+
+/** Icon bubble next to name — same palette as `getRoleBadgeClass`. */
+function getRoleIconBubbleClass(role: string): string {
+    switch (role) {
+        case 'admin':
+            return 'border-rose-500/30 bg-rose-500/15 text-rose-500';
+        case 'supervisor':
+            return 'border-amber-500/30 bg-amber-500/15 text-amber-500';
+        case 'technical':
+            return 'border-blue-500/30 bg-blue-500/15 text-blue-500';
+        default:
+            return 'border-border bg-muted text-muted-foreground';
+    }
+}
+
+function getRoleAccentTextClass(role: string): string {
+    switch (role) {
+        case 'admin':
+            return 'text-rose-500';
+        case 'supervisor':
+            return 'text-amber-500';
+        case 'technical':
+            return 'text-blue-500';
+        default:
+            return 'text-muted-foreground';
+    }
+}
+
+function formatUserRoleLabel(role: string): string {
+    if (role.length === 0) {
+        return role;
+    }
+    return role.charAt(0).toUpperCase() + role.slice(1);
+}
+
+function onActionSelectChange(value: unknown): void {
+    const v = typeof value === 'string' ? value : '';
+    filterAction.value = v === FILTER_ALL || v === '' ? '' : v;
+}
+
+function onActorSelectChange(value: unknown): void {
+    const v = typeof value === 'string' ? value : '';
+    filterUserId.value = v === FILTER_ALL || v === '' ? '' : v;
+}
+
 // ── Filter apply / clear ───────────────────────────────────────────────────
 const hasActiveFilters = computed(() =>
     !!(filterAction.value || filterUserId.value || filterSearch.value || filterFrom.value || filterTo.value),
@@ -213,12 +305,35 @@ watch(filterSearch, () => {
 // Immediately apply when select/date inputs change
 watch([filterAction, filterUserId, filterFrom, filterTo], applyFilters);
 
-// ── Row interaction ──────────────────────────────────────────────────────────
-const openTicket = (ticketId: number | null) => {
-    if (ticketId) {
-        router.get(route('tickets'), { ticket_id: ticketId });
+// ── Row interaction (ticket detail modal) ───────────────────────────────────
+const isTicketDetailOpen = ref(false);
+const ticketDetailLoading = ref(false);
+const ticketDetail = ref<TicketDetail | null>(null);
+const ticketDetailPriorities = ref<{ id: number; name: string; icon: string; color: string }[]>([]);
+
+async function openTicket(ticketId: number | null): Promise<void> {
+    if (!ticketId) {
+        return;
     }
-};
+    isTicketDetailOpen.value = true;
+    ticketDetailLoading.value = true;
+    ticketDetail.value = null;
+    ticketDetailPriorities.value = [];
+    try {
+        const res = await laravelFetch(route('tickets.detail-json', { ticket: ticketId }));
+        if (!res.ok) {
+            isTicketDetailOpen.value = false;
+            return;
+        }
+        const data = await res.json() as { ticket: TicketDetail; priorities: typeof ticketDetailPriorities.value };
+        ticketDetail.value = data.ticket;
+        ticketDetailPriorities.value = data.priorities;
+    } catch {
+        isTicketDetailOpen.value = false;
+    } finally {
+        ticketDetailLoading.value = false;
+    }
+}
 
 // ── Pagination helper ──────────────────────────────────────────────────────
 const pageLinks = computed(() =>
@@ -233,7 +348,7 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
     <Head title="Audit Log" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
-        <div class="flex h-full flex-1 flex-col gap-4 p-4 md:gap-6 md:p-6">
+        <div class="flex h-full min-w-0 w-full flex-1 flex-col gap-4 p-4 md:gap-6 md:p-6">
 
             <!-- Page header -->
             <div class="flex items-center justify-between gap-4">
@@ -256,14 +371,14 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
             </div>
 
             <!-- Filter bar -->
-            <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div class="flex min-w-0 flex-col gap-3 md:flex-row md:items-end md:justify-between md:gap-4">
                 <!-- Search by anything -->
-                <div class="relative w-full sm:w-64 shrink-0">
+                <div class="relative w-full shrink-0 md:w-64 md:max-w-xs">
                     <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
                     <Input
                         v-model="filterSearch"
                         type="text"
-                        placeholder="Search logs..."
+                        placeholder="Search title, ticket ID, action, values…"
                         class="h-9 pl-9 w-full bg-background shadow-sm border-border/60 transition-colors focus-visible:border-primary"
                     />
                     <!-- Clear search shortcut hint -->
@@ -278,38 +393,146 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                     </button>
                 </div>
 
-                <!-- Right side filters -->
-                <div class="flex flex-wrap items-end gap-3 w-full sm:w-auto">
+                <!-- Filters: single horizontal row (scroll on narrow viewports) -->
+                <div
+                    class="flex min-w-0 flex-nowrap items-end gap-2 overflow-x-auto pb-0.5 sm:gap-3 md:min-w-0 md:flex-1 md:justify-end md:overflow-visible md:pb-0 [-webkit-overflow-scrolling:touch]"
+                >
                     <!-- Action type -->
-                    <div class="flex flex-col gap-1 min-w-[160px] flex-1 sm:flex-none">
+                    <div class="flex w-[min(16rem,calc(100vw-2rem))] shrink-0 flex-col gap-1 sm:w-[15rem]">
                         <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Action</span>
-                        <select
-                            v-model="filterAction"
-                            class="h-9 rounded-md border border-border/60 bg-background px-3 text-xs font-medium text-foreground shadow-sm transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                        <Select
+                            :model-value="filterAction || FILTER_ALL"
+                            @update:model-value="onActionSelectChange"
                         >
-                            <option value="">All actions</option>
-                            <option v-for="a in ALL_ACTIONS" :key="a" :value="a">
-                                {{ getActionLabel(a) }}
-                            </option>
-                        </select>
+                            <SelectTrigger
+                                class="h-9 border-border/60 bg-background shadow-sm focus:ring-1 focus:ring-primary data-[placeholder]:text-muted-foreground [&>span:first-child]:min-w-0 [&>span:first-child]:flex-1"
+                            >
+                                <div class="flex min-w-0 flex-1 items-center gap-2 text-left">
+                                    <span
+                                        class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border"
+                                        :class="
+                                            filterAction
+                                                ? getActivityIconClass(filterAction)
+                                                : 'border-border/50 bg-muted/50 text-muted-foreground'
+                                        "
+                                    >
+                                        <component
+                                            :is="filterAction ? getActivityIcon(filterAction) : ListFilter"
+                                            class="h-3.5 w-3.5"
+                                        />
+                                    </span>
+                                    <span class="truncate text-xs font-semibold">
+                                        {{ filterAction ? getActionLabel(filterAction) : 'All actions' }}
+                                    </span>
+                                </div>
+                            </SelectTrigger>
+                            <SelectContent class="max-h-[min(22rem,75vh)] w-[min(calc(100vw-2rem),20rem)]">
+                                <SelectItem :value="FILTER_ALL">
+                                    <span class="flex items-center gap-2 py-0.5">
+                                        <span
+                                            class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted/50 text-muted-foreground"
+                                        >
+                                            <ListFilter class="h-3.5 w-3.5" />
+                                        </span>
+                                        <span class="text-xs font-medium">All actions</span>
+                                    </span>
+                                </SelectItem>
+                                <SelectItem v-for="a in ALL_ACTIONS" :key="a" :value="a">
+                                    <span class="flex items-center gap-2 py-0.5">
+                                        <span
+                                            class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border"
+                                            :class="getActivityIconClass(a)"
+                                        >
+                                            <component :is="getActivityIcon(a)" class="h-3.5 w-3.5" />
+                                        </span>
+                                        <span class="text-xs font-medium">{{ getActionLabel(a) }}</span>
+                                    </span>
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
 
                     <!-- Actor -->
-                    <div class="flex flex-col gap-1 min-w-[140px] flex-1 sm:flex-none">
+                    <div class="flex w-[min(18rem,calc(100vw-2rem))] shrink-0 flex-col gap-1 sm:w-[17rem]">
                         <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Actor</span>
-                        <select
-                            v-model="filterUserId"
-                            class="h-9 rounded-md border border-border/60 bg-background px-3 text-xs font-medium text-foreground shadow-sm transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                        <Select
+                            :model-value="filterUserId || FILTER_ALL"
+                            @update:model-value="onActorSelectChange"
                         >
-                            <option value="">All users</option>
-                            <option v-for="u in users" :key="u.id" :value="String(u.id)">
-                                {{ u.name }}
-                            </option>
-                        </select>
+                            <SelectTrigger
+                                class="h-auto min-h-9 border-border/60 bg-background py-1.5 shadow-sm focus:ring-1 focus:ring-primary data-[placeholder]:text-muted-foreground [&>span:first-child]:min-w-0 [&>span:first-child]:flex-1"
+                            >
+                                <div class="flex min-w-0 flex-1 items-center gap-2.5 text-left">
+                                    <template v-if="selectedActor">
+                                        <span
+                                            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border"
+                                            :class="getRoleIconBubbleClass(selectedActor.role)"
+                                        >
+                                            <component :is="getRoleIcon(selectedActor.role)" class="h-4 w-4" />
+                                        </span>
+                                        <div class="flex min-w-0 flex-1 flex-col items-start gap-0 leading-tight">
+                                            <span class="w-full truncate text-xs font-semibold text-foreground">{{
+                                                selectedActor.name
+                                            }}</span>
+                                            <span
+                                                class="text-[10px] font-semibold"
+                                                :class="getRoleAccentTextClass(selectedActor.role)"
+                                            >{{ formatUserRoleLabel(selectedActor.role) }}</span>
+                                        </div>
+                                    </template>
+                                    <template v-else>
+                                        <span
+                                            class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted/50 text-muted-foreground"
+                                        >
+                                            <Users class="h-3.5 w-3.5" />
+                                        </span>
+                                        <span class="truncate text-xs font-semibold">All users</span>
+                                    </template>
+                                </div>
+                            </SelectTrigger>
+                            <SelectContent class="max-h-[min(20rem,75vh)] w-[min(calc(100vw-2rem),20rem)]">
+                                <SelectItem :value="FILTER_ALL">
+                                    <span class="flex items-center gap-2 py-0.5">
+                                        <span
+                                            class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted/50 text-muted-foreground"
+                                        >
+                                            <Users class="h-3.5 w-3.5" />
+                                        </span>
+                                        <div class="flex flex-col gap-0.5">
+                                            <span class="text-xs font-medium">All users</span>
+                                            <span class="text-[10px] text-muted-foreground">Any role</span>
+                                        </div>
+                                    </span>
+                                </SelectItem>
+                                <SelectItem v-for="u in users" :key="u.id" :value="String(u.id)">
+                                    <span class="flex items-center gap-2.5 py-0.5">
+                                        <span
+                                            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border"
+                                            :class="getRoleIconBubbleClass(u.role)"
+                                        >
+                                            <component :is="getRoleIcon(u.role)" class="h-4 w-4" />
+                                        </span>
+                                        <div class="flex min-w-0 flex-1 flex-col items-start gap-1 leading-tight">
+                                            <span class="w-full truncate text-xs font-semibold">{{ u.name }}</span>
+                                            <Badge
+                                                variant="outline"
+                                                :class="[
+                                                    'inline-flex h-5 shrink-0 items-center gap-1 px-2 py-0 text-[10px] font-bold',
+                                                    getRoleBadgeClass(u.role),
+                                                ]"
+                                            >
+                                                <component :is="getRoleIcon(u.role)" class="h-3 w-3 shrink-0" />
+                                                {{ formatUserRoleLabel(u.role) }}
+                                            </Badge>
+                                        </div>
+                                    </span>
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
 
                     <!-- Date range -->
-                    <div class="flex flex-col gap-1 flex-1 sm:flex-none">
+                    <div class="flex shrink-0 flex-col gap-1">
                         <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Date Range</span>
                         <div class="flex items-center gap-1.5 h-9 rounded-md border border-border/60 bg-background px-2.5 shadow-sm transition-colors focus-within:border-primary focus-within:ring-1 focus-within:ring-primary">
                             <input
@@ -333,7 +556,7 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                         v-if="hasActiveFilters"
                         variant="ghost"
                         size="sm"
-                        class="h-9 gap-1.5 text-xs text-muted-foreground hover:text-foreground shrink-0"
+                        class="h-9 shrink-0 gap-1.5 self-end text-xs text-muted-foreground hover:text-foreground"
                         @click="clearFilters"
                     >
                         <X class="h-3.5 w-3.5" />
@@ -343,16 +566,23 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
             </div>
 
             <!-- Table -->
-            <Card class="shadow-none border border-border/50 overflow-hidden">
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm table-fixed">
+            <Card class="shadow-none border border-border/50 overflow-hidden w-full min-w-0">
+                <div class="w-full min-w-0 overflow-x-auto">
+                    <table class="w-full min-w-[56rem] text-sm table-fixed border-collapse">
+                        <colgroup>
+                            <col class="w-[13%]" />
+                            <col class="w-[15%]" />
+                            <col class="w-[14%]" />
+                            <col class="w-[20%]" />
+                            <col class="w-[38%]" />
+                        </colgroup>
                         <thead>
                             <tr class="border-b border-border/50 bg-muted/30">
-                                <th class="w-40 px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Date / Time</th>
-                                <th class="w-48 px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Actor</th>
-                                <th class="w-40 px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Action</th>
-                                <th class="w-64 px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Ticket</th>
-                                <th class="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Change</th>
+                                <th class="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Date / Time</th>
+                                <th class="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Actor</th>
+                                <th class="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Action</th>
+                                <th class="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Ticket</th>
+                                <th class="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Change</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-border/30">
@@ -392,12 +622,32 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                                 </td>
 
                                 <!-- Actor -->
-                                <td class="px-4 py-3 whitespace-nowrap">
-                                    <div class="flex items-center gap-2">
-                                        <div class="h-6 w-6 rounded-full bg-muted border border-border/50 flex items-center justify-center text-[9px] font-bold shrink-0 uppercase">
-                                            {{ entry.userName.split(' ').map(n => n[0]).join('').substring(0, 2) }}
+                                <td class="px-4 py-3 min-w-0 align-top">
+                                    <div class="flex items-start gap-2">
+                                        <div
+                                            class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted text-[9px] font-bold uppercase"
+                                        >
+                                            {{ entry.userName.split(' ').map((n) => n[0]).join('').substring(0, 2) }}
                                         </div>
-                                        <span class="text-xs font-medium text-foreground">{{ entry.userName }}</span>
+                                        <div class="flex min-w-0 flex-col gap-1">
+                                            <span class="truncate text-xs font-medium text-foreground">{{
+                                                entry.userName
+                                            }}</span>
+                                            <Badge
+                                                v-if="entry.userRole"
+                                                variant="outline"
+                                                :class="[
+                                                    'inline-flex w-fit items-center gap-1 px-1.5 py-0 text-[9px] font-bold',
+                                                    getRoleBadgeClass(entry.userRole),
+                                                ]"
+                                            >
+                                                <component
+                                                    :is="getRoleIcon(entry.userRole)"
+                                                    class="h-2.5 w-2.5 shrink-0"
+                                                />
+                                                {{ formatUserRoleLabel(entry.userRole) }}
+                                            </Badge>
+                                        </div>
                                     </div>
                                 </td>
 
@@ -410,18 +660,18 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                                 </td>
 
                                 <!-- Ticket -->
-                                <td class="px-4 py-3 max-w-[200px]">
+                                <td class="px-4 py-3 min-w-0 align-top">
                                     <template v-if="entry.ticketId">
                                         <p class="text-[10px] font-bold text-primary/70">{{ entry.ticketTktId }}</p>
-                                        <p class="text-xs text-muted-foreground truncate">{{ entry.ticketTitle }}</p>
+                                        <p class="text-xs text-muted-foreground break-words line-clamp-2">{{ entry.ticketTitle }}</p>
                                     </template>
                                     <span v-else class="text-xs text-muted-foreground/40">—</span>
                                 </td>
 
                                 <!-- Change old → new -->
-                                <td class="px-4 py-3">
-                                    <div class="flex items-center justify-between gap-4">
-                                        <div class="flex items-center gap-1.5 flex-wrap">
+                                <td class="px-4 py-3 min-w-0 align-top">
+                                    <div class="flex items-start justify-between gap-3 min-w-0">
+                                        <div class="flex min-w-0 flex-1 items-center gap-1.5 flex-wrap">
                                             <span
                                                 v-if="entry.oldValue"
                                                 class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold bg-destructive/10 text-destructive/80 line-through"
@@ -495,6 +745,16 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                     </div>
                 </div>
             </Card>
+
+            <TicketDetailModal
+                v-model="isTicketDetailOpen"
+                :ticket="ticketDetail"
+                :priorities="ticketDetailPriorities"
+                :statuses="props.statuses"
+                :loading="ticketDetailLoading"
+                :show-edit-button="false"
+                :show-open-in-tickets-button="true"
+            />
 
         </div>
     </AppLayout>

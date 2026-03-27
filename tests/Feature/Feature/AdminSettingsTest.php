@@ -66,6 +66,10 @@ class AdminSettingsTest extends TestCase
                 ->has('categories')
                 ->has('priorities')
                 ->has('statuses')
+                ->has('ticketConfigProtectedNames')
+                ->has('categoryTicketCountsById')
+                ->has('priorityTicketCountsById')
+                ->has('statusTicketCountsById')
             );
     }
 
@@ -99,15 +103,15 @@ class AdminSettingsTest extends TestCase
 
     public function test_admin_can_update_boolean_setting(): void
     {
-        Setting::create(['key' => 'maintenance_mode', 'value' => '0', 'type' => 'boolean', 'group' => 'general']);
+        Setting::create(['key' => 'sidebar_collapsed_default', 'value' => '0', 'type' => 'boolean', 'group' => 'appearance']);
         $admin = User::factory()->admin()->create();
 
         $this->actingAs($admin)
-            ->put('/admin/settings', ['settings' => ['maintenance_mode' => true]])
+            ->put('/admin/settings', ['settings' => ['sidebar_collapsed_default' => true]])
             ->assertRedirect()
             ->assertSessionHas('success');
 
-        $this->assertDatabaseHas('settings', ['key' => 'maintenance_mode', 'value' => '1']);
+        $this->assertDatabaseHas('settings', ['key' => 'sidebar_collapsed_default', 'value' => '1']);
     }
 
     public function test_update_ignores_unknown_keys(): void
