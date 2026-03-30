@@ -28,6 +28,65 @@ class AdminSettingsAuditFormatter
     }
 
     /**
+     * Compact one line per ticket status for audit log (no verbose key names).
+     *
+     * @param  list<array<string, mixed>>  $rows
+     */
+    public static function ticketStatusesForAudit(array $rows): string
+    {
+        $lines = [];
+        foreach ($rows as $row) {
+            $name = trim((string) ($row['name'] ?? ''));
+            $icon = trim(self::stringifyValue($row['icon'] ?? null));
+            $color = trim(self::stringifyValue($row['color'] ?? null));
+            $handler = self::handlerRequirementDisplay($row['handler_requirement'] ?? null);
+            $iconOut = $icon !== '' ? $icon : '—';
+            $colorOut = $color !== '' ? $color : '—';
+            $lines[] = '• '.$name.' · '.$iconOut.' · '.$colorOut.' · '.$handler;
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Compact one line per category: name · icon (for audit log UI).
+     *
+     * @param  list<array<string, mixed>>  $rows
+     */
+    public static function ticketCategoriesForAudit(array $rows): string
+    {
+        $lines = [];
+        foreach ($rows as $row) {
+            $name = trim((string) ($row['name'] ?? ''));
+            $icon = trim(self::stringifyValue($row['icon'] ?? null));
+            $iconOut = $icon !== '' ? $icon : '—';
+            $lines[] = '• '.$name.' · '.$iconOut;
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Compact one line per priority: name · icon · color (for audit log UI).
+     *
+     * @param  list<array<string, mixed>>  $rows
+     */
+    public static function ticketPrioritiesForAudit(array $rows): string
+    {
+        $lines = [];
+        foreach ($rows as $row) {
+            $name = trim((string) ($row['name'] ?? ''));
+            $icon = trim(self::stringifyValue($row['icon'] ?? null));
+            $color = trim(self::stringifyValue($row['color'] ?? null));
+            $iconOut = $icon !== '' ? $icon : '—';
+            $colorOut = $color !== '' ? $color : '—';
+            $lines[] = '• '.$name.' · '.$iconOut.' · '.$colorOut;
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
      * Multi-line blocks per row (name + indented fields) for readable audit log diffs.
      *
      * @param  list<array<string, mixed>>  $rows
@@ -56,6 +115,23 @@ class AdminSettingsAuditFormatter
             'icon' => 'Icon',
             'color' => 'Color',
             default => Str::title(str_replace('_', ' ', $key)),
+        };
+    }
+
+    private static function handlerRequirementDisplay(mixed $v): string
+    {
+        if ($v instanceof BackedEnum) {
+            $v = (string) $v->value;
+        } else {
+            $v = trim((string) ($v ?? ''));
+        }
+
+        return match ($v) {
+            'none' => '—',
+            'optional' => 'Optional',
+            'required' => 'Required',
+            '' => '—',
+            default => $v,
         };
     }
 

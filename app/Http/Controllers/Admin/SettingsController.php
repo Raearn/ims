@@ -202,8 +202,8 @@ class SettingsController extends Controller
             ->all();
 
         if (json_encode($beforeSnapshot) !== json_encode($afterSnapshot) && auth()->check()) {
-            $oldText = AdminSettingsAuditFormatter::ticketConfigRowsSideBySide($beforeSnapshot, ['icon']);
-            $newText = AdminSettingsAuditFormatter::ticketConfigRowsSideBySide($afterSnapshot, ['icon']);
+            $oldText = AdminSettingsAuditFormatter::ticketCategoriesForAudit($beforeSnapshot);
+            $newText = AdminSettingsAuditFormatter::ticketCategoriesForAudit($afterSnapshot);
             TicketActivity::create([
                 'ticket_id' => null,
                 'user_id' => auth()->id(),
@@ -289,8 +289,8 @@ class SettingsController extends Controller
             ->all();
 
         if (json_encode($beforeSnapshot) !== json_encode($afterSnapshot) && auth()->check()) {
-            $oldText = AdminSettingsAuditFormatter::ticketConfigRowsSideBySide($beforeSnapshot, ['icon', 'color']);
-            $newText = AdminSettingsAuditFormatter::ticketConfigRowsSideBySide($afterSnapshot, ['icon', 'color']);
+            $oldText = AdminSettingsAuditFormatter::ticketPrioritiesForAudit($beforeSnapshot);
+            $newText = AdminSettingsAuditFormatter::ticketPrioritiesForAudit($afterSnapshot);
             TicketActivity::create([
                 'ticket_id' => null,
                 'user_id' => auth()->id(),
@@ -381,8 +381,8 @@ class SettingsController extends Controller
             ->all();
 
         if (json_encode($beforeSnapshot) !== json_encode($afterSnapshot) && auth()->check()) {
-            $oldText = AdminSettingsAuditFormatter::ticketConfigRowsSideBySide($beforeSnapshot, ['icon', 'color', 'handler_requirement']);
-            $newText = AdminSettingsAuditFormatter::ticketConfigRowsSideBySide($afterSnapshot, ['icon', 'color', 'handler_requirement']);
+            $oldText = AdminSettingsAuditFormatter::ticketStatusesForAudit($beforeSnapshot);
+            $newText = AdminSettingsAuditFormatter::ticketStatusesForAudit($afterSnapshot);
             TicketActivity::create([
                 'ticket_id' => null,
                 'user_id' => auth()->id(),

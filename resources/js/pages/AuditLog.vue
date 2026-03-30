@@ -1,16 +1,17 @@
 <script setup lang="ts">
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
+import AuditChangeDetailModal, { type AuditChangeDetailEntry } from '@/components/AuditChangeDetailModal.vue';
+import AuditConfigChangeBlock from '@/components/AuditConfigChangeBlock.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import TicketDetailModal, { type TicketDetail } from '@/components/TicketDetailModal.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
 import {
     CheckCircle2,
-    ChevronDown,
     ChevronLeft,
     ChevronRight,
     ExternalLink,
@@ -221,6 +222,14 @@ const getActivityIconClass = (action: string): string =>
 const getActionLabel = (action: string): string =>
     ACTION_LABELS[action] ?? action.replace(/_/g, ' ');
 
+function isTicketConfigSettingsAudit(action: string): boolean {
+    return (
+        action === 'ticket_statuses_updated' ||
+        action === 'ticket_categories_updated' ||
+        action === 'ticket_priorities_updated'
+    );
+}
+
 const selectedActor = computed(() => {
     if (!filterUserId.value) {
         return null;
@@ -367,6 +376,47 @@ async function openTicket(ticketId: number | null): Promise<void> {
     }
 }
 
+// ── Change detail modal (full before / after; table shows “updated” only) ───
+const isAuditChangeDetailOpen = ref(false);
+const auditChangeDetailEntry = ref<AuditChangeDetailEntry | null>(null);
+
+function buildChangeDetailEntry(entry: ActivityRow): AuditChangeDetailEntry {
+    return {
+        action: entry.action,
+        actionLabel: getActionLabel(entry.action),
+        oldValue: entry.oldValue,
+        newValue: entry.newValue,
+        userName: entry.userName,
+        userRole: entry.userRole,
+        createdAtFormatted: entry.createdAtFormatted,
+        createdAtRelative: entry.createdAt,
+        ticketId: entry.ticketId,
+        ticketTktId: entry.ticketTktId,
+        ticketTitle: entry.ticketTitle,
+    };
+}
+
+function onAuditRowClick(entry: ActivityRow): void {
+    if (entry.oldValue || entry.newValue) {
+        auditChangeDetailEntry.value = buildChangeDetailEntry(entry);
+        isAuditChangeDetailOpen.value = true;
+
+        return;
+    }
+    void openTicket(entry.ticketId);
+}
+
+function onAuditChangeDetailOpenUpdate(open: boolean): void {
+    isAuditChangeDetailOpen.value = open;
+    if (!open) {
+        auditChangeDetailEntry.value = null;
+    }
+}
+
+function auditRowIsClickable(entry: ActivityRow): boolean {
+    return !!(entry.ticketId || entry.oldValue || entry.newValue);
+}
+
 // ── Pagination helper ──────────────────────────────────────────────────────
 const pageLinks = computed(() =>
     props.activities.links.filter(l => l.label !== '« Previous' && l.label !== 'Next »'),
@@ -375,67 +425,6 @@ const pageLinks = computed(() =>
 const prevLink = computed(() => props.activities.links.find(l => l.label === '« Previous') ?? null);
 const nextLink = computed(() => props.activities.links.find(l => l.label === 'Next »') ?? null);
 
-// ── Change column: collapse very large diffs (e.g. full ticket status lists) ──
-const AUDIT_CHANGE_OVERSIZED_MIN_CHARS = 520;
-const AUDIT_CHANGE_OVERSIZED_MIN_LINES = 7;
-
-const expandedAuditChangeById = ref<Record<number, boolean>>({});
-
-function auditChangeIsOversized(oldValue: string | null, newValue: string | null): boolean {
-    const o = oldValue ?? '';
-    const n = newValue ?? '';
-    if (o.length + n.length >= AUDIT_CHANGE_OVERSIZED_MIN_CHARS) {
-        return true;
-    }
-    const lineCount = Math.max(
-        o ? o.split('\n').length : 0,
-        n ? n.split('\n').length : 0,
-    );
-
-    return lineCount >= AUDIT_CHANGE_OVERSIZED_MIN_LINES;
-}
-
-function auditChangeIsExpanded(id: number): boolean {
-    return !!expandedAuditChangeById.value[id];
-}
-
-function toggleAuditChangeExpanded(id: number): void {
-    expandedAuditChangeById.value = {
-        ...expandedAuditChangeById.value,
-        [id]: !expandedAuditChangeById.value[id],
-    };
-}
-
-/** Outer wrapper: clips tall content until expanded. */
-function auditChangeClipClass(entry: ActivityRow): string {
-    if (!auditChangeIsOversized(entry.oldValue, entry.newValue)) {
-        return '';
-    }
-    if (auditChangeIsExpanded(entry.id)) {
-        return 'max-h-[min(32rem,70vh)] overflow-y-auto overscroll-contain pr-0.5';
-    }
-
-    return 'max-h-28 overflow-hidden relative';
-}
-
-/** Per-panel scroll only when the diff is small or moderately sized. */
-function auditChangePanelClass(entry: ActivityRow): string {
-    if (!auditChangeIsOversized(entry.oldValue, entry.newValue)) {
-        return 'max-h-52 overflow-y-auto';
-    }
-    if (auditChangeIsExpanded(entry.id)) {
-        return '';
-    }
-
-    return '';
-}
-
-watch(
-    () => props.activities.current_page,
-    () => {
-        expandedAuditChangeById.value = {};
-    },
-);
 </script>
 
 <template>
@@ -705,9 +694,9 @@ watch(
                                 :key="entry.id"
                                 :class="[
                                     'transition-colors group',
-                                    entry.ticketId ? 'cursor-pointer hover:bg-muted/40' : 'hover:bg-muted/20'
+                                    auditRowIsClickable(entry) ? 'cursor-pointer hover:bg-muted/40' : 'hover:bg-muted/20',
                                 ]"
-                                @click="openTicket(entry.ticketId)"
+                                @click="onAuditRowClick(entry)"
                             >
                                 <!-- Date -->
                                 <td class="px-4 py-3 whitespace-nowrap">
@@ -762,69 +751,49 @@ watch(
                                     <span v-else class="text-xs text-muted-foreground/40">—</span>
                                 </td>
 
-                                <!-- Change old → new -->
+                                <!-- Change: show “updated” only; full diff in row-click modal -->
                                 <td class="px-4 py-3 min-w-0 align-top">
                                     <div class="flex items-start justify-between gap-3 min-w-0">
-                                        <div class="flex min-w-0 flex-1 flex-col gap-1.5">
-                                            <template v-if="entry.oldValue || entry.newValue">
-                                                <div :class="['min-w-0', auditChangeClipClass(entry)]">
-                                                    <div class="flex flex-col gap-2">
-                                                        <div
-                                                            v-if="entry.oldValue"
-                                                            :class="[
-                                                                'rounded-md border border-destructive/25 bg-destructive/5 px-2.5 py-2',
-                                                                auditChangePanelClass(entry),
-                                                            ]"
-                                                        >
-                                                            <span class="mb-1 block text-[9px] font-bold uppercase tracking-wider text-destructive/70">Previous</span>
-                                                            <div
-                                                                class="text-[10px] font-medium leading-relaxed text-destructive/90 line-through whitespace-pre-wrap break-words"
-                                                            >{{ entry.oldValue }}</div>
-                                                        </div>
-                                                        <div
-                                                            v-if="entry.oldValue && entry.newValue"
-                                                            class="flex justify-center py-0.5 text-muted-foreground/50"
-                                                            aria-hidden="true"
-                                                        >
-                                                            <ChevronDown class="h-3.5 w-3.5" />
-                                                        </div>
-                                                        <div
-                                                            v-if="entry.newValue"
-                                                            :class="[
-                                                                'rounded-md border border-emerald-500/25 bg-emerald-500/5 px-2.5 py-2 dark:bg-emerald-500/10',
-                                                                auditChangePanelClass(entry),
-                                                            ]"
-                                                        >
-                                                            <span class="mb-1 block text-[9px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400/90">Updated</span>
-                                                            <div
-                                                                class="text-[10px] font-medium leading-relaxed whitespace-pre-wrap break-words text-emerald-800 dark:text-emerald-300"
-                                                            >{{ entry.newValue }}</div>
-                                                        </div>
-                                                    </div>
-                                                    <div
-                                                        v-if="auditChangeIsOversized(entry.oldValue, entry.newValue) && !auditChangeIsExpanded(entry.id)"
-                                                        class="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-background to-transparent dark:from-background"
-                                                        aria-hidden="true"
-                                                    />
-                                                </div>
-                                                <Button
-                                                    v-if="auditChangeIsOversized(entry.oldValue, entry.newValue)"
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    class="h-7 shrink-0 gap-1 self-start px-1.5 text-[10px] font-semibold text-muted-foreground hover:text-foreground"
-                                                    @click.stop="toggleAuditChangeExpanded(entry.id)"
+                                        <div class="flex min-w-0 flex-1 flex-col gap-1">
+                                            <template v-if="entry.newValue">
+                                                <div
+                                                    class="max-h-48 overflow-y-auto overscroll-contain rounded-md border border-emerald-500/25 bg-emerald-500/5 px-2.5 py-2 dark:bg-emerald-500/10"
                                                 >
-                                                    <ChevronDown
-                                                        class="h-3 w-3 transition-transform duration-200"
-                                                        :class="{ 'rotate-180': auditChangeIsExpanded(entry.id) }"
+                                                    <span class="mb-1 block text-[9px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400/90">Updated</span>
+                                                    <AuditConfigChangeBlock
+                                                        v-if="isTicketConfigSettingsAudit(entry.action)"
+                                                        :text="entry.newValue"
+                                                        tone="updated"
                                                     />
-                                                    {{ auditChangeIsExpanded(entry.id) ? 'Show less' : 'Show full change' }}
-                                                </Button>
+                                                    <div
+                                                        v-else
+                                                        class="text-[10px] font-medium leading-relaxed whitespace-pre-wrap break-words text-emerald-800 dark:text-emerald-300"
+                                                    >{{ entry.newValue }}</div>
+                                                </div>
+                                                <p
+                                                    v-if="entry.oldValue"
+                                                    class="text-[9px] text-muted-foreground/80"
+                                                >
+                                                    Row click: previous vs updated
+                                                </p>
+                                            </template>
+                                            <template v-else-if="entry.oldValue">
+                                                <p class="text-[10px] font-medium text-muted-foreground">
+                                                    Click row for change details
+                                                </p>
                                             </template>
                                             <span v-else class="text-[10px] text-muted-foreground/40">—</span>
                                         </div>
-                                        <ExternalLink v-if="entry.ticketId" class="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-200 shrink-0" />
+                                        <button
+                                            v-if="entry.ticketId"
+                                            type="button"
+                                            class="inline-flex shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                            title="Open ticket"
+                                            aria-label="Open ticket"
+                                            @click.stop="openTicket(entry.ticketId)"
+                                        >
+                                            <ExternalLink class="h-4 w-4" />
+                                        </button>
                                     </div>
                                 </td>
                             </tr>
@@ -858,8 +827,9 @@ watch(
                                 v-if="link.url && !link.active"
                                 :href="link.url"
                                 class="inline-flex h-7 min-w-[28px] items-center justify-center rounded-md border border-border/50 bg-background px-2 text-xs hover:bg-muted transition-colors"
-                                v-html="link.label"
-                            />
+                            >
+                                <span v-html="link.label" />
+                            </Link>
                             <span
                                 v-else-if="link.active"
                                 class="inline-flex h-7 min-w-[28px] items-center justify-center rounded-md border border-primary/40 bg-primary/10 px-2 text-xs font-bold text-primary"
@@ -886,6 +856,13 @@ watch(
                     </div>
                 </div>
             </Card>
+
+            <AuditChangeDetailModal
+                :model-value="isAuditChangeDetailOpen"
+                :entry="auditChangeDetailEntry"
+                :statuses="props.statuses"
+                @update:model-value="onAuditChangeDetailOpenUpdate"
+            />
 
             <TicketDetailModal
                 v-model="isTicketDetailOpen"

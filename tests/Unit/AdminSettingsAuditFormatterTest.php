@@ -28,17 +28,62 @@ class AdminSettingsAuditFormatterTest extends TestCase
         $this->assertSame("Open\n  Icon: Circle\n  Color: #fff", $text);
     }
 
-    public function test_ticket_config_rows_side_by_side_stringifies_backed_enum_values(): void
+    public function test_ticket_statuses_for_audit_outputs_compact_bullet_lines(): void
     {
-        $text = AdminSettingsAuditFormatter::ticketConfigRowsSideBySide([
+        $text = AdminSettingsAuditFormatter::ticketStatusesForAudit([
+            [
+                'name' => 'Open',
+                'icon' => 'AlertTriangle',
+                'color' => '#f43f5e',
+                'handler_requirement' => TicketStatusHandlerRequirement::None,
+            ],
             [
                 'name' => 'In Progress',
-                'icon' => 'Loader',
-                'color' => '#0ea5e9',
+                'icon' => 'Play',
+                'color' => '#3b82f6',
                 'handler_requirement' => TicketStatusHandlerRequirement::Required,
             ],
-        ], ['icon', 'color', 'handler_requirement']);
+            [
+                'name' => 'Closed',
+                'icon' => 'Ban',
+                'color' => '#64748b',
+                'handler_requirement' => TicketStatusHandlerRequirement::Optional,
+            ],
+        ]);
 
-        $this->assertSame("In Progress\n  Icon: Loader\n  Color: #0ea5e9\n  Handler: required", $text);
+        $expected = <<<'TXT'
+• Open · AlertTriangle · #f43f5e · —
+• In Progress · Play · #3b82f6 · Required
+• Closed · Ban · #64748b · Optional
+TXT;
+        $this->assertSame($expected, $text);
+    }
+
+    public function test_ticket_categories_for_audit_outputs_compact_bullet_lines(): void
+    {
+        $text = AdminSettingsAuditFormatter::ticketCategoriesForAudit([
+            ['name' => 'Network', 'icon' => 'Wifi'],
+            ['name' => 'Uncategorized', 'icon' => null],
+        ]);
+
+        $expected = <<<'TXT'
+• Network · Wifi
+• Uncategorized · —
+TXT;
+        $this->assertSame($expected, $text);
+    }
+
+    public function test_ticket_priorities_for_audit_outputs_compact_bullet_lines(): void
+    {
+        $text = AdminSettingsAuditFormatter::ticketPrioritiesForAudit([
+            ['name' => 'High', 'icon' => 'AlertTriangle', 'color' => '#f97316'],
+            ['name' => 'Low', 'icon' => '', 'color' => ''],
+        ]);
+
+        $expected = <<<'TXT'
+• High · AlertTriangle · #f97316
+• Low · — · —
+TXT;
+        $this->assertSame($expected, $text);
     }
 }
