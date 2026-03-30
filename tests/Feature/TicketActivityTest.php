@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Tag;
 use App\Models\Ticket;
 use App\Models\TicketActivity;
 use App\Models\TicketComment;
@@ -30,6 +31,7 @@ class TicketActivityTest extends TestCase
             'category' => 'Software',
             'priority' => 'Medium',
             'status' => 'Open',
+            'tags' => ['StoreTestTag'],
         ]);
 
         $ticket = Ticket::where('title', 'Test ticket')->firstOrFail();
@@ -65,12 +67,16 @@ class TicketActivityTest extends TestCase
     {
         $admin = $this->admin();
         $ticket = Ticket::factory()->create(['priority' => 'Low', 'status' => 'Open']);
+        $tag = Tag::query()->create(['name' => 'PriorityTestTag']);
+        $ticket->tags()->sync([$tag->id]);
 
         $this->actingAs($admin)->put(route('tickets.update', $ticket), [
             'title' => $ticket->title,
             'category' => $ticket->category,
             'priority' => 'Critical',
             'status' => 'Open',
+            'handler_ids' => [],
+            'tags' => [$tag->name],
         ]);
 
         $this->assertDatabaseHas('ticket_activities', [
@@ -110,6 +116,8 @@ class TicketActivityTest extends TestCase
         $handler = User::factory()->create(['name' => 'Bob Removed']);
         $ticket = Ticket::factory()->create(['status' => 'Open']);
         $ticket->handlers()->attach($handler->id);
+        $tag = Tag::query()->create(['name' => 'HandlerRemoveTag']);
+        $ticket->tags()->sync([$tag->id]);
 
         // Use full-edit route: switching to Open clears handlers
         $this->actingAs($admin)->put(route('tickets.update', $ticket), [
@@ -118,12 +126,37 @@ class TicketActivityTest extends TestCase
             'priority' => $ticket->priority,
             'status' => 'Open',
             'handler_ids' => [],
+            'tags' => [$tag->name],
         ]);
 
         $this->assertDatabaseHas('ticket_activities', [
             'ticket_id' => $ticket->id,
             'action' => 'handler_removed',
             'old_value' => 'Bob Removed',
+        ]);
+    }
+
+    public function test_title_change_logs_ticket_edited_activity(): void
+    {
+        $admin = $this->admin();
+        $ticket = Ticket::factory()->create(['status' => 'Open', 'title' => 'Original']);
+        $tag = Tag::query()->create(['name' => 'EditTitleTag']);
+        $ticket->tags()->sync([$tag->id]);
+
+        $this->actingAs($admin)->put(route('tickets.update', $ticket), [
+            'title' => 'Updated title',
+            'description' => $ticket->description,
+            'category' => $ticket->category,
+            'priority' => $ticket->priority,
+            'status' => 'Open',
+            'handler_ids' => [],
+            'tags' => [$tag->name],
+        ]);
+
+        $this->assertDatabaseHas('ticket_activities', [
+            'ticket_id' => $ticket->id,
+            'action' => 'ticket_edited',
+            'new_value' => 'Updated: Title',
         ]);
     }
 

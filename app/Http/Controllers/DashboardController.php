@@ -2,10 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Tag;
 use App\Models\Ticket;
+use App\Models\TicketActivity;
+use App\Models\TicketCategory;
 use App\Models\TicketComment;
+use App\Models\TicketPriority;
 use App\Models\TicketStatus;
 use App\Models\User;
+use App\Services\ReportGenerationService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Response;
@@ -25,63 +30,41 @@ class DashboardController extends Controller
         return Inertia::render('Dashboard', $data);
     }
 
-    public function exportPdf(): Response
+    public function exportPdf(ReportGenerationService $reportService): Response
     {
         $period = request('period', '7d');
-        $data = $this->buildDashboardData($period);
 
-        /** @var array{start: Carbon, end: Carbon} $window */
-        $window = $data['_window'];
-        $currentPeriodStart = $window['start'];
-        $now = $window['end'];
+        $days = 7;
+        switch ($period) {
+            case '30d':
+                $days = 30;
+                break;
+            case 'this_month':
+                $days = now()->day;
+                break;
+            case 'last_month':
+                $days = 60;
+                break;
+            case 'ytd':
+                $days = now()->dayOfYear;
+                break;
+            case 'all':
+                $days = 365 * 10;
+                break;
+        }
 
-        $priorityOrder = ['Critical', 'High', 'Medium', 'Low'];
+        $data = $reportService->generateDashboardMetrics($days);
 
-        $ticketsByPriority = Ticket::with(['reporter', 'handlers'])
-            ->where('created_at', '>=', $currentPeriodStart)
-            ->where('created_at', '<=', $now)
-            ->orderByRaw("FIELD(priority, 'Critical','High','Medium','Low')")
-            ->orderBy('created_at', 'desc')
-            ->get()
-            ->groupBy('priority')
-            ->map(fn ($tickets) => $tickets->map(fn ($t) => [
-                'tktId' => 'TKT-'.(1000 + $t->id),
-                'title' => $t->title,
-                'category' => $t->category,
-                'status' => $t->status,
-                'reporter' => $t->reporter?->name ?? 'Unknown',
-                'handlers' => $t->handlers->pluck('name')->join(', ') ?: '—',
-                'openedAt' => $t->created_at->format('M d, Y'),
-            ])->values()->all())
-            ->sortBy(fn ($_, $key) => array_search($key, $priorityOrder))
-            ->all();
+        TicketActivity::create([
+            'ticket_id' => null,
+            'user_id' => auth()->id(),
+            'action' => 'dashboard_export_pdf',
+            'old_value' => null,
+            'new_value' => 'Reporting period: '.$period,
+            'created_at' => now(),
+        ]);
 
-        $ticketsByCategory = Ticket::with(['reporter', 'handlers'])
-            ->where('created_at', '>=', $currentPeriodStart)
-            ->where('created_at', '<=', $now)
-            ->orderBy('category')
-            ->orderBy('created_at', 'desc')
-            ->get()
-            ->groupBy('category')
-            ->map(fn ($tickets) => $tickets->map(fn ($t) => [
-                'tktId' => 'TKT-'.(1000 + $t->id),
-                'title' => $t->title,
-                'priority' => $t->priority,
-                'status' => $t->status,
-                'reporter' => $t->reporter?->name ?? 'Unknown',
-                'handlers' => $t->handlers->pluck('name')->join(', ') ?: '—',
-                'openedAt' => $t->created_at->format('M d, Y'),
-            ])->values()->all())
-            ->all();
-
-        unset($data['_window']);
-
-        $pdf = Pdf::loadView('exports.dashboard-report', array_merge($data, [
-            'ticketsByPriority' => $ticketsByPriority,
-            'ticketsByCategory' => $ticketsByCategory,
-            'generatedAt' => now()->format('F j, Y \a\t g:i A'),
-            'priorityOrder' => $priorityOrder,
-        ]));
+        $pdf = Pdf::loadView('reports.dashboard-pdf', $data);
 
         $pdf->setPaper('a4', 'portrait');
 
@@ -347,83 +330,164 @@ class DashboardController extends Controller
             'showTrendArrow' => $chartTrendRaw['showTrendArrow'],
         ];
 
-        // ── Priority distribution ─────────────────────────────────────
-        $priorityMap = [
-            'Critical' => ['color' => 'bg-rose-500',   'hex' => '#f43f5e'],
-            'High' => ['color' => 'bg-orange-500',  'hex' => '#f97316'],
-            'Medium' => ['color' => 'bg-yellow-500',  'hex' => '#eab308'],
-            'Low' => ['color' => 'bg-blue-400',    'hex' => '#60a5fa'],
-        ];
+        // ── Priority distribution (admin-configured priorities) ───────
+        $prioritiesConfigured = TicketPriority::orderBy('sort_order')->get(['name', 'color', 'icon']);
+
         $priorityRaw = Ticket::selectRaw('priority, COUNT(*) as c')
             ->where('created_at', '>=', $currentPeriodStart)
             ->where('created_at', '<=', $now)
             ->groupBy('priority')
             ->pluck('c', 'priority');
-        $severities = collect($priorityMap)
-            ->map(fn ($c, $name) => ['name' => $name, 'count' => (int) $priorityRaw->get($name, 0), 'color' => $c['color'], 'hex' => $c['hex']])
-            ->values()->all();
 
-        // ── Category distribution ─────────────────────────────────────
-        $categoryMap = [
-            'Network' => ['color' => 'bg-blue-500',   'hex' => '#3b82f6'],
-            'Hardware' => ['color' => 'bg-purple-500',  'hex' => '#a855f7'],
-            'Software' => ['color' => 'bg-orange-500',  'hex' => '#f97316'],
-            'Access' => ['color' => 'bg-green-500',   'hex' => '#22c55e'],
-            'Security' => ['color' => 'bg-red-500',     'hex' => '#ef4444'],
-        ];
+        $priorityLegend = $prioritiesConfigured->map(fn ($p) => [
+            'name' => $p->name,
+            'hex' => $this->normalizeChartHex($p->color),
+            'icon' => $p->icon,
+        ])->values()->all();
+
+        $configuredPriorityNames = $prioritiesConfigured->pluck('name')->all();
+
+        $severities = $prioritiesConfigured->map(function ($p) use ($priorityRaw) {
+            return [
+                'name' => $p->name,
+                'count' => (int) $priorityRaw->get($p->name, 0),
+                'color' => 'bg-gray-500',
+                'hex' => $this->normalizeChartHex($p->color),
+            ];
+        })->values()->all();
+
+        $orphanPriorities = $priorityRaw->filter(
+            fn ($count, $name) => ! in_array($name, $configuredPriorityNames, true) && (int) $count > 0
+        );
+
+        foreach ($orphanPriorities as $name => $count) {
+            $severities[] = [
+                'name' => $name,
+                'count' => (int) $count,
+                'color' => 'bg-gray-500',
+                'hex' => '#6b7280',
+            ];
+        }
+
+        // ── Category distribution (admin-configured categories) ─────
+        $categoriesConfigured = TicketCategory::orderBy('sort_order')->get(['name']);
+
+        $categoryPalette = ['#3b82f6', '#a855f7', '#f97316', '#22c55e', '#ef4444', '#06b6d4', '#eab308', '#ec4899', '#6366f1', '#14b8a6', '#84cc16', '#f59e0b'];
+
         $categoryRaw = Ticket::selectRaw('category, COUNT(*) as c')
             ->where('created_at', '>=', $currentPeriodStart)
             ->where('created_at', '<=', $now)
             ->groupBy('category')
             ->pluck('c', 'category');
-        $categories = collect($categoryMap)
-            ->map(fn ($c, $name) => ['name' => $name, 'count' => (int) $categoryRaw->get($name, 0), 'color' => $c['color'], 'hex' => $c['hex']])
-            ->filter(fn ($c) => $c['count'] > 0)
-            ->values()->all();
 
-        $extraCats = $categoryRaw
-            ->filter(fn ($count, $name) => ! isset($categoryMap[$name]) && $count > 0)
-            ->map(fn ($count, $name) => ['name' => $name, 'count' => (int) $count, 'color' => 'bg-gray-500', 'hex' => '#6b7280'])
-            ->values()->all();
-        $categories = array_values(array_merge($categories, $extraCats));
+        $categoryLegend = $categoriesConfigured->values()
+            ->map(fn ($cat, $i) => [
+                'name' => $cat->name,
+                'hex' => $categoryPalette[$i % count($categoryPalette)],
+            ])->values()->all();
 
-        // ── Top recurring incidents ───────────────────────────────────
-        $thisMonthCounts = Ticket::selectRaw('title, COUNT(*) as c')
-            ->where('created_at', '>=', $currentPeriodStart)
-            ->where('created_at', '<=', $now)
-            ->groupBy('title')
-            ->pluck('c', 'title');
-        $lastMonthCounts = Ticket::selectRaw('title, COUNT(*) as c')
-            ->whereBetween('created_at', [$previousPeriodStart, $previousPeriodEnd])
-            ->groupBy('title')
-            ->pluck('c', 'title');
+        $configuredCategoryNames = $categoriesConfigured->pluck('name')->all();
 
-        $topRecurring = Ticket::selectRaw('title, category, COUNT(*) as total')
-            ->where('created_at', '>=', $currentPeriodStart)
-            ->where('created_at', '<=', $now)
-            ->groupBy('title', 'category')
+        $categories = $categoriesConfigured->values()
+            ->map(function ($cat, $i) use ($categoryRaw, $categoryPalette) {
+                $count = (int) $categoryRaw->get($cat->name, 0);
+                if ($count === 0) {
+                    return null;
+                }
+
+                return [
+                    'name' => $cat->name,
+                    'count' => $count,
+                    'color' => 'bg-gray-500',
+                    'hex' => $categoryPalette[$i % count($categoryPalette)],
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+
+        $orphanCategories = $categoryRaw->filter(
+            fn ($count, $name) => ! in_array($name, $configuredCategoryNames, true) && (int) $count > 0
+        );
+
+        foreach ($orphanCategories as $name => $count) {
+            $categories[] = [
+                'name' => $name,
+                'count' => (int) $count,
+                'color' => 'bg-gray-500',
+                'hex' => '#6b7280',
+            ];
+        }
+
+        // ── Top recurring incidents (tag leaderboard: tickets in period) ──
+        // Prior window for trend: match dashboard intent (YTD = same span last year; skip for all-time).
+        $tagTrendCompareEnabled = $period !== 'all';
+        $tagPreviousEnd = $period === 'ytd'
+            ? $now->copy()->subYear()
+            : $previousPeriodEnd;
+
+        $previousTagCounts = $tagTrendCompareEnabled
+            ? Tag::query()
+                ->join('tag_ticket', 'tags.id', '=', 'tag_ticket.tag_id')
+                ->join('tickets', 'tag_ticket.ticket_id', '=', 'tickets.id')
+                ->where('tickets.created_at', '>=', $previousPeriodStart)
+                ->where('tickets.created_at', '<=', $tagPreviousEnd)
+                ->groupBy('tags.id', 'tags.name')
+                ->selectRaw('tags.name as tag_name, COUNT(tag_ticket.ticket_id) as c')
+                ->pluck('c', 'tag_name')
+            : collect();
+
+        $topRecurring = Tag::query()
+            ->join('tag_ticket', 'tags.id', '=', 'tag_ticket.tag_id')
+            ->join('tickets', 'tag_ticket.ticket_id', '=', 'tickets.id')
+            ->where('tickets.created_at', '>=', $currentPeriodStart)
+            ->where('tickets.created_at', '<=', $now)
+            ->groupBy('tags.id', 'tags.name')
+            ->selectRaw('tags.name as name, COUNT(tag_ticket.ticket_id) as total')
             ->orderByDesc('total')
             ->limit(6)
             ->get()
-            ->map(function ($item, $i) use ($thisMonthCounts, $lastMonthCounts) {
-                $thisM = (int) $thisMonthCounts->get($item->title, 0);
-                $lastM = (int) $lastMonthCounts->get($item->title, 0);
-                $change = $lastM > 0
-                    ? (int) round(abs($thisM - $lastM) / $lastM * 100)
-                    : ($thisM > 0 ? 100 : 0);
+            ->map(function ($row, $i) use ($previousTagCounts, $tagTrendCompareEnabled) {
+                $thisM = (int) $row->total;
+                $lastM = (int) ($previousTagCounts->get($row->name) ?? 0);
+
+                if (! $tagTrendCompareEnabled) {
+                    return [
+                        'rank' => $i + 1,
+                        'tag' => $row->name,
+                        'count' => $thisM,
+                        'previous_count' => null,
+                        'trend' => 'neutral',
+                        'change' => null,
+                    ];
+                }
+
+                if ($lastM === 0) {
+                    return [
+                        'rank' => $i + 1,
+                        'tag' => $row->name,
+                        'count' => $thisM,
+                        'previous_count' => 0,
+                        'trend' => $thisM > 0 ? 'new' : 'neutral',
+                        'change' => null,
+                    ];
+                }
+
+                $change = (int) round((($thisM - $lastM) / $lastM) * 100);
+                $trend = $change > 0 ? 'up' : ($change < 0 ? 'down' : 'neutral');
 
                 return [
                     'rank' => $i + 1,
-                    'title' => $item->title,
-                    'category' => $item->category,
-                    'count' => (int) $item->total,
-                    'trend' => $thisM >= $lastM ? 'up' : 'down',
+                    'tag' => $row->name,
+                    'count' => $thisM,
+                    'previous_count' => $lastM,
+                    'trend' => $trend,
                     'change' => $change,
                 ];
             })->values()->all();
 
         // ── Recent activity ───────────────────────────────────────────
-        $recentActivity = Ticket::with(['reporter', 'handlers'])
+        $recentActivity = Ticket::with(['reporter', 'handlers', 'tags'])
             ->where('status', 'Open')
             ->where('created_at', '>=', $currentPeriodStart)
             ->where('created_at', '<=', $now)
@@ -442,12 +506,13 @@ class DashboardController extends Controller
                 'reporterId' => $ticket->user_id,
                 'priority' => $ticket->priority,
                 'category' => $ticket->category,
+                'tags' => $ticket->tags->pluck('name')->toArray(),
                 'handlerIds' => $ticket->handlers->pluck('id')->toArray(),
                 'handlers' => $ticket->handlers->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->values()->toArray(),
                 'attachmentUrl' => $ticket->attachment ? Storage::disk('public')->url($ticket->attachment) : null,
             ])->all();
 
-        $recentComments = TicketComment::with(['user', 'ticket.reporter', 'ticket.handlers'])
+        $recentComments = TicketComment::with(['user', 'ticket.reporter', 'ticket.handlers', 'ticket.tags'])
             ->latest()
             ->take(5)
             ->get()
@@ -473,6 +538,7 @@ class DashboardController extends Controller
                     'ticketStatus' => $ticket->status ?? '',
                     'ticketPriority' => $ticket->priority ?? '',
                     'ticketCategory' => $ticket->category ?? '',
+                    'ticketTags' => $ticket?->tags?->pluck('name')->toArray() ?? [],
                     'ticketReporter' => $ticket->reporter?->name ?? 'Unknown',
                     'ticketReporterId' => $ticket->user_id ?? null,
                     'ticketCreatedAtFormatted' => $ticket?->created_at?->format('M d, Y \a\t h:i A') ?? '',
@@ -492,10 +558,33 @@ class DashboardController extends Controller
             'chartTrend' => $chartTrend,
             'severities' => $severities,
             'categories' => $categories,
+            'priorityLegend' => $priorityLegend,
+            'categoryLegend' => $categoryLegend,
             'topRecurring' => $topRecurring,
             'recentActivity' => $recentActivity,
             'recentComments' => $recentComments,
             '_window' => ['start' => $currentPeriodStart, 'end' => $now],
         ];
+    }
+
+    private function normalizeChartHex(?string $hex, string $fallback = '#6b7280'): string
+    {
+        $hex = trim((string) $hex);
+        if ($hex === '') {
+            return $fallback;
+        }
+        if (! str_starts_with($hex, '#')) {
+            $hex = '#'.$hex;
+        }
+        if (preg_match('/^#([0-9a-fA-F]{3})$/', $hex, $m)) {
+            $h = $m[1];
+
+            return strtolower('#'.$h[0].$h[0].$h[1].$h[1].$h[2].$h[2]);
+        }
+        if (! preg_match('/^#[0-9a-fA-F]{6}$/', $hex)) {
+            return $fallback;
+        }
+
+        return strtolower($hex);
     }
 }

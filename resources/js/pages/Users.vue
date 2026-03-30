@@ -945,12 +945,4 @@ watch(isDeleteModalOpen, (val) => {
 </template>
 
 <style scoped>
-.modal-body {
-    scrollbar-width: thin;
-    scrollbar-color: hsl(var(--border)) transparent;
-}
-.modal-body::-webkit-scrollbar { width: 4px; }
-.modal-body::-webkit-scrollbar-track { background: transparent; }
-.modal-body::-webkit-scrollbar-thumb { background-color: hsl(var(--border)); border-radius: 9999px; }
-.modal-body::-webkit-scrollbar-thumb:hover { background-color: hsl(var(--muted-foreground) / 0.4); }
 </style>

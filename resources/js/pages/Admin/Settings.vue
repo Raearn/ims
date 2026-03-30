@@ -1,12 +1,10 @@
 <script setup lang="ts">
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type SharedData } from '@/types';
@@ -694,7 +692,6 @@ const inUseConfirmScopeLabel = computed((): string => {
 const appearanceForm = useForm({
     settings: {
         default_theme: rawVal(props.settings.appearance, 'default_theme', 'system') as string,
-        sidebar_collapsed_default: rawVal(props.settings.appearance, 'sidebar_collapsed_default', false) as boolean,
     },
 });
 
@@ -913,7 +910,7 @@ function submitAppearance(): void {
                 <!-- ══ GENERAL TAB ═══════════════════════════════════════ -->
                 <TabsContent value="general">
                     <form @submit.prevent="submitGeneral">
-                        <Card>
+                        <Card class="shadow-sm border border-border/60 transition-all duration-300 hover:shadow-md">
                             <CardHeader>
                                 <CardTitle>General Settings</CardTitle>
                                 <CardDescription>Application name as shown across the system.</CardDescription>
@@ -946,7 +943,7 @@ function submitAppearance(): void {
 
                         <!-- Categories -->
                         <form @submit.prevent="submitCategories">
-                            <Card>
+                            <Card class="shadow-sm border border-border/60 transition-all duration-300 hover:shadow-md">
                                 <CardHeader>
                                     <CardTitle>Ticket Categories</CardTitle>
                                     <CardDescription>
@@ -1023,7 +1020,7 @@ function submitAppearance(): void {
 
                         <!-- Priorities -->
                         <form @submit.prevent="submitPriorities">
-                            <Card>
+                            <Card class="shadow-sm border border-border/60 transition-all duration-300 hover:shadow-md">
                                 <CardHeader>
                                     <CardTitle>Ticket Priorities</CardTitle>
                                     <CardDescription>
@@ -1107,7 +1104,7 @@ function submitAppearance(): void {
 
                         <!-- Statuses -->
                         <form @submit.prevent="submitStatuses">
-                            <Card>
+                            <Card class="shadow-sm border border-border/60 transition-all duration-300 hover:shadow-md">
                                 <CardHeader>
                                     <CardTitle>Ticket Statuses</CardTitle>
                                     <CardDescription>
@@ -1206,7 +1203,7 @@ function submitAppearance(): void {
                 <!-- ══ APPEARANCE TAB ══════════════════════════════════════ -->
                 <TabsContent value="appearance">
                     <form @submit.prevent="submitAppearance">
-                        <Card>
+                        <Card class="shadow-sm border border-border/60 transition-all duration-300 hover:shadow-md">
                             <CardHeader>
                                 <CardTitle>Appearance</CardTitle>
                                 <CardDescription>Default UI preferences for the application.</CardDescription>
@@ -1231,22 +1228,6 @@ function submitAppearance(): void {
                                     <p class="text-xs text-muted-foreground">The theme applied on first visit for new users.</p>
                                 </div>
 
-                                <Separator />
-
-                                <div class="flex items-center gap-3">
-                                    <Checkbox
-                                        id="sidebar_collapsed_default"
-                                        :checked="appearanceForm.settings.sidebar_collapsed_default"
-                                        @update:checked="(v) => (appearanceForm.settings.sidebar_collapsed_default = v)"
-                                    />
-                                    <div>
-                                        <Label for="sidebar_collapsed_default" class="cursor-pointer font-medium">
-                                            Collapse Sidebar by Default
-                                        </Label>
-                                        <p class="text-xs text-muted-foreground">New users will see the sidebar in collapsed/icon-only mode.</p>
-                                    </div>
-                                </div>
-
                                 <div class="flex justify-end pt-2">
                                     <Button type="submit" :disabled="appearanceForm.processing">
                                         <Check class="mr-2 h-4 w-4" />
@@ -1264,7 +1245,7 @@ function submitAppearance(): void {
 
         <Dialog :open="inUseModalOpen" @update:open="onInUseModalOpen">
             <DialogContent
-                class="gap-0 overflow-hidden border border-border/70 bg-card p-0 shadow-2xl sm:max-w-[432px]"
+                class="gap-0 overflow-hidden border border-border/40 bg-card p-0 shadow-2xl sm:rounded-2xl sm:max-w-[432px]"
             >
                 <div class="relative px-6 pb-6 pt-7">
                     <div
@@ -1362,7 +1343,7 @@ function submitAppearance(): void {
 
         <Dialog :open="emptyLabelWarningOpen" @update:open="onEmptyLabelWarningOpen">
             <DialogContent
-                class="gap-0 overflow-hidden border border-border/70 bg-card p-0 shadow-2xl sm:max-w-[432px]"
+                class="gap-0 overflow-hidden border border-border/40 bg-card p-0 shadow-2xl sm:rounded-2xl sm:max-w-[432px]"
             >
                 <div class="relative px-6 pb-6 pt-7">
                     <div

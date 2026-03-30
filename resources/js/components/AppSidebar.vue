@@ -41,7 +41,7 @@ const dashboardRoute = computed(() =>
     <Sidebar collapsible="icon" variant="inset">
 
         <!-- ── Header ─────────────────────────────────────────────────── -->
-        <SidebarHeader class="border-b border-sidebar-border/40 px-3 py-3">
+        <SidebarHeader class="border-b border-sidebar-border/40 px-3 py-3 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-2">
             <SidebarMenu>
                 <SidebarMenuItem>
                     <SidebarMenuButton size="lg" as-child>
@@ -54,14 +54,14 @@ const dashboardRoute = computed(() =>
         </SidebarHeader>
 
         <!-- ── Content ────────────────────────────────────────────────── -->
-        <SidebarContent class="gap-0 px-2 py-3">
+        <SidebarContent class="gap-0 px-2 py-3 group-data-[collapsible=icon]:px-0">
 
             <!-- ┌─ ADMIN ─────────────────────────────────────────────── -->
             <template v-if="user?.role === 'admin'">
 
                 <!-- Overview -->
-                <SidebarGroup class="px-2 pb-1">
-                    <SidebarGroupLabel class="mb-1 px-1 text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground/35 group-data-[collapsible=icon]:hidden">
+                <SidebarGroup class="px-2 pb-1 group-data-[collapsible=icon]:px-0">
+                    <SidebarGroupLabel class="mb-1 px-1 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/50 group-data-[collapsible=icon]:hidden">
                         Overview
                     </SidebarGroupLabel>
                     <SidebarGroupContent>
@@ -69,10 +69,8 @@ const dashboardRoute = computed(() =>
                             <SidebarMenuItem>
                                 <SidebarMenuButton as-child :is-active="route().current('dashboard')">
                                     <Link :href="route('dashboard')">
-                                        <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-sidebar-accent shadow-sm ring-1 ring-sidebar-border/50 group-data-[collapsible=icon]:h-7 group-data-[collapsible=icon]:w-7">
-                                            <LayoutGrid class="h-3.5 w-3.5" />
-                                        </span>
-                                        <span class="font-medium">Dashboard</span>
+                                        <LayoutGrid />
+                                        <span>Dashboard</span>
                                     </Link>
                                 </SidebarMenuButton>
                             </SidebarMenuItem>
@@ -83,8 +81,8 @@ const dashboardRoute = computed(() =>
                 <SidebarSeparator class="mx-2 my-0.5 group-data-[collapsible=icon]:hidden" />
 
                 <!-- Helpdesk -->
-                <SidebarGroup class="px-2 py-1">
-                    <SidebarGroupLabel class="mb-1 px-1 text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground/35 group-data-[collapsible=icon]:hidden">
+                <SidebarGroup class="px-2 py-1 group-data-[collapsible=icon]:px-0">
+                    <SidebarGroupLabel class="mb-1 px-1 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/50 group-data-[collapsible=icon]:hidden">
                         Helpdesk
                     </SidebarGroupLabel>
                     <SidebarGroupContent>
@@ -92,10 +90,8 @@ const dashboardRoute = computed(() =>
                             <SidebarMenuItem>
                                 <SidebarMenuButton as-child :is-active="route().current('tickets')">
                                     <Link :href="route('tickets')">
-                                        <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-sidebar-accent shadow-sm ring-1 ring-sidebar-border/50 group-data-[collapsible=icon]:h-7 group-data-[collapsible=icon]:w-7">
-                                            <Folder class="h-3.5 w-3.5" />
-                                        </span>
-                                        <span class="flex-1 font-medium">Tickets</span>
+                                        <Folder />
+                                        <span class="flex-1">Tickets</span>
                                         <span
                                             v-if="openTicketsCount && openTicketsCount > 0"
                                             class="ml-auto inline-flex items-center gap-1 rounded-full border border-rose-500/20 bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-bold leading-none text-rose-500 tabular-nums group-data-[collapsible=icon]:hidden"
@@ -113,8 +109,8 @@ const dashboardRoute = computed(() =>
                 <SidebarSeparator class="mx-2 my-0.5 group-data-[collapsible=icon]:hidden" />
 
                 <!-- Administration -->
-                <SidebarGroup class="px-2 pt-1">
-                    <SidebarGroupLabel class="mb-1 px-1 text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground/35 group-data-[collapsible=icon]:hidden">
+                <SidebarGroup class="px-2 pt-1 group-data-[collapsible=icon]:px-0">
+                    <SidebarGroupLabel class="mb-1 px-1 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/50 group-data-[collapsible=icon]:hidden">
                         Administration
                     </SidebarGroupLabel>
                     <SidebarGroupContent>
@@ -122,40 +118,32 @@ const dashboardRoute = computed(() =>
                             <SidebarMenuItem>
                                 <SidebarMenuButton as-child :is-active="route().current('users')">
                                     <Link :href="route('users')">
-                                        <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-sidebar-accent shadow-sm ring-1 ring-sidebar-border/50 group-data-[collapsible=icon]:h-7 group-data-[collapsible=icon]:w-7">
-                                            <Users class="h-3.5 w-3.5" />
-                                        </span>
-                                        <span class="font-medium">Users</span>
+                                        <Users />
+                                        <span>Users</span>
                                     </Link>
                                 </SidebarMenuButton>
                             </SidebarMenuItem>
                             <SidebarMenuItem>
                                 <SidebarMenuButton as-child :is-active="route().current('audit-log')">
                                     <Link :href="route('audit-log')">
-                                        <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-sidebar-accent shadow-sm ring-1 ring-sidebar-border/50 group-data-[collapsible=icon]:h-7 group-data-[collapsible=icon]:w-7">
-                                            <ScrollText class="h-3.5 w-3.5" />
-                                        </span>
-                                        <span class="font-medium">Audit Log</span>
+                                        <ScrollText />
+                                        <span>Audit Log</span>
                                     </Link>
                                 </SidebarMenuButton>
                             </SidebarMenuItem>
                             <SidebarMenuItem>
                                 <SidebarMenuButton as-child :is-active="route().current('diagnostics')">
                                     <Link :href="route('diagnostics')">
-                                        <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-sidebar-accent shadow-sm ring-1 ring-sidebar-border/50 group-data-[collapsible=icon]:h-7 group-data-[collapsible=icon]:w-7">
-                                            <Activity class="h-3.5 w-3.5" />
-                                        </span>
-                                        <span class="font-medium">Diagnostics</span>
+                                        <Activity />
+                                        <span>Diagnostics</span>
                                     </Link>
                                 </SidebarMenuButton>
                             </SidebarMenuItem>
                             <SidebarMenuItem>
                                 <SidebarMenuButton as-child :is-active="route().current('admin.settings')">
                                     <Link :href="route('admin.settings')">
-                                        <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-sidebar-accent shadow-sm ring-1 ring-sidebar-border/50 group-data-[collapsible=icon]:h-7 group-data-[collapsible=icon]:w-7">
-                                            <Settings class="h-3.5 w-3.5" />
-                                        </span>
-                                        <span class="font-medium">Settings</span>
+                                        <Settings />
+                                        <span>Settings</span>
                                     </Link>
                                 </SidebarMenuButton>
                             </SidebarMenuItem>
@@ -168,8 +156,8 @@ const dashboardRoute = computed(() =>
 
             <!-- ┌─ SUPERVISOR ────────────────────────────────────────── -->
             <template v-else-if="user?.role === 'supervisor'">
-                <SidebarGroup class="px-2 pb-1">
-                    <SidebarGroupLabel class="mb-1 px-1 text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground/35 group-data-[collapsible=icon]:hidden">
+                <SidebarGroup class="px-2 pb-1 group-data-[collapsible=icon]:px-0">
+                    <SidebarGroupLabel class="mb-1 px-1 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/50 group-data-[collapsible=icon]:hidden">
                         Overview
                     </SidebarGroupLabel>
                     <SidebarGroupContent>
@@ -177,10 +165,8 @@ const dashboardRoute = computed(() =>
                             <SidebarMenuItem>
                                 <SidebarMenuButton as-child :is-active="route().current('supervisor.dashboard')">
                                     <Link :href="route('supervisor.dashboard')">
-                                        <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-sidebar-accent shadow-sm ring-1 ring-sidebar-border/50 group-data-[collapsible=icon]:h-7 group-data-[collapsible=icon]:w-7">
-                                            <LayoutGrid class="h-3.5 w-3.5" />
-                                        </span>
-                                        <span class="font-medium">Dashboard</span>
+                                        <LayoutGrid />
+                                        <span>Dashboard</span>
                                     </Link>
                                 </SidebarMenuButton>
                             </SidebarMenuItem>
@@ -192,8 +178,8 @@ const dashboardRoute = computed(() =>
 
             <!-- ┌─ TECHNICAL / FALLBACK ──────────────────────────────── -->
             <template v-else>
-                <SidebarGroup class="px-2 pb-1">
-                    <SidebarGroupLabel class="mb-1 px-1 text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground/35 group-data-[collapsible=icon]:hidden">
+                <SidebarGroup class="px-2 pb-1 group-data-[collapsible=icon]:px-0">
+                    <SidebarGroupLabel class="mb-1 px-1 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/50 group-data-[collapsible=icon]:hidden">
                         Overview
                     </SidebarGroupLabel>
                     <SidebarGroupContent>
@@ -201,10 +187,8 @@ const dashboardRoute = computed(() =>
                             <SidebarMenuItem>
                                 <SidebarMenuButton as-child :is-active="route().current('dashboard')">
                                     <Link :href="route('dashboard')">
-                                        <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-sidebar-accent shadow-sm ring-1 ring-sidebar-border/50 group-data-[collapsible=icon]:h-7 group-data-[collapsible=icon]:w-7">
-                                            <LayoutGrid class="h-3.5 w-3.5" />
-                                        </span>
-                                        <span class="font-medium">Dashboard</span>
+                                        <LayoutGrid />
+                                        <span>Dashboard</span>
                                     </Link>
                                 </SidebarMenuButton>
                             </SidebarMenuItem>
@@ -217,7 +201,7 @@ const dashboardRoute = computed(() =>
         </SidebarContent>
 
         <!-- ── Footer ─────────────────────────────────────────────────── -->
-        <SidebarFooter class="border-t border-sidebar-border/40 px-3 py-3">
+        <SidebarFooter class="border-t border-sidebar-border/40 px-3 py-3 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-2">
             <div class="mb-2 px-1 group-data-[collapsible=icon]:hidden">
                 <span
                     :class="[

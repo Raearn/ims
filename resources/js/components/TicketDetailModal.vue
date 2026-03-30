@@ -57,6 +57,7 @@ export interface TicketDetail {
     resolvedInDuration: string | null;
     resolvedAtFormatted: string | null;
     commentsCount: number;
+    tags: string[];
 }
 
 interface ActivityEntry {
@@ -293,6 +294,9 @@ function openInTickets(): void {
                             <component :is="getPriorityIcon(ticket.priority)" class="h-3 w-3" />
                             {{ ticket.priority }}
                         </span>
+                        <Badge v-for="tag in ticket.tags" :key="tag" variant="secondary" class="px-2 py-0.5 text-[10px] font-medium border-border/50">
+                            {{ tag }}
+                        </Badge>
                     </div>
                     <DialogTitle class="text-base font-bold leading-snug tracking-tight sm:text-lg">
                         {{ ticket.title }}
@@ -361,6 +365,15 @@ function openInTickets(): void {
                                 </span>
                             </div>
                             <span v-else class="text-sm italic text-muted-foreground/50">Unassigned</span>
+                        </div>
+                    </div>
+
+                    <div v-if="ticket.tags && ticket.tags.length > 0" class="flex flex-col gap-2">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Tags</span>
+                        <div class="flex flex-wrap gap-1.5">
+                            <Badge v-for="tag in ticket.tags" :key="tag" variant="secondary" class="bg-primary/10 text-primary hover:bg-primary/20 border-primary/20 text-[10px] font-semibold px-2 py-0.5">
+                                {{ tag }}
+                            </Badge>
                         </div>
                     </div>
 

@@ -237,7 +237,7 @@ class TicketActivitySeeder extends Seeder
 
                 // Reactions (50 % chance)
                 if (fake()->boolean(50)) {
-                    $emojis = ['👍', '❤️', '😂', '🎉', '🔥'];
+                    $emojis = ['👍', '👎', '❤️', '😂', '😮', '😢', '🎉', '🔥', '✅', '👀', '💯'];
                     $reactor = $users->reject(fn ($u) => $u->id === $commenter->id)->random();
                     $emoji = fake()->randomElement($emojis);
                     $commentCursor->addMinutes(fake()->numberBetween(2, 20));

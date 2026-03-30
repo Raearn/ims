@@ -2,6 +2,7 @@
 
 namespace App\Actions\Fortify;
 
+use App\Models\TicketActivity;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
@@ -28,5 +29,17 @@ class ResetUserPassword implements ResetsUserPasswords
         $user->forceFill([
             'password' => Hash::make($input['password']),
         ])->save();
+
+        TicketActivity::create([
+            'ticket_id' => null,
+            'user_id' => $user->id,
+            'action' => 'password_reset_via_email',
+            'old_value' => null,
+            'new_value' => json_encode([
+                'subject_user_id' => $user->id,
+                'email' => $user->email,
+            ], JSON_UNESCAPED_UNICODE),
+            'created_at' => now(),
+        ]);
     }
 }

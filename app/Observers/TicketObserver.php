@@ -55,5 +55,26 @@ class TicketObserver
                 'created_at' => now(),
             ]);
         }
+
+        $contentFields = ['title', 'description', 'category', 'attachment'];
+        $dirtyContent = array_values(array_filter($contentFields, fn (string $f) => $ticket->isDirty($f)));
+        if ($dirtyContent !== []) {
+            $labels = array_map(fn (string $f) => match ($f) {
+                'title' => 'Title',
+                'description' => 'Description',
+                'category' => 'Category',
+                'attachment' => 'Attachment',
+                default => $f,
+            }, $dirtyContent);
+
+            TicketActivity::create([
+                'ticket_id' => $ticket->id,
+                'user_id' => $userId,
+                'action' => 'ticket_edited',
+                'old_value' => null,
+                'new_value' => 'Updated: '.implode(', ', $labels),
+                'created_at' => now(),
+            ]);
+        }
     }
 }

@@ -355,4 +355,26 @@ class AuditLogTest extends TestCase
             ->getJson(route('tickets.detail-json', $ticket))
             ->assertForbidden();
     }
+
+    public function test_admin_post_excel_export_audit_creates_activity(): void
+    {
+        $admin = $this->admin();
+
+        $this->actingAs($admin)
+            ->postJson(route('tickets.export-excel-audit'), ['ticket_count' => 12])
+            ->assertNoContent();
+
+        $this->assertDatabaseHas('ticket_activities', [
+            'user_id' => $admin->id,
+            'ticket_id' => null,
+            'action' => 'tickets_export_excel',
+            'new_value' => 'Exported 12 ticket(s)',
+        ]);
+    }
+
+    public function test_guest_cannot_post_excel_export_audit(): void
+    {
+        $this->postJson(route('tickets.export-excel-audit'), ['ticket_count' => 1])
+            ->assertUnauthorized();
+    }
 }

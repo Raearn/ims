@@ -103,15 +103,15 @@ class AdminSettingsTest extends TestCase
 
     public function test_admin_can_update_boolean_setting(): void
     {
-        Setting::create(['key' => 'sidebar_collapsed_default', 'value' => '0', 'type' => 'boolean', 'group' => 'appearance']);
+        Setting::create(['key' => 'fixture_boolean_setting', 'value' => '0', 'type' => 'boolean', 'group' => 'general']);
         $admin = User::factory()->admin()->create();
 
         $this->actingAs($admin)
-            ->put('/admin/settings', ['settings' => ['sidebar_collapsed_default' => true]])
+            ->put('/admin/settings', ['settings' => ['fixture_boolean_setting' => true]])
             ->assertRedirect()
             ->assertSessionHas('success');
 
-        $this->assertDatabaseHas('settings', ['key' => 'sidebar_collapsed_default', 'value' => '1']);
+        $this->assertDatabaseHas('settings', ['key' => 'fixture_boolean_setting', 'value' => '1']);
     }
 
     public function test_update_ignores_unknown_keys(): void

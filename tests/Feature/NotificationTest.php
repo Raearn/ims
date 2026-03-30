@@ -39,6 +39,7 @@ class NotificationTest extends TestCase
                 'priority' => 'High',
                 'status' => 'In Progress',
                 'handler_ids' => [$handler->id],
+                'tags' => ['NotifyTag'],
             ]);
 
         Notification::assertSentTo($handler, TicketAssigned::class);
@@ -55,6 +56,7 @@ class NotificationTest extends TestCase
                 'category' => 'Network',
                 'priority' => 'Low',
                 'status' => 'Open',
+                'tags' => ['NotifyTag'],
             ]);
 
         Notification::assertNothingSent();

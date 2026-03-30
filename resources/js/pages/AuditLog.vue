@@ -10,10 +10,13 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
 import {
     CheckCircle2,
+    ChevronDown,
     ChevronLeft,
     ChevronRight,
     ExternalLink,
     FilePenLine,
+    FileSpreadsheet,
+    FileText,
     Flag,
     GitBranch,
     History,
@@ -25,6 +28,10 @@ import {
     PinOff,
     ScrollText,
     Search,
+    Pencil,
+    SlidersHorizontal,
+    Tags,
+    Layers,
     Crown,
     Headset,
     ShieldCheck,
@@ -33,6 +40,7 @@ import {
     ThumbsUp,
     Trash2,
     UserCog,
+    KeyRound,
     UserMinus,
     UserPlus,
     UserRound,
@@ -102,6 +110,9 @@ const filterTo       = ref(props.filters.to ?? '');
 
 const ALL_ACTIONS = [
     'created',
+    'ticket_edited',
+    'dashboard_export_pdf',
+    'tickets_export_excel',
     'status_changed',
     'priority_changed',
     'solution_updated',
@@ -123,11 +134,19 @@ const ALL_ACTIONS = [
     'user_logout',
     'user_created',
     'user_updated',
+    'user_role_changed',
     'user_deleted',
+    'settings_updated',
+    'ticket_categories_updated',
+    'ticket_priorities_updated',
+    'ticket_statuses_updated',
 ] as const;
 
 const ACTION_LABELS: Record<string, string> = {
     created:           'Ticket Created',
+    ticket_edited:     'Ticket Edited',
+    dashboard_export_pdf: 'Dashboard Export (PDF)',
+    tickets_export_excel: 'Tickets Export (Excel)',
     status_changed:    'Status Changed',
     priority_changed:  'Priority Changed',
     solution_updated:  'Solution Updated',
@@ -149,13 +168,21 @@ const ACTION_LABELS: Record<string, string> = {
     user_logout:       'User Logout',
     user_created:      'User Created',
     user_updated:      'User Updated',
+    user_role_changed: 'User Role Changed',
     user_deleted:      'User Deleted',
+    settings_updated:  'App Settings Updated',
+    ticket_categories_updated: 'Ticket Categories Updated',
+    ticket_priorities_updated: 'Ticket Priorities Updated',
+    ticket_statuses_updated:   'Ticket Statuses Updated',
 };
 
 type IconComponent = typeof History;
 
 const ACTIVITY_CONFIG: Record<string, { icon: IconComponent; classes: string }> = {
     created:           { icon: FilePenLine,   classes: 'bg-primary/10 text-primary border-primary/20' },
+    ticket_edited:     { icon: Pencil,        classes: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20' },
+    dashboard_export_pdf: { icon: FileText, classes: 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20' },
+    tickets_export_excel: { icon: FileSpreadsheet, classes: 'bg-green-600/10 text-green-700 dark:text-green-400 border-green-600/20' },
     status_changed:    { icon: GitBranch,     classes: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' },
     priority_changed:  { icon: Flag,          classes: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' },
     solution_updated:  { icon: CheckCircle2,  classes: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' },
@@ -177,7 +204,12 @@ const ACTIVITY_CONFIG: Record<string, { icon: IconComponent; classes: string }> 
     user_logout:       { icon: LogOut,        classes: 'bg-muted text-muted-foreground border-border/50' },
     user_created:      { icon: UserPlus,      classes: 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20' },
     user_updated:      { icon: UserCog,       classes: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' },
+    user_role_changed: { icon: KeyRound,      classes: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20' },
     user_deleted:      { icon: UserX,         classes: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' },
+    settings_updated:  { icon: SlidersHorizontal, classes: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20' },
+    ticket_categories_updated: { icon: Tags, classes: 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20' },
+    ticket_priorities_updated: { icon: Flag, classes: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' },
+    ticket_statuses_updated:   { icon: Layers, classes: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' },
 };
 
 const getActivityIcon = (action: string): IconComponent =>
@@ -342,6 +374,68 @@ const pageLinks = computed(() =>
 
 const prevLink = computed(() => props.activities.links.find(l => l.label === '« Previous') ?? null);
 const nextLink = computed(() => props.activities.links.find(l => l.label === 'Next »') ?? null);
+
+// ── Change column: collapse very large diffs (e.g. full ticket status lists) ──
+const AUDIT_CHANGE_OVERSIZED_MIN_CHARS = 520;
+const AUDIT_CHANGE_OVERSIZED_MIN_LINES = 7;
+
+const expandedAuditChangeById = ref<Record<number, boolean>>({});
+
+function auditChangeIsOversized(oldValue: string | null, newValue: string | null): boolean {
+    const o = oldValue ?? '';
+    const n = newValue ?? '';
+    if (o.length + n.length >= AUDIT_CHANGE_OVERSIZED_MIN_CHARS) {
+        return true;
+    }
+    const lineCount = Math.max(
+        o ? o.split('\n').length : 0,
+        n ? n.split('\n').length : 0,
+    );
+
+    return lineCount >= AUDIT_CHANGE_OVERSIZED_MIN_LINES;
+}
+
+function auditChangeIsExpanded(id: number): boolean {
+    return !!expandedAuditChangeById.value[id];
+}
+
+function toggleAuditChangeExpanded(id: number): void {
+    expandedAuditChangeById.value = {
+        ...expandedAuditChangeById.value,
+        [id]: !expandedAuditChangeById.value[id],
+    };
+}
+
+/** Outer wrapper: clips tall content until expanded. */
+function auditChangeClipClass(entry: ActivityRow): string {
+    if (!auditChangeIsOversized(entry.oldValue, entry.newValue)) {
+        return '';
+    }
+    if (auditChangeIsExpanded(entry.id)) {
+        return 'max-h-[min(32rem,70vh)] overflow-y-auto overscroll-contain pr-0.5';
+    }
+
+    return 'max-h-28 overflow-hidden relative';
+}
+
+/** Per-panel scroll only when the diff is small or moderately sized. */
+function auditChangePanelClass(entry: ActivityRow): string {
+    if (!auditChangeIsOversized(entry.oldValue, entry.newValue)) {
+        return 'max-h-52 overflow-y-auto';
+    }
+    if (auditChangeIsExpanded(entry.id)) {
+        return '';
+    }
+
+    return '';
+}
+
+watch(
+    () => props.activities.current_page,
+    () => {
+        expandedAuditChangeById.value = {};
+    },
+);
 </script>
 
 <template>
@@ -358,7 +452,7 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                         Audit Log
                     </h1>
                     <p class="mt-0.5 text-sm text-muted-foreground">
-                        Complete history of all ticket and comment actions
+                        Tickets, comments, user roles, and admin settings (priorities, statuses, categories, app options)
                     </p>
                 </div>
 
@@ -622,7 +716,7 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                                 </td>
 
                                 <!-- Actor -->
-                                <td class="px-4 py-3 min-w-0 align-top">
+                                <td class="px-4 py-3 min-w-0 align-middle">
                                     <div class="flex items-start gap-2">
                                         <div
                                             class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted text-[9px] font-bold uppercase"
@@ -660,7 +754,7 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                                 </td>
 
                                 <!-- Ticket -->
-                                <td class="px-4 py-3 min-w-0 align-top">
+                                <td class="px-4 py-3 min-w-0 align-middle">
                                     <template v-if="entry.ticketId">
                                         <p class="text-[10px] font-bold text-primary/70">{{ entry.ticketTktId }}</p>
                                         <p class="text-xs text-muted-foreground break-words line-clamp-2">{{ entry.ticketTitle }}</p>
@@ -671,17 +765,64 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                                 <!-- Change old → new -->
                                 <td class="px-4 py-3 min-w-0 align-top">
                                     <div class="flex items-start justify-between gap-3 min-w-0">
-                                        <div class="flex min-w-0 flex-1 items-center gap-1.5 flex-wrap">
-                                            <span
-                                                v-if="entry.oldValue"
-                                                class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold bg-destructive/10 text-destructive/80 line-through"
-                                            >{{ entry.oldValue }}</span>
-                                            <ChevronRight v-if="entry.oldValue && entry.newValue" class="h-3 w-3 text-muted-foreground/40 shrink-0" />
-                                            <span
-                                                v-if="entry.newValue"
-                                                class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                                            >{{ entry.newValue }}</span>
-                                            <span v-if="!entry.oldValue && !entry.newValue" class="text-[10px] text-muted-foreground/40">—</span>
+                                        <div class="flex min-w-0 flex-1 flex-col gap-1.5">
+                                            <template v-if="entry.oldValue || entry.newValue">
+                                                <div :class="['min-w-0', auditChangeClipClass(entry)]">
+                                                    <div class="flex flex-col gap-2">
+                                                        <div
+                                                            v-if="entry.oldValue"
+                                                            :class="[
+                                                                'rounded-md border border-destructive/25 bg-destructive/5 px-2.5 py-2',
+                                                                auditChangePanelClass(entry),
+                                                            ]"
+                                                        >
+                                                            <span class="mb-1 block text-[9px] font-bold uppercase tracking-wider text-destructive/70">Previous</span>
+                                                            <div
+                                                                class="text-[10px] font-medium leading-relaxed text-destructive/90 line-through whitespace-pre-wrap break-words"
+                                                            >{{ entry.oldValue }}</div>
+                                                        </div>
+                                                        <div
+                                                            v-if="entry.oldValue && entry.newValue"
+                                                            class="flex justify-center py-0.5 text-muted-foreground/50"
+                                                            aria-hidden="true"
+                                                        >
+                                                            <ChevronDown class="h-3.5 w-3.5" />
+                                                        </div>
+                                                        <div
+                                                            v-if="entry.newValue"
+                                                            :class="[
+                                                                'rounded-md border border-emerald-500/25 bg-emerald-500/5 px-2.5 py-2 dark:bg-emerald-500/10',
+                                                                auditChangePanelClass(entry),
+                                                            ]"
+                                                        >
+                                                            <span class="mb-1 block text-[9px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400/90">Updated</span>
+                                                            <div
+                                                                class="text-[10px] font-medium leading-relaxed whitespace-pre-wrap break-words text-emerald-800 dark:text-emerald-300"
+                                                            >{{ entry.newValue }}</div>
+                                                        </div>
+                                                    </div>
+                                                    <div
+                                                        v-if="auditChangeIsOversized(entry.oldValue, entry.newValue) && !auditChangeIsExpanded(entry.id)"
+                                                        class="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-background to-transparent dark:from-background"
+                                                        aria-hidden="true"
+                                                    />
+                                                </div>
+                                                <Button
+                                                    v-if="auditChangeIsOversized(entry.oldValue, entry.newValue)"
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    class="h-7 shrink-0 gap-1 self-start px-1.5 text-[10px] font-semibold text-muted-foreground hover:text-foreground"
+                                                    @click.stop="toggleAuditChangeExpanded(entry.id)"
+                                                >
+                                                    <ChevronDown
+                                                        class="h-3 w-3 transition-transform duration-200"
+                                                        :class="{ 'rotate-180': auditChangeIsExpanded(entry.id) }"
+                                                    />
+                                                    {{ auditChangeIsExpanded(entry.id) ? 'Show less' : 'Show full change' }}
+                                                </Button>
+                                            </template>
+                                            <span v-else class="text-[10px] text-muted-foreground/40">—</span>
                                         </div>
                                         <ExternalLink v-if="entry.ticketId" class="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-200 shrink-0" />
                                     </div>

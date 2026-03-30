@@ -615,7 +615,7 @@
 
 <div class="section-header slate continuation">
     <div class="section-title">Top Recurring Incidents</div>
-    <div class="section-subtitle">Most frequently reported issues in the selected period vs. the prior period</div>
+    <div class="section-subtitle">Tags on the most tickets in the selected period vs. the prior period</div>
 </div>
 
 @if(count($topRecurring) > 0)
@@ -623,9 +623,8 @@
     <thead>
         <tr>
             <th class="center" style="width:30px;">#</th>
-            <th>Incident Title</th>
-            <th style="width:70px;">Category</th>
-            <th class="right" style="width:70px;">Occurrences</th>
+            <th>Tag</th>
+            <th class="right" style="width:90px;">Tickets</th>
             <th class="center" style="width:90px;">vs Prior Period</th>
         </tr>
     </thead>
@@ -633,14 +632,19 @@
         @foreach($topRecurring as $item)
         <tr>
             <td class="center bold" style="color:#64748b;">{{ $item['rank'] }}</td>
-            <td class="bold">{{ $item['title'] }}</td>
-            <td class="muted">{{ $item['category'] }}</td>
+            <td class="bold">{{ $item['tag'] }}</td>
             <td class="right bold">{{ $item['count'] }}</td>
             <td class="center">
-                @if($item['trend'] === 'up')
+                @if(($item['previous_count'] ?? null) === null)
+                    <span class="muted">&mdash;</span>
+                @elseif($item['trend'] === 'new')
+                    <span class="badge-up">New</span>
+                @elseif($item['trend'] === 'neutral')
+                    <span class="muted">0%</span>
+                @elseif($item['trend'] === 'up')
                     <span class="badge-up">&#9650; +{{ $item['change'] }}%</span>
                 @else
-                    <span class="badge-down">&#9660; &minus;{{ $item['change'] }}%</span>
+                    <span class="badge-down">&#9660; {{ $item['change'] }}%</span>
                 @endif
             </td>
         </tr>
@@ -648,7 +652,7 @@
     </tbody>
 </table>
 @else
-<p style="color:#94a3b8; font-size:8pt; padding:10px 0;">No recurring incidents found in this period.</p>
+<p style="color:#94a3b8; font-size:8pt; padding:10px 0;">No tagged tickets found in this period.</p>
 @endif
 
 {{-- ── Report end marker ── --}}

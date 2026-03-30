@@ -16,25 +16,30 @@ const breadcrumbs: BreadcrumbItem[] = [
     <Head title="Supervisor Dashboard" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
-        <div class="flex h-full flex-1 flex-col gap-6 p-6">
+        <div class="flex h-full flex-1 flex-col gap-6 p-6 font-sans">
             <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <Card>
+                <Card class="bg-gradient-to-br from-slate-900 to-slate-950 border-slate-800 shadow-sm transition-all duration-300 hover:shadow-md hover:border-slate-700">
                     <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle class="text-sm font-medium uppercase tracking-wider text-muted-foreground">Team Performance</CardTitle>
+                        <CardTitle class="text-sm font-medium uppercase tracking-wider text-slate-400 font-mono">Team Performance</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div class="text-2xl font-bold">85%</div>
-                        <p class="text-xs text-muted-foreground mt-1">Completion rate this month</p>
+                        <div class="text-2xl font-bold text-slate-50">85%</div>
+                        <p class="text-xs text-emerald-400 mt-1">Completion rate this month</p>
                     </CardContent>
                 </Card>
             </div>
             
-            <div class="flex-1 flex items-center justify-center border-2 border-dashed border-muted rounded-xl bg-muted/20">
-                <div class="text-center px-6">
-                    <h3 class="text-lg font-semibold mb-2 text-foreground">Welcome Supervisor</h3>
-                    <p class="text-muted-foreground max-w-sm">This is your dedicated dashboard. Here you will see team-specific metrics and reported incidents for your department.</p>
+            <div class="flex-1 flex items-center justify-center border border-slate-800 rounded-xl bg-slate-950/50 backdrop-blur-sm shadow-inner overflow-hidden relative group">
+                <div class="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                <div class="text-center px-6 relative z-10">
+                    <h3 class="text-xl font-semibold mb-3 text-slate-50 tracking-tight">Welcome Supervisor</h3>
+                    <p class="text-slate-400 max-w-sm text-sm leading-relaxed">This is your dedicated dashboard. Here you will see team-specific metrics and reported incidents for your department.</p>
                 </div>
             </div>
         </div>
     </AppLayout>
 </template>
+
+<style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap');
+</style>

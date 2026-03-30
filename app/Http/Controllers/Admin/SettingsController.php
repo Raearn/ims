@@ -9,6 +9,7 @@ use App\Models\TicketActivity;
 use App\Models\TicketCategory;
 use App\Models\TicketPriority;
 use App\Models\TicketStatus;
+use App\Support\AdminSettingsAuditFormatter;
 use App\Support\TicketConfigDefaults;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -95,6 +96,8 @@ class SettingsController extends Controller
             'settings.*' => ['present', 'nullable'],
         ]);
 
+        $changed = [];
+
         foreach ($validated['settings'] as $key => $value) {
             $setting = Setting::where('key', $key)->first();
 
@@ -102,11 +105,36 @@ class SettingsController extends Controller
                 continue;
             }
 
+            $rawOld = $setting->getRawOriginal('value');
+            $oldVal = $setting->type === 'json'
+                ? (is_string($rawOld) ? $rawOld : json_encode($rawOld))
+                : (string) ($rawOld ?? '');
+
             if ($setting->type === 'json' && is_array($value)) {
-                $setting->update(['value' => json_encode($value)]);
+                $newVal = json_encode($value);
+                if ($oldVal !== $newVal) {
+                    $changed[$key] = ['old' => $oldVal, 'new' => $newVal];
+                }
+                $setting->update(['value' => $value]);
             } else {
+                $stored = $value === null ? '' : (string) $value;
+                if ($oldVal !== $stored) {
+                    $changed[$key] = ['old' => $oldVal, 'new' => $stored];
+                }
                 $setting->update(['value' => $value]);
             }
+        }
+
+        if ($changed !== [] && auth()->check()) {
+            [$oldText, $newText] = AdminSettingsAuditFormatter::generalSettingsSideBySide($changed);
+            TicketActivity::create([
+                'ticket_id' => null,
+                'user_id' => auth()->id(),
+                'action' => 'settings_updated',
+                'old_value' => $oldText,
+                'new_value' => $newText,
+                'created_at' => now(),
+            ]);
         }
 
         return redirect()->back()->with('success', 'Settings saved successfully.');
@@ -124,6 +152,13 @@ class SettingsController extends Controller
         ]);
 
         $this->assertBuiltInCategoryNamesPreserved($validated['categories']);
+
+        $beforeSnapshot = TicketCategory::query()
+            ->orderBy('sort_order')
+            ->get(['name', 'icon'])
+            ->map(fn (TicketCategory $c): array => ['name' => $c->name, 'icon' => $c->icon])
+            ->values()
+            ->all();
 
         $existingNames = TicketCategory::query()->orderBy('sort_order')->pluck('name')->all();
         $newNames = collect($validated['categories'])->pluck('name')->all();
@@ -159,6 +194,26 @@ class SettingsController extends Controller
             ]);
         }
 
+        $afterSnapshot = TicketCategory::query()
+            ->orderBy('sort_order')
+            ->get(['name', 'icon'])
+            ->map(fn (TicketCategory $c): array => ['name' => $c->name, 'icon' => $c->icon])
+            ->values()
+            ->all();
+
+        if (json_encode($beforeSnapshot) !== json_encode($afterSnapshot) && auth()->check()) {
+            $oldText = AdminSettingsAuditFormatter::ticketConfigRowsSideBySide($beforeSnapshot, ['icon']);
+            $newText = AdminSettingsAuditFormatter::ticketConfigRowsSideBySide($afterSnapshot, ['icon']);
+            TicketActivity::create([
+                'ticket_id' => null,
+                'user_id' => auth()->id(),
+                'action' => 'ticket_categories_updated',
+                'old_value' => $oldText,
+                'new_value' => $newText,
+                'created_at' => now(),
+            ]);
+        }
+
         return redirect()->back()->with('success', 'Categories saved successfully.');
     }
 
@@ -175,6 +230,17 @@ class SettingsController extends Controller
         ]);
 
         $this->assertBuiltInPriorityNamesPreserved($validated['priorities']);
+
+        $beforeSnapshot = TicketPriority::query()
+            ->orderBy('sort_order')
+            ->get(['name', 'icon', 'color'])
+            ->map(fn (TicketPriority $p): array => [
+                'name' => $p->name,
+                'icon' => $p->icon,
+                'color' => $p->color,
+            ])
+            ->values()
+            ->all();
 
         $existingNames = TicketPriority::query()->orderBy('sort_order')->pluck('name')->all();
         $newNames = collect($validated['priorities'])->pluck('name')->all();
@@ -211,6 +277,30 @@ class SettingsController extends Controller
             ]);
         }
 
+        $afterSnapshot = TicketPriority::query()
+            ->orderBy('sort_order')
+            ->get(['name', 'icon', 'color'])
+            ->map(fn (TicketPriority $p): array => [
+                'name' => $p->name,
+                'icon' => $p->icon,
+                'color' => $p->color,
+            ])
+            ->values()
+            ->all();
+
+        if (json_encode($beforeSnapshot) !== json_encode($afterSnapshot) && auth()->check()) {
+            $oldText = AdminSettingsAuditFormatter::ticketConfigRowsSideBySide($beforeSnapshot, ['icon', 'color']);
+            $newText = AdminSettingsAuditFormatter::ticketConfigRowsSideBySide($afterSnapshot, ['icon', 'color']);
+            TicketActivity::create([
+                'ticket_id' => null,
+                'user_id' => auth()->id(),
+                'action' => 'ticket_priorities_updated',
+                'old_value' => $oldText,
+                'new_value' => $newText,
+                'created_at' => now(),
+            ]);
+        }
+
         return redirect()->back()->with('success', 'Priorities saved successfully.');
     }
 
@@ -229,6 +319,18 @@ class SettingsController extends Controller
 
         $this->assertBuiltInStatusNamesPreserved($validated['statuses']);
         $this->assertBuiltInStatusHandlerRequirementsMatchDefaults($validated['statuses']);
+
+        $beforeSnapshot = TicketStatus::query()
+            ->orderBy('sort_order')
+            ->get(['name', 'icon', 'color', 'handler_requirement'])
+            ->map(fn (TicketStatus $s): array => [
+                'name' => $s->name,
+                'icon' => $s->icon,
+                'color' => $s->color,
+                'handler_requirement' => $s->handler_requirement,
+            ])
+            ->values()
+            ->all();
 
         $existingNames = TicketStatus::query()->orderBy('sort_order')->pluck('name')->all();
         $newNames = collect($validated['statuses'])->pluck('name')->all();
@@ -263,6 +365,31 @@ class SettingsController extends Controller
                 'color' => $row['color'],
                 'handler_requirement' => $row['handler_requirement'],
                 'sort_order' => $index,
+            ]);
+        }
+
+        $afterSnapshot = TicketStatus::query()
+            ->orderBy('sort_order')
+            ->get(['name', 'icon', 'color', 'handler_requirement'])
+            ->map(fn (TicketStatus $s): array => [
+                'name' => $s->name,
+                'icon' => $s->icon,
+                'color' => $s->color,
+                'handler_requirement' => $s->handler_requirement,
+            ])
+            ->values()
+            ->all();
+
+        if (json_encode($beforeSnapshot) !== json_encode($afterSnapshot) && auth()->check()) {
+            $oldText = AdminSettingsAuditFormatter::ticketConfigRowsSideBySide($beforeSnapshot, ['icon', 'color', 'handler_requirement']);
+            $newText = AdminSettingsAuditFormatter::ticketConfigRowsSideBySide($afterSnapshot, ['icon', 'color', 'handler_requirement']);
+            TicketActivity::create([
+                'ticket_id' => null,
+                'user_id' => auth()->id(),
+                'action' => 'ticket_statuses_updated',
+                'old_value' => $oldText,
+                'new_value' => $newText,
+                'created_at' => now(),
             ]);
         }
 

@@ -44,7 +44,7 @@ const sortOrder            = ref<'oldest' | 'newest' | 'relevant'>('relevant');
 const frozenRelevantOrder  = ref<number[]>([]);
 const pendingRefresh       = ref(false);
 
-const ALLOWED_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉', '🔥', '✅'];
+const ALLOWED_EMOJIS = ['👍', '👎', '❤️', '😂', '😮', '😢', '🎉', '🔥', '✅', '👀', '💯'];
 
 const AVATAR_COLORS = [
     'bg-violet-500/15 text-violet-500 border-violet-500/20',

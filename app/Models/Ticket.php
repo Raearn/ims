@@ -106,4 +106,12 @@ class Ticket extends Model
     {
         return $this->hasMany(TicketActivity::class);
     }
+
+    /**
+     * Get the tags associated with the ticket.
+     */
+    public function tags(): BelongsToMany
+    {
+        return $this->belongsToMany(Tag::class);
+    }
 }

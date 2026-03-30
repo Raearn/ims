@@ -25,7 +25,7 @@ class TicketFactory extends Factory
             'priority' => fake()->randomElement(['Low', 'Medium', 'High', 'Critical']),
             'category' => fake()->randomElement(['Network', 'Hardware', 'Software', 'Access', 'Security']),
             'user_id' => User::factory(),
-            'assigned_to' => fake()->boolean(70) ? User::factory() : null,
+            'assigned_to' => null,
         ];
     }
 }

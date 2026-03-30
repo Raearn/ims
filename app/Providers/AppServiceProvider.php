@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\TicketActivity;
+use Illuminate\Auth\Events\Lockout;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
 use Illuminate\Support\Facades\Event;
@@ -36,6 +37,22 @@ class AppServiceProvider extends ServiceProvider
                 'action' => 'user_logout',
                 'old_value' => null,
                 'new_value' => $event->user->name,
+                'created_at' => now(),
+            ]);
+        });
+
+        Event::listen(Lockout::class, function (Lockout $event): void {
+            $request = $event->request;
+
+            TicketActivity::create([
+                'ticket_id' => null,
+                'user_id' => null,
+                'action' => 'user_login_lockout',
+                'old_value' => null,
+                'new_value' => json_encode([
+                    'email' => $request->string('email')->toString(),
+                    'ip' => $request->ip(),
+                ], JSON_UNESCAPED_UNICODE),
                 'created_at' => now(),
             ]);
         });

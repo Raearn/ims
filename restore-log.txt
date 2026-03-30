@@ -1,0 +1,7 @@
+﻿git : fatal: sha1 file 'C:/xampp/htdocs/ims/.git/index.lock' write error. Out of diskspace
+At C:\Users\OJT22026\AppData\Local\Temp\ps-script-ba1c27e2-c5e2-4255-ad26-5ce43e740830.ps1:11 char:1
++ git -C c:/xampp/htdocs/ims restore resources/js/pages/AuditLog.vue re ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (fatal: sha1 fil...ut of diskspace:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 

@@ -57,6 +57,7 @@ import RichTextEditor from '@/components/RichTextEditor.vue';
 import { ensureLucideIconsLoaded, lucideAllIconMap, resolveLucideIcon } from '@/composables/useLucideIconRegistry';
 import { Ticket, TicketCheck, Loader, X, ChevronsUpDown, ChevronUp, ChevronDown, ChevronLeft } from 'lucide-vue-next';
 import { compressImage } from '@/lib/utils';
+import { laravelFetch } from '@/lib/laravelFetch';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -141,6 +142,7 @@ const props = defineProps<{
         resolvedAtFormatted: string | null;
         attachmentUrl: string | null;
         commentsCount: number;
+        tags: string[];
     }[];
     users: {
         id: number;
@@ -155,6 +157,7 @@ const props = defineProps<{
         color: string;
         handler_requirement: 'none' | 'optional' | 'required';
     }[];
+    allTags: string[];
 }>();
 
 type StatusHandlerRequirement = 'none' | 'optional' | 'required';
@@ -248,6 +251,7 @@ const openEditModal = (ticket: typeof props.tickets[0]) => {
     form.category = ticket.category;
     form.status = ticket.status;
     form.handler_ids = [...ticket.handlerIds];
+    form.tags = [...ticket.tags];
     form.solution = ticket.solution ?? '';
     form.attachment = null;
     attachmentPreview.value = ticket.attachmentUrl ?? null;
@@ -262,6 +266,7 @@ const form = useForm({
     category: 'Software',
     status: props.statuses.find((s) => s.handler_requirement === 'none')?.name ?? props.statuses[0]?.name ?? 'Open',
     handler_ids: [] as number[],
+    tags: [] as string[],
     solution: '',
     attachment: null as File | null,
 });
@@ -271,6 +276,13 @@ const handlerRequired = computed(() => isStatusHandlerRequired(form.status));
 const isEmptyHtml = (html: string): boolean => !html.replace(/<[^>]*>/g, '').trim();
 
 const handlerSearch = ref('');
+const tagSearchInput = ref('');
+
+const filteredTags = computed(() => {
+    if (!tagSearchInput.value.trim()) return props.allTags;
+    const q = tagSearchInput.value.toLowerCase();
+    return props.allTags.filter(t => t.toLowerCase().includes(q));
+});
 
 // ── Assign Handler modal ───────────────────────────────────────────────────
 const isAssignModalOpen = ref(false);
@@ -568,6 +580,12 @@ const exportToExcel = async () => {
     isExporting.value = true;
 
     try {
+        void laravelFetch(route('tickets.export-excel-audit'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ticket_count: sortedTickets.value.length }),
+        }).catch(() => {});
+
         const ExcelJS = (await import('exceljs')).default;
         const workbook = new ExcelJS.Workbook();
         workbook.creator = 'IMS';
@@ -584,6 +602,7 @@ const exportToExcel = async () => {
             { key: 'status',     header: 'Status',       width: 14 },
             { key: 'priority',   header: 'Priority',     width: 12 },
             { key: 'category',   header: 'Category',     width: 14 },
+            { key: 'tags',       header: 'Tags',         width: 25 },
             { key: 'reporter',   header: 'Reporter',     width: 22 },
             { key: 'handlers',   header: 'Handler(s)',   width: 28 },
             { key: 'createdAt',  header: 'Created At',   width: 22 },
@@ -644,6 +663,7 @@ const exportToExcel = async () => {
                 status:    t.status,
                 priority:  t.priority,
                 category:  t.category,
+                tags:      t.tags.join(', ') || '—',
                 reporter:  t.reporter,
                 handlers:   t.handlers.map(h => h.name).join(', ') || '—',
                 createdAt:  t.createdAtFormatted,
@@ -694,7 +714,7 @@ const exportToExcel = async () => {
         });
 
         // ── Auto-filter on header ───────────────────────────────────────
-        sheet.autoFilter = { from: 'A1', to: 'J1' };
+        sheet.autoFilter = { from: 'A1', to: 'K1' };
 
         // ── Download ───────────────────────────────────────────────────
         const dateStr = new Date().toISOString().slice(0, 10);
@@ -713,6 +733,12 @@ const exportToExcel = async () => {
 // ──────────────────────────────────────────────────────────────────────────
 
 const submit = () => {
+    // Form submission validation
+    if (form.tags.length === 0) {
+        form.setError('tags', 'At least one tag is required.');
+        return;
+    }
+
     if (editingTicket.value) {
         form.transform(data => ({ ...data, _method: 'put' })).post(
             route('tickets.update', { ticket: editingTicket.value!.numericId }),
@@ -830,7 +856,8 @@ const searchDateFiltered = computed(() => {
             t.id.toLowerCase().includes(q) ||
             t.title.toLowerCase().includes(q) ||
             t.reporter.toLowerCase().includes(q) ||
-            t.handlers.some(h => h.name.toLowerCase().includes(q))
+            t.handlers.some(h => h.name.toLowerCase().includes(q)) ||
+            (t.tags ?? []).some((tag) => tag.toLowerCase().includes(q))
         );
     }
 
@@ -1094,7 +1121,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                             ref="searchInputRef"
                             v-model="search"
                             type="text"
-                            placeholder="Search tickets…"
+                            placeholder="Search tickets, tags, reporters…"
                             class="flex h-9 w-full rounded-lg border border-input bg-background py-1 pl-9 pr-8 text-sm shadow-sm placeholder:text-muted-foreground/50 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
                         />
                         <!-- Shortcut hint (empty state) -->
@@ -1192,6 +1219,80 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                                             </Label>
                                             <RichTextEditor v-model="form.description" placeholder="Provide more context about the issue…" />
                                             <span v-if="form.errors.description" class="text-xs text-destructive font-medium">{{ form.errors.description }}</span>
+                                        </div>
+
+                                        <!-- Tags -->
+                                        <div class="grid gap-2">
+                                            <Label class="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                                                Tags <span class="ml-1 text-destructive">*</span>
+                                            </Label>
+                                            
+                                            <div v-if="form.tags.length > 0" class="flex flex-wrap gap-1.5">
+                                                <span
+                                                    v-for="tag in form.tags"
+                                                    :key="tag"
+                                                    class="inline-flex items-center gap-1 rounded-full bg-primary/10 border border-primary/20 pl-2 pr-1 py-1 text-[11px] font-semibold text-primary"
+                                                >
+                                                    {{ tag }}
+                                                    <button type="button" @click="form.tags = form.tags.filter(t => t !== tag)" class="ml-0.5 h-4 w-4 flex items-center justify-center rounded-full hover:bg-primary/20 transition-colors">
+                                                        <X class="h-2.5 w-2.5" />
+                                                    </button>
+                                                </span>
+                                            </div>
+
+                                            <div class="relative">
+                                                <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                                                <input
+                                                    v-model="tagSearchInput"
+                                                    type="text"
+                                                    placeholder="Search or add tags… (press enter to create)"
+                                                    @keydown.enter.prevent="() => {
+                                                        if (tagSearchInput.trim() !== '') {
+                                                            const tag = filteredTags.length > 0 && props.allTags.some(t => t.toLowerCase() === tagSearchInput.trim().toLowerCase()) ? filteredTags[0] : tagSearchInput.trim();
+                                                            if (!form.tags.includes(tag)) {
+                                                                form.tags.push(tag);
+                                                            }
+                                                            tagSearchInput = '';
+                                                        }
+                                                    }"
+                                                    class="w-full rounded-lg border border-input bg-transparent pl-8 pr-3 py-2 text-xs shadow-sm placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                                />
+                                            </div>
+                                            
+                                            <div class="handler-list max-h-36 overflow-y-auto rounded-lg border border-border/50 divide-y divide-border/40 bg-muted/10">
+                                                <button
+                                                    v-for="tag in filteredTags"
+                                                    :key="tag"
+                                                    type="button"
+                                                    @click="() => {
+                                                        form.tags = form.tags.includes(tag) ? form.tags.filter(t => t !== tag) : [...form.tags, tag];
+                                                    }"
+                                                    :class="['w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors', form.tags.includes(tag) ? 'bg-primary/10 text-primary' : 'hover:bg-muted/50 text-foreground']"
+                                                >
+                                                    <span class="text-xs font-medium truncate">{{ tag }}</span>
+                                                    <CheckCircle2 v-if="form.tags.includes(tag)" class="ml-auto h-3.5 w-3.5 shrink-0 text-primary" />
+                                                </button>
+                                                
+                                                <button
+                                                    v-if="tagSearchInput.trim() !== '' && !props.allTags.some(t => t.toLowerCase() === tagSearchInput.trim().toLowerCase())"
+                                                    type="button"
+                                                    @click="() => {
+                                                        if (!form.tags.includes(tagSearchInput.trim())) form.tags.push(tagSearchInput.trim());
+                                                        tagSearchInput = '';
+                                                    }"
+                                                    class="w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors bg-primary/5 hover:bg-primary/10 text-primary"
+                                                >
+                                                    <span class="text-xs font-medium truncate">Create "{{ tagSearchInput.trim() }}"</span>
+                                                    <Plus class="ml-auto h-3.5 w-3.5 shrink-0 text-primary" />
+                                                </button>
+
+                                                <div v-if="filteredTags.length === 0 && tagSearchInput.trim() === ''" class="px-4 py-6 text-center text-xs text-muted-foreground/60 italic">
+                                                    Type to search or create a new tag.
+                                                </div>
+                                            </div>
+
+                                            <span v-if="form.errors.tags" class="text-xs text-destructive font-medium">{{ form.errors.tags }}</span>
+                                            <span v-else-if="form.tags.length === 0" class="text-xs text-muted-foreground/60 italic">At least one tag is required.</span>
                                         </div>
 
                                         <!-- Attachment -->
@@ -1786,6 +1887,9 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                                         <span class="inline-flex items-center rounded-md bg-muted/60 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground uppercase tracking-tight border border-border/40">
                                             {{ ticket.category }}
                                         </span>
+                                        <Badge v-for="tag in ticket.tags" :key="tag" variant="secondary" class="px-1.5 py-0.5 text-[9px] font-medium border-border/50">
+                                            {{ tag }}
+                                        </Badge>
                                     </div>
 
                                     <!-- Footer row: reporter + date -->
@@ -1914,6 +2018,9 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                                                 </span>
                                                 <span class="text-[10px] text-muted-foreground/40">·</span>
                                                 <span class="text-[10px] font-medium text-muted-foreground/70 uppercase tracking-tight">{{ ticket.category }}</span>
+                                                <Badge v-for="tag in ticket.tags" :key="tag" variant="secondary" class="ml-1 px-1.5 py-0 text-[9px] font-medium border-border/50">
+                                                    {{ tag }}
+                                                </Badge>
                                                 <span class="text-[10px] text-muted-foreground/40">·</span>
                                                 <div class="flex items-center gap-1 text-[10px] text-muted-foreground/60">
                                                     <Clock class="h-2.5 w-2.5" />
@@ -2873,22 +2980,4 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
 .handler-tooltip-leave-active { transition: opacity 0.12s ease; }
 .handler-tooltip-enter-from,
 .handler-tooltip-leave-to { opacity: 0; }
-
-.modal-body {
-    scrollbar-width: thin;
-    scrollbar-color: hsl(var(--border)) transparent;
-}
-.modal-body::-webkit-scrollbar { width: 4px; }
-.modal-body::-webkit-scrollbar-track { background: transparent; }
-.modal-body::-webkit-scrollbar-thumb { background-color: hsl(var(--border)); border-radius: 9999px; }
-.modal-body::-webkit-scrollbar-thumb:hover { background-color: hsl(var(--muted-foreground) / 0.4); }
-
-.handler-list {
-    scrollbar-width: thin;
-    scrollbar-color: hsl(var(--border)) transparent;
-}
-.handler-list::-webkit-scrollbar { width: 4px; }
-.handler-list::-webkit-scrollbar-track { background: transparent; }
-.handler-list::-webkit-scrollbar-thumb { background-color: hsl(var(--border)); border-radius: 9999px; }
-.handler-list::-webkit-scrollbar-thumb:hover { background-color: hsl(var(--muted-foreground) / 0.4); }
 </style>

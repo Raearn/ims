@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
+use App\Models\TicketActivity;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -34,8 +35,22 @@ class PasswordController extends Controller
             'password' => ['required', Password::defaults(), 'confirmed'],
         ]);
 
-        $request->user()->update([
+        $user = $request->user();
+
+        $user->update([
             'password' => Hash::make($validated['password']),
+        ]);
+
+        TicketActivity::create([
+            'ticket_id' => null,
+            'user_id' => $user->id,
+            'action' => 'password_changed_self',
+            'old_value' => null,
+            'new_value' => json_encode([
+                'subject_user_id' => $user->id,
+                'email' => $user->email,
+            ], JSON_UNESCAPED_UNICODE),
+            'created_at' => now(),
         ]);
 
         return back();

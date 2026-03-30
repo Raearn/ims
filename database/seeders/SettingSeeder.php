@@ -27,12 +27,6 @@ class SettingSeeder extends Seeder
                 'type' => 'string',
                 'group' => 'appearance',
             ],
-            [
-                'key' => 'sidebar_collapsed_default',
-                'value' => '0',
-                'type' => 'boolean',
-                'group' => 'appearance',
-            ],
         ];
 
         foreach ($defaults as $setting) {

@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\Tag;
 use App\Models\Ticket;
+use App\Models\TicketActivity;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -33,6 +35,8 @@ class DashboardTest extends TestCase
                 ->has('sparklineLabels')
                 ->where('sparklineLabels', fn ($labels) => count($labels) === 11)
                 ->has('stats.0.sparklineValueSuffix')
+                ->has('priorityLegend')
+                ->has('categoryLegend')
             );
     }
 
@@ -110,6 +114,34 @@ class DashboardTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->where('stats.0.trend', '200%')
                 ->where('stats.0.showTrendArrow', true)
+            );
+    }
+
+    public function test_dashboard_top_recurring_lists_tags_by_ticket_volume_in_period(): void
+    {
+        if (config('database.default') !== 'mysql' && config('database.default') !== 'mariadb') {
+            $this->markTestSkipped('This test requires MySQL for TIMESTAMPDIFF function.');
+        }
+
+        $admin = User::factory()->create(['role' => 'admin']);
+        $tagHeavy = Tag::firstOrCreate(['name' => 'DashboardTagHeavy']);
+        $tagLight = Tag::firstOrCreate(['name' => 'DashboardTagLight']);
+
+        $t1 = Ticket::factory()->create(['created_at' => now()->subDay()]);
+        $t2 = Ticket::factory()->create(['created_at' => now()->subDay()]);
+        $t3 = Ticket::factory()->create(['created_at' => now()->subDay()]);
+        $t1->tags()->attach($tagHeavy->id);
+        $t2->tags()->attach($tagHeavy->id);
+        $t3->tags()->attach($tagLight->id);
+
+        $this->actingAs($admin)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('topRecurring.0.tag', 'DashboardTagHeavy')
+                ->where('topRecurring.0.count', 2)
+                ->where('topRecurring.1.tag', 'DashboardTagLight')
+                ->where('topRecurring.1.count', 1)
             );
     }
 
@@ -199,5 +231,13 @@ class DashboardTest extends TestCase
 
         $response->assertStatus(200);
         $this->assertStringContainsString('application/pdf', $response->headers->get('Content-Type'));
+
+        $this->assertDatabaseHas('ticket_activities', [
+            'user_id' => $user->id,
+            'ticket_id' => null,
+            'action' => 'dashboard_export_pdf',
+            'new_value' => 'Reporting period: 7d',
+        ]);
+        $this->assertSame(1, TicketActivity::query()->where('action', 'dashboard_export_pdf')->count());
     }
 }

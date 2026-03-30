@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\DashboardController;
+use App\Models\Tag;
 use App\Models\Ticket;
 use App\Models\TicketActivity;
 use App\Models\TicketCategory;
@@ -41,10 +42,28 @@ Route::get('/', function () {
 
 Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(function () {
     Route::get('dashboard/export-pdf', [DashboardController::class, 'exportPdf'])->name('dashboard.export-pdf');
+    Route::post('tickets/export-excel-audit', function () {
+        $validated = request()->validate([
+            'ticket_count' => ['nullable', 'integer', 'min:0', 'max:500000'],
+        ]);
+        $count = $validated['ticket_count'] ?? null;
+        TicketActivity::create([
+            'ticket_id' => null,
+            'user_id' => auth()->id(),
+            'action' => 'tickets_export_excel',
+            'old_value' => null,
+            'new_value' => $count !== null
+                ? "Exported {$count} ticket(s)"
+                : 'Tickets list (Excel)',
+            'created_at' => now(),
+        ]);
+
+        return response()->noContent();
+    })->name('tickets.export-excel-audit');
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     Route::get('tickets/by-priority/{priority}', function (string $priority) {
-        $tickets = Ticket::with(['reporter', 'handlers'])
+        $tickets = Ticket::with(['reporter', 'handlers', 'tags'])
             ->where('priority', $priority)
             ->latest()
             ->get()
@@ -57,6 +76,7 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
                 'status' => $t->status,
                 'priority' => $t->priority,
                 'category' => $t->category,
+                'tags' => $t->tags->pluck('name')->toArray(),
                 'reporter' => $t->reporter?->name ?? 'Unknown',
                 'reporterId' => $t->user_id,
                 'handlerIds' => $t->handlers->pluck('id')->toArray(),
@@ -70,7 +90,7 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
     })->name('tickets.by-priority');
 
     Route::get('tickets/by-category/{category}', function (string $category) {
-        $tickets = Ticket::with(['reporter', 'handlers'])
+        $tickets = Ticket::with(['reporter', 'handlers', 'tags'])
             ->where('category', $category)
             ->latest()
             ->get()
@@ -83,6 +103,7 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
                 'status' => $t->status,
                 'priority' => $t->priority,
                 'category' => $t->category,
+                'tags' => $t->tags->pluck('name')->toArray(),
                 'reporter' => $t->reporter?->name ?? 'Unknown',
                 'reporterId' => $t->user_id,
                 'handlerIds' => $t->handlers->pluck('id')->toArray(),
@@ -95,8 +116,44 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
         return response()->json($tickets);
     })->name('tickets.by-category');
 
+    Route::get('tickets/by-tag', function () {
+        $validated = request()->validate([
+            'name' => ['required', 'string', 'max:255'],
+        ]);
+
+        $tag = Tag::where('name', $validated['name'])->first();
+        if ($tag === null) {
+            return response()->json([]);
+        }
+
+        $tickets = Ticket::with(['reporter', 'handlers', 'tags'])
+            ->whereHas('tags', fn ($q) => $q->where('tags.id', $tag->id))
+            ->latest()
+            ->get()
+            ->map(fn ($t) => [
+                'id' => $t->id,
+                'numericId' => $t->id,
+                'tktId' => 'TKT-'.(1000 + $t->id),
+                'title' => $t->title,
+                'description' => $t->description,
+                'status' => $t->status,
+                'priority' => $t->priority,
+                'category' => $t->category,
+                'tags' => $t->tags->pluck('name')->toArray(),
+                'reporter' => $t->reporter?->name ?? 'Unknown',
+                'reporterId' => $t->user_id,
+                'handlerIds' => $t->handlers->pluck('id')->toArray(),
+                'handlers' => $t->handlers->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->values()->toArray(),
+                'attachmentUrl' => $t->attachment ? Storage::disk('public')->url($t->attachment) : null,
+                'createdAtFormatted' => $t->created_at->format('M d, Y \a\t h:i A'),
+                'time' => $t->created_at->diffForHumans(),
+            ]);
+
+        return response()->json($tickets);
+    })->name('tickets.by-tag');
+
     Route::get('tickets', function () {
-        $tickets = Ticket::with(['handlers', 'reporter'])
+        $tickets = Ticket::with(['handlers', 'reporter', 'tags'])
             ->withCount('comments')
             ->latest()
             ->get();
@@ -110,6 +167,7 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
                 'status' => $ticket->status,
                 'priority' => $ticket->priority,
                 'category' => $ticket->category,
+                'tags' => $ticket->tags->pluck('name')->toArray(),
                 'handlerIds' => $ticket->handlers->pluck('id')->toArray(),
                 'handlers' => $ticket->handlers->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->values()->toArray(),
                 'reporter' => $ticket->reporter?->name ?? 'Unknown',
@@ -129,11 +187,12 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
             'categories' => TicketCategory::orderBy('sort_order')->get(['id', 'name', 'icon']),
             'priorities' => TicketPriority::orderBy('sort_order')->get(['id', 'name', 'icon', 'color']),
             'statuses' => TicketStatus::orderBy('sort_order')->get(['id', 'name', 'icon', 'color', 'handler_requirement']),
+            'allTags' => Tag::pluck('name')->toArray(),
         ]);
     })->name('tickets');
 
     Route::get('tickets/{ticket}/detail', function (Ticket $ticket) {
-        $ticket->load(['handlers', 'reporter']);
+        $ticket->load(['handlers', 'reporter', 'tags']);
         $ticket->loadCount('comments');
 
         return response()->json([
@@ -145,6 +204,7 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
                 'status' => $ticket->status,
                 'priority' => $ticket->priority,
                 'category' => $ticket->category,
+                'tags' => $ticket->tags->pluck('name')->toArray(),
                 'handlerIds' => $ticket->handlers->pluck('id')->toArray(),
                 'handlers' => $ticket->handlers->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->values()->toArray(),
                 'reporter' => $ticket->reporter?->name ?? 'Unknown',
@@ -182,6 +242,8 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
                 'nullable',
                 'string',
             ],
+            'tags' => ['required', 'array', 'min:1'],
+            'tags.*' => ['string'],
             'attachment' => 'nullable|image|max:4096',
         ]);
 
@@ -208,6 +270,14 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
             'category' => $validated['category'],
             'user_id' => auth()->id(),
         ]);
+
+        $tagIds = [];
+        if (! empty($validated['tags'])) {
+            foreach ($validated['tags'] as $tagName) {
+                $tagIds[] = Tag::firstOrCreate(['name' => $tagName])->id;
+            }
+        }
+        $ticket->tags()->sync($tagIds);
 
         $handlerIds = $validated['handler_ids'] ?? [];
         $ticket->handlers()->sync($handlerIds);
@@ -640,6 +710,8 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
                 'nullable',
                 'string',
             ],
+            'tags' => ['required', 'array', 'min:1'],
+            'tags.*' => ['string'],
             'attachment' => 'nullable|image|max:4096',
         ]);
 
@@ -663,6 +735,18 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
         $newStatus = $validated['status'];
         $existingHandlerIds = $ticket->handlers()->pluck('users.id')->toArray();
 
+        $normalizeTagList = static function (array $names): array {
+            return collect($names)
+                ->map(fn (mixed $n) => is_string($n) ? trim($n) : (string) $n)
+                ->filter()
+                ->unique()
+                ->sort()
+                ->values()
+                ->all();
+        };
+
+        $oldTagNames = $normalizeTagList($ticket->tags()->pluck('name')->all());
+
         $ticket->update([
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
@@ -672,6 +756,26 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
             'category' => $validated['category'],
             'attachment' => $validated['attachment'] ?? $ticket->attachment,
         ]);
+
+        $tagIds = [];
+        if (! empty($validated['tags'])) {
+            foreach ($validated['tags'] as $tagName) {
+                $tagIds[] = Tag::firstOrCreate(['name' => $tagName])->id;
+            }
+        }
+        $ticket->tags()->sync($tagIds);
+
+        $newTagNames = $normalizeTagList($ticket->tags()->pluck('name')->all());
+        if ($oldTagNames !== $newTagNames) {
+            TicketActivity::create([
+                'ticket_id' => $ticket->id,
+                'user_id' => auth()->id(),
+                'action' => 'ticket_edited',
+                'old_value' => $oldTagNames === [] ? '—' : implode(', ', $oldTagNames),
+                'new_value' => $newTagNames === [] ? '—' : implode(', ', $newTagNames),
+                'created_at' => now(),
+            ]);
+        }
 
         $newHandlerIds = $validated['handler_ids'] ?? [];
         if (in_array($newStatus, TicketStatus::namesWithNoHandlersInUi(), true)) {
@@ -792,6 +896,10 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
             'role' => 'required|string|in:admin,supervisor,technical',
         ]);
 
+        $beforeName = $user->name;
+        $beforeEmail = $user->email;
+        $beforeRole = $user->role;
+
         $changes = [];
         if ($user->name !== $validated['name']) {
             $changes[] = "name: {$user->name} → {$validated['name']}";
@@ -800,14 +908,16 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
             $changes[] = "email: {$user->email} → {$validated['email']}";
         }
 
+        $roleChanged = false;
+        if ($user->id !== auth()->id() && $beforeRole !== $validated['role']) {
+            $roleChanged = true;
+        }
+
         $user->name = $validated['name'];
         $user->email = $validated['email'];
 
         // Prevent admins from changing their own role
         if ($user->id !== auth()->id()) {
-            if ($user->role !== $validated['role']) {
-                $changes[] = "role: {$user->role} → {$validated['role']}";
-            }
             $user->role = $validated['role'];
         }
 
@@ -818,12 +928,23 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
 
         $user->save();
 
-        if (! empty($changes)) {
+        if ($roleChanged) {
+            TicketActivity::create([
+                'ticket_id' => null,
+                'user_id' => auth()->id(),
+                'action' => 'user_role_changed',
+                'old_value' => "{$beforeName} ({$beforeEmail}) — {$beforeRole}",
+                'new_value' => "{$validated['name']} ({$validated['email']}) — {$validated['role']}",
+                'created_at' => now(),
+            ]);
+        }
+
+        if ($changes !== []) {
             TicketActivity::create([
                 'ticket_id' => null,
                 'user_id' => auth()->id(),
                 'action' => 'user_updated',
-                'old_value' => $user->name,
+                'old_value' => $beforeName,
                 'new_value' => implode('; ', $changes),
                 'created_at' => now(),
             ]);
@@ -831,7 +952,6 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
 
         return redirect()->back()->with('success', 'User updated successfully.');
     })->name('users.update');
-
     Route::delete('users/{user}', function (User $user) {
         if ($user->id === auth()->id()) {
             abort(403, 'You cannot delete your own account.');
@@ -910,7 +1030,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
 // ── Ticket Comments ────────────────────────────────────────────────────────────
 Route::middleware(['auth', 'verified'])->group(function () {
-    $allowedEmojis = ['👍', '❤️', '😂', '😮', '😢', '🎉', '🔥', '✅'];
+    $allowedEmojis = ['👍', '👎', '❤️', '😂', '😮', '😢', '🎉', '🔥', '✅', '👀', '💯'];
 
     // List comments for a ticket (also returns subscription state)
     Route::get('tickets/{ticket}/comments', function (Ticket $ticket) {

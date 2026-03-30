@@ -21,7 +21,7 @@ class BulkTicketSeeder extends Seeder
 
     private const CATEGORIES = ['Network', 'Hardware', 'Software', 'Access', 'Security'];
 
-    private const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉', '🔥', '✅'];
+    private const EMOJIS = ['👍', '👎', '❤️', '😂', '😮', '😢', '🎉', '🔥', '✅', '👀', '💯'];
 
     private const TICKET_TITLES = [
         // Network

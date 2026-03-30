@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Auth;
 
+use App\Models\TicketActivity;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -44,6 +45,18 @@ class LoginRequest extends FormRequest
 
         if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey());
+
+            TicketActivity::create([
+                'ticket_id' => null,
+                'user_id' => null,
+                'action' => 'user_login_failed',
+                'old_value' => null,
+                'new_value' => json_encode([
+                    'email' => $this->string('email')->toString(),
+                    'ip' => $this->ip(),
+                ], JSON_UNESCAPED_UNICODE),
+                'created_at' => now(),
+            ]);
 
             throw ValidationException::withMessages([
                 'email' => trans('auth.failed'),

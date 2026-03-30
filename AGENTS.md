@@ -5,6 +5,10 @@
 
 The Laravel Boost guidelines are specifically curated by Laravel maintainers for this application. These guidelines should be followed closely to ensure the best experience when building Laravel applications.
 
+## Database & Migrations
+
+- CRITICAL: NEVER run `php artisan migrate:fresh`, `php artisan db:wipe`, or any commands that drop/truncate the database tables at any point. Do not suggest or execute these commands even if the database is in an inconsistent state or the user asks for a reset. If a rollback is needed, use `php artisan migrate:rollback` or create a new migration instead.
+
 ## Foundational Context
 
 This application is a Laravel application and its main Laravel ecosystems package & versions are below. You are an expert with them all. Ensure you abide by these specific packages & versions.
