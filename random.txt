@@ -1,0 +1,60 @@
+'http://localhost/ims/public/build/assets/app-B7KKwnZy.js' from origin 'http://ewbpo-meap' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+localhost/ims/public/build/assets/app-B7KKwnZy.js:1  Failed to load resource: net::ERR_FAILED
+login:1 Access to script at 'http://localhost/ims/public/build/assets/InputError.vue_vue_type_script_setup_true_lang-CYX84fPi.js%27 from origin 'http://ewbpo-meap' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+localhost/ims/public/build/assets/InputError.vue_vue_type_script_setup_true_lang-CYX84fPi.js:1  Failed to load resource: net::ERR_FAILED
+login:1 Access to script at 'http://localhost/ims/public/build/assets/Login-BfoMW6Wf.js' from origin 'http://ewbpo-meap' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+localhost/ims/public/build/assets/Login-BfoMW6Wf.js:1  Failed to load resource: net::ERR_FAILED
+login:1 Access to script at 'http://localhost/ims/public/build/assets/index-BkjU1yJS.js' from origin 'http://ewbpo-meap' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+localhost/ims/public/build/assets/index-BkjU1yJS.js:1  Failed to load resource: net::ERR_FAILED
+login:1 Access to script at 'http://localhost/ims/public/build/assets/Checkbox.vue_vue_type_script_setup_true_lang-BJCqj8PN.js%27 from origin 'http://ewbpo-meap' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+localhost/ims/public/build/assets/Checkbox.vue_vue_type_script_setup_true_lang-BJCqj8PN.js:1  Failed to load resource: net::ERR_FAILED
+login:1 Access to script at 'http://localhost/ims/public/build/assets/Input.vue_vue_type_script_setup_true_lang-ClyXgedq.js' from origin 'http://ewbpo-meap' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+localhost/ims/public/build/assets/Input.vue_vue_type_script_setup_true_lang-ClyXgedq.js:1  Failed to load resource: net::ERR_FAILED
+login:1 Access to script at 'http://localhost/ims/public/build/assets/Label.vue_vue_type_script_setup_true_lang-CT8OO5Lk.js' from origin 'http://ewbpo-meap' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+localhost/ims/public/build/assets/Label.vue_vue_type_script_setup_true_lang-CT8OO5Lk.js:1  Failed to load resource: net::ERR_FAILED
+login:1 Access to script at 'http://localhost/ims/public/build/assets/index-DXpYhSlP.js' from origin 'http://ewbpo-meap' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+localhost/ims/public/build/assets/index-DXpYhSlP.js:1  Failed to load resource: net::ERR_FAILED
+login:1 Access to script at 'http://localhost/ims/public/build/assets/AlertDialogContent.vue_vue_type_script_setup_true_lang-pyDGiyIn.js%27 from origin 'http://ewbpo-meap' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+localhost/ims/public/build/assets/AlertDialogContent.vue_vue_type_script_setup_true_lang-pyDGiyIn.js:1  Failed to load resource: net::ERR_FAILED
+login:1 Access to script at 'http://localhost/ims/public/build/assets/user-CXlVCXEJ.js' from origin 'http://ewbpo-meap' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+localhost/ims/public/build/assets/user-CXlVCXEJ.js:1  Failed to load resource: net::ERR_FAILED
+login:1 Access to script at 'http://localhost/ims/public/build/assets/check-BZiL0cdA.js' from origin 'http://ewbpo-meap' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+localhost/ims/public/build/assets/check-BZiL0cdA.js:1  Failed to load resource: net::ERR_FAILED
+login:1 Access to script at 'http://localhost/ims/public/build/assets/ThemeToggle.vue_vue_type_script_setup_true_lang-BDW_muLH.js%27 from origin 'http://ewbpo-meap' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+localhost/ims/public/build/assets/ThemeToggle.vue_vue_type_script_setup_true_lang-BDW_muLH.js:1  Failed to load resource: net::ERR_FAILED
+login:1 Access to script at 'http://localhost/ims/public/build/assets/loader-circle-CHstx9D0.js' from origin 'http://ewbpo-meap' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+localhost/ims/public/build/assets/loader-circle-CHstx9D0.js:1  Failed to load resource: net::ERR_FAILED
+login:1 Access to script at 'http://localhost/ims/public/build/assets/shield-check-BZ7cPGo-.js' from origin 'http://ewbpo-meap' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+localhost/ims/public/build/assets/shield-check-BZ7cPGo-.js:1  Failed to load resource: net::ERR_FAILED
+login:1 Access to script at 'http://localhost/ims/public/build/assets/wrench-DmiFPbdO.js' from origin 'http://ewbpo-meap' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+localhost/ims/public/build/assets/wrench-DmiFPbdO.js:1  Failed to load resource: net::ERR_FAILED
+login:1 Access to script at 'http://localhost/ims/public/build/assets/_plugin-vue_export-helper-DlAUqK2U.js' from origin 'http://ewbpo-meap' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+localhost/ims/public/build/assets/_plugin-vue_export-helper-DlAUqK2U.js:1  Failed to load resource: net::ERR_FAILED
+login:1 Access to script at 'http://localhost/ims/public/build/assets/file-text-BliawjQx.js' from origin 'http://ewbpo-meap' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+localhost/ims/public/build/assets/file-text-BliawjQx.js:1  Failed to load resource: net::ERR_FAILED
+login:1 Access to script at 'http://localhost/ims/public/build/assets/index-FcMfhafb.js' from origin 'http://ewbpo-meap' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+localhost/ims/public/build/assets/index-FcMfhafb.js:1  Failed to load resource: net::ERR_FAILED
+login:1 Access to script at 'http://localhost/ims/public/build/assets/index-BOMSZq3N.js' from origin 'http://ewbpo-meap' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+localhost/ims/public/build/assets/index-BOMSZq3N.js:1  Failed to load resource: net::ERR_FAILED
+login:1 Access to script at 'http://localhost/ims/public/build/assets/circle-x-CNkDdEaP.js' from origin 'http://ewbpo-meap' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+localhost/ims/public/build/assets/circle-x-CNkDdEaP.js:1  Failed to load resource: net::ERR_FAILED
+login:1 Access to script at 'http://localhost/ims/public/build/assets/mail-C_kvDtmv.js' from origin 'http://ewbpo-meap' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+localhost/ims/public/build/assets/mail-C_kvDtmv.js:1  Failed to load resource: net::ERR_FAILED
+login:1 Access to script at 'http://localhost/ims/public/build/assets/lock-Dv76lwsn.js' from origin 'http://ewbpo-meap' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+localhost/ims/public/build/assets/lock-Dv76lwsn.js:1  Failed to load resource: net::ERR_FAILED
+login:1 Access to script at 'http://localhost/ims/public/build/assets/user-plus-BEXsuxsF.js' from origin 'http://ewbpo-meap' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+localhost/ims/public/build/assets/user-plus-BEXsuxsF.js:1  Failed to load resource: net::ERR_FAILED
+login:1 Access to script at 'http://localhost/ims/public/build/assets/info-Bp58kgjq.js' from origin 'http://ewbpo-meap' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+localhost/ims/public/build/assets/info-Bp58kgjq.js:1  Failed to load resource: net::ERR_FAILED
+login:1 Access to script at 'http://localhost/ims/public/build/assets/circle-check-BCXg-5oB.js' from origin 'http://ewbpo-meap' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+localhost/ims/public/build/assets/circle-check-BCXg-5oB.js:1  Failed to load resource: net::ERR_FAILED
+login:1 Access to script at 'http://localhost/ims/public/build/assets/circle-alert-Co7btlB-.js' from origin 'http://ewbpo-meap' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+localhost/ims/public/build/assets/circle-alert-Co7btlB-.js:1  Failed to load resource: net::ERR_FAILED
+login:1 Access to script at 'http://localhost/ims/public/build/assets/VisuallyHiddenInput-iVmPhvPr.js' from origin 'http://ewbpo-meap' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+localhost/ims/public/build/assets/VisuallyHiddenInput-iVmPhvPr.js:1  Failed to load resource: net::ERR_FAILED
+login:1 Access to script at 'http://localhost/ims/public/build/assets/RovingFocusItem-CPG9VnAP.js' from origin 'http://ewbpo-meap' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+localhost/ims/public/build/assets/RovingFocusItem-CPG9VnAP.js:1  Failed to load resource: net::ERR_FAILED
+login:48 🔍 Browser logger active (MCP server detected). Posting to: http://ewbpo-meap/ims/_boost/browser-logs
+content-script.js:1 [Mon, 03/23/2026, 10:09:42.565 GMT+8][DEBUG][SearchSuggest] {SearchSuggest} init 
+login:1 The resource http://localhost/ims/public/build/assets/Login-D5meYZGS.css was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.
+login:1 The resource http://localhost/ims/public/build/assets/app-CcqT7xJH.css was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.

@@ -20,6 +20,46 @@ use Inertia\Response as InertiaResponse;
 
 class DashboardController extends Controller
 {
+    /**
+     * Dashboard chart/modal date window: tickets are filtered by {@see Ticket::$created_at}
+     * between the returned start (inclusive) and end (inclusive).
+     *
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    public static function reportingPeriodBounds(string $period): array
+    {
+        $period = in_array($period, ['7d', '30d', 'this_month', 'last_month', 'ytd', 'all'], true)
+            ? $period
+            : '7d';
+
+        $now = now();
+
+        switch ($period) {
+            case '30d':
+                $currentPeriodStart = $now->copy()->subDays(30)->startOfDay();
+                break;
+            case 'this_month':
+                $currentPeriodStart = $now->copy()->startOfMonth();
+                break;
+            case 'last_month':
+                $currentPeriodStart = $now->copy()->subMonth()->startOfMonth();
+                $now = $currentPeriodStart->copy()->endOfMonth();
+                break;
+            case 'ytd':
+                $currentPeriodStart = $now->copy()->startOfYear();
+                break;
+            case 'all':
+                $currentPeriodStart = Carbon::create(2000, 1, 1);
+                break;
+            case '7d':
+            default:
+                $currentPeriodStart = $now->copy()->subDays(7)->startOfDay();
+                break;
+        }
+
+        return [$currentPeriodStart, $now];
+    }
+
     public function index(): InertiaResponse
     {
         $data = $this->buildDashboardData(request('period', '7d'));
@@ -76,38 +116,11 @@ class DashboardController extends Controller
      */
     private function buildDashboardData(string $period): array
     {
-        $now = now();
+        $period = in_array($period, ['7d', '30d', 'this_month', 'last_month', 'ytd', 'all'], true)
+            ? $period
+            : '7d';
 
-        switch ($period) {
-            case '30d':
-                $currentPeriodStart = $now->copy()->subDays(30)->startOfDay();
-                $previousPeriodStart = $now->copy()->subDays(60)->startOfDay();
-                break;
-            case 'this_month':
-                $currentPeriodStart = $now->copy()->startOfMonth();
-                $previousPeriodStart = $now->copy()->subMonth()->startOfMonth();
-                break;
-            case 'last_month':
-                $currentPeriodStart = $now->copy()->subMonth()->startOfMonth();
-                $previousPeriodStart = $now->copy()->subMonths(2)->startOfMonth();
-                $now = $currentPeriodStart->copy()->endOfMonth();
-                break;
-            case 'ytd':
-                $currentPeriodStart = $now->copy()->startOfYear();
-                $previousPeriodStart = $now->copy()->subYear()->startOfYear();
-                break;
-            case 'all':
-                $currentPeriodStart = Carbon::create(2000, 1, 1);
-                $previousPeriodStart = Carbon::create(2000, 1, 1);
-                break;
-            case '7d':
-            default:
-                $currentPeriodStart = $now->copy()->subDays(7)->startOfDay();
-                $previousPeriodStart = $now->copy()->subDays(14)->startOfDay();
-                break;
-        }
-
-        $previousPeriodEnd = $currentPeriodStart->copy()->subSecond();
+        [$currentPeriodStart, $now] = self::reportingPeriodBounds($period);
 
         $periodLabel = match ($period) {
             '30d' => 'Last 30 Days',
@@ -118,56 +131,9 @@ class DashboardController extends Controller
             default => 'Last 7 Days',
         };
 
-        $periodComparisonLabel = match ($period) {
-            '30d' => 'Compared with the prior 30 days',
-            'this_month' => 'Compared with the previous month',
-            'last_month' => 'Compared with the month before',
-            'ytd' => 'Compared with the same period last year',
-            'all' => 'Compared with the prior window',
-            default => 'Compared with the prior 7 days',
-        };
-
-        $trendFromCounts = function (float $current, float $previous): array {
-            if ($previous <= 0.0) {
-                if ($current <= 0.0) {
-                    return ['display' => '—', 'value' => 0.0, 'isUp' => true, 'showTrendArrow' => false];
-                }
-
-                return ['display' => 'New', 'value' => null, 'isUp' => true, 'showTrendArrow' => true];
-            }
-
-            $pct = round(abs($current - $previous) / $previous * 100, 1);
-
-            return [
-                'display' => $pct.'%',
-                'value' => $pct,
-                'isUp' => $current >= $previous,
-                'showTrendArrow' => true,
-            ];
-        };
-
-        $trendFromAverages = function (float $current, float $previous): array {
-            if ($previous <= 0.0) {
-                return ['display' => '—', 'value' => null, 'isUp' => true, 'showTrendArrow' => false];
-            }
-
-            if ($current <= 0.0) {
-                return ['display' => '—', 'value' => null, 'isUp' => false, 'showTrendArrow' => false];
-            }
-
-            $pct = round(abs($current - $previous) / $previous * 100, 1);
-
-            return [
-                'display' => $pct.'%',
-                'value' => $pct,
-                'isUp' => $current >= $previous,
-                'showTrendArrow' => true,
-            ];
-        };
-
         // ── Core counts ───────────────────────────────────────────────
         $openCount = Ticket::where('status', 'Open')->where('created_at', '>=', $currentPeriodStart)->where('created_at', '<=', $now)->count();
-        $inProgressCount = Ticket::where('status', 'In Progress')->where('created_at', '>=', $currentPeriodStart)->where('created_at', '<=', $now)->count();
+        $inProgressCount = Ticket::whereIn('status', ['In Progress', 'On Hold'])->where('created_at', '>=', $currentPeriodStart)->where('created_at', '<=', $now)->count();
         $resolvedForStatWidgets = ['Resolved'];
         $resolvedCount = Ticket::query()
             ->whereIn('status', $resolvedForStatWidgets)
@@ -183,31 +149,12 @@ class DashboardController extends Controller
             ->selectRaw('AVG(TIMESTAMPDIFF(MINUTE, created_at, resolved_at)) / 60 as h')
             ->value('h') ?? 0);
 
-        // ── Period-over-period ────────────────────────────────────────
-        $openTrend = $trendFromCounts(
-            (float) Ticket::where('status', 'Open')->where('created_at', '>=', $currentPeriodStart)->where('created_at', '<=', $now)->count(),
-            (float) Ticket::where('status', 'Open')->whereBetween('created_at', [$previousPeriodStart, $previousPeriodEnd])->count()
-        );
-        $inProgressTrend = $trendFromCounts(
-            (float) Ticket::where('status', 'In Progress')->where('created_at', '>=', $currentPeriodStart)->where('created_at', '<=', $now)->count(),
-            (float) Ticket::where('status', 'In Progress')->whereBetween('created_at', [$previousPeriodStart, $previousPeriodEnd])->count()
-        );
-        $resolvedTrend = $trendFromCounts(
-            (float) Ticket::whereIn('status', $resolvedForStatWidgets)->whereNotNull('resolved_at')->where('resolved_at', '>=', $currentPeriodStart)->where('resolved_at', '<=', $now)->count(),
-            (float) Ticket::whereIn('status', $resolvedForStatWidgets)->whereNotNull('resolved_at')->whereBetween('resolved_at', [$previousPeriodStart, $previousPeriodEnd])->count()
-        );
-        $thisWeekAvgHours = (float) (Ticket::whereNotNull('resolved_at')->whereIn('status', $resolvedForStatWidgets)->where('resolved_at', '>=', $currentPeriodStart)
-            ->selectRaw('AVG(TIMESTAMPDIFF(MINUTE, created_at, resolved_at)) / 60 as h')->value('h') ?? 0);
-        $lastWeekAvgHours = (float) (Ticket::whereNotNull('resolved_at')->whereIn('status', $resolvedForStatWidgets)->whereBetween('resolved_at', [$previousPeriodStart, $previousPeriodEnd])
-            ->selectRaw('AVG(TIMESTAMPDIFF(MINUTE, created_at, resolved_at)) / 60 as h')->value('h') ?? 0);
-        $avgTimeTrend = $trendFromAverages($thisWeekAvgHours, $lastWeekAvgHours);
-
         $trendDays = min((int) ceil($currentPeriodStart->diffInDays($now)), 90);
         if ($trendDays < 1 || $period === 'all') {
             $trendDays = 90;
         }
 
-        // ── Sparklines ────────────────────────────────────────────────
+        // ── Stat card sparklines (recent daily shape; no period-over-period %) ──
         $sparkPoints = min($trendDays, 30);
         $sparkStart = $now->copy()->subDays($sparkPoints - 1)->startOfDay();
         $sparkDates = collect(range($sparkPoints - 1, 0))->map(fn ($i) => $now->copy()->subDays($i)->format('Y-m-d'));
@@ -236,59 +183,41 @@ class DashboardController extends Controller
             ->values()
             ->all();
 
+        $pendingReviewStatuses = ['In Progress', 'On Hold'];
+
         // ── Stats payload ─────────────────────────────────────────────
         $stats = [
             [
                 'title' => 'Total Open Incidents',
                 'value' => $openCount,
-                'description' => $periodComparisonLabel,
-                'trend' => $openTrend['display'],
-                'isUp' => $openTrend['isUp'],
-                'showTrendArrow' => $openTrend['showTrendArrow'],
+                'description' => 'Open tickets created in '.$periodLabel,
                 'sparkline' => $dailyCounts('created_at', 'Open'),
                 'sparklineValueSuffix' => '',
                 'stroke' => '#f43f5e',
-                'textColor' => 'text-rose-600 dark:text-rose-400',
-                'cardBg' => 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-100/50 dark:border-rose-900/50',
             ],
             [
                 'title' => 'Pending Review',
                 'value' => $inProgressCount,
-                'description' => 'Work in progress · '.$periodComparisonLabel,
-                'trend' => $inProgressTrend['display'],
-                'isUp' => $inProgressTrend['isUp'],
-                'showTrendArrow' => $inProgressTrend['showTrendArrow'],
-                'sparkline' => $dailyCounts('created_at', 'In Progress'),
+                'description' => 'In progress & on hold · '.$periodLabel,
+                'sparkline' => $dailyCounts('created_at', $pendingReviewStatuses),
                 'sparklineValueSuffix' => '',
                 'stroke' => '#f97316',
-                'textColor' => 'text-orange-600 dark:text-orange-400',
-                'cardBg' => 'bg-orange-50/50 dark:bg-orange-950/20 border-orange-100/50 dark:border-orange-900/50',
             ],
             [
                 'title' => 'Resolved Incidents',
                 'value' => $resolvedCount,
-                'description' => 'Status Resolved · '.$periodComparisonLabel,
-                'trend' => $resolvedTrend['display'],
-                'isUp' => $resolvedTrend['isUp'],
-                'showTrendArrow' => $resolvedTrend['showTrendArrow'],
+                'description' => 'Resolved in '.$periodLabel,
                 'sparkline' => $dailyCounts('resolved_at', $resolvedForStatWidgets),
                 'sparklineValueSuffix' => '',
                 'stroke' => '#3b82f6',
-                'textColor' => 'text-blue-600 dark:text-blue-400',
-                'cardBg' => 'bg-blue-50/50 dark:bg-blue-950/20 border-blue-100/50 dark:border-blue-900/50',
             ],
             [
                 'title' => 'Avg. Resolution Time',
                 'value' => $avgHours > 0 ? round($avgHours, 1).'h' : '—',
-                'description' => 'Mean hours (Resolved only) · '.$periodComparisonLabel,
-                'trend' => $avgTimeTrend['display'],
-                'isUp' => ! $avgTimeTrend['isUp'],
-                'showTrendArrow' => $avgTimeTrend['showTrendArrow'],
+                'description' => 'Mean hours (resolved tickets) · '.$periodLabel,
                 'sparkline' => $avgTimeSparkline,
                 'sparklineValueSuffix' => 'h',
                 'stroke' => '#10b981',
-                'textColor' => 'text-emerald-600 dark:text-emerald-400',
-                'cardBg' => 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-100/50 dark:border-emerald-900/50',
             ],
         ];
 
@@ -318,17 +247,6 @@ class DashboardController extends Controller
                 'created' => (int) ($createdRaw->get($carbon->format('Y-m-d'), 0)),
                 'resolved' => (int) ($resolvedRaw->get($carbon->format('Y-m-d'), 0)),
             ])->all();
-
-        $chartTrendRaw = $trendFromCounts(
-            (float) Ticket::where('created_at', '>=', $currentPeriodStart)->where('created_at', '<=', $now)->count(),
-            (float) Ticket::whereBetween('created_at', [$previousPeriodStart, $previousPeriodEnd])->count()
-        );
-        $chartTrend = [
-            'value' => $chartTrendRaw['value'],
-            'isUp' => $chartTrendRaw['isUp'],
-            'display' => $chartTrendRaw['display'],
-            'showTrendArrow' => $chartTrendRaw['showTrendArrow'],
-        ];
 
         // ── Priority distribution (admin-configured priorities) ───────
         $prioritiesConfigured = TicketPriority::orderBy('sort_order')->get(['name', 'color', 'icon']);
@@ -420,23 +338,6 @@ class DashboardController extends Controller
         }
 
         // ── Top recurring incidents (tag leaderboard: tickets in period) ──
-        // Prior window for trend: match dashboard intent (YTD = same span last year; skip for all-time).
-        $tagTrendCompareEnabled = $period !== 'all';
-        $tagPreviousEnd = $period === 'ytd'
-            ? $now->copy()->subYear()
-            : $previousPeriodEnd;
-
-        $previousTagCounts = $tagTrendCompareEnabled
-            ? Tag::query()
-                ->join('tag_ticket', 'tags.id', '=', 'tag_ticket.tag_id')
-                ->join('tickets', 'tag_ticket.ticket_id', '=', 'tickets.id')
-                ->where('tickets.created_at', '>=', $previousPeriodStart)
-                ->where('tickets.created_at', '<=', $tagPreviousEnd)
-                ->groupBy('tags.id', 'tags.name')
-                ->selectRaw('tags.name as tag_name, COUNT(tag_ticket.ticket_id) as c')
-                ->pluck('c', 'tag_name')
-            : collect();
-
         $topRecurring = Tag::query()
             ->join('tag_ticket', 'tags.id', '=', 'tag_ticket.tag_id')
             ->join('tickets', 'tag_ticket.ticket_id', '=', 'tickets.id')
@@ -447,44 +348,13 @@ class DashboardController extends Controller
             ->orderByDesc('total')
             ->limit(6)
             ->get()
-            ->map(function ($row, $i) use ($previousTagCounts, $tagTrendCompareEnabled) {
-                $thisM = (int) $row->total;
-                $lastM = (int) ($previousTagCounts->get($row->name) ?? 0);
-
-                if (! $tagTrendCompareEnabled) {
-                    return [
-                        'rank' => $i + 1,
-                        'tag' => $row->name,
-                        'count' => $thisM,
-                        'previous_count' => null,
-                        'trend' => 'neutral',
-                        'change' => null,
-                    ];
-                }
-
-                if ($lastM === 0) {
-                    return [
-                        'rank' => $i + 1,
-                        'tag' => $row->name,
-                        'count' => $thisM,
-                        'previous_count' => 0,
-                        'trend' => $thisM > 0 ? 'new' : 'neutral',
-                        'change' => null,
-                    ];
-                }
-
-                $change = (int) round((($thisM - $lastM) / $lastM) * 100);
-                $trend = $change > 0 ? 'up' : ($change < 0 ? 'down' : 'neutral');
-
-                return [
-                    'rank' => $i + 1,
-                    'tag' => $row->name,
-                    'count' => $thisM,
-                    'previous_count' => $lastM,
-                    'trend' => $trend,
-                    'change' => $change,
-                ];
-            })->values()->all();
+            ->map(fn ($row, $i): array => [
+                'rank' => $i + 1,
+                'tag' => $row->name,
+                'count' => (int) $row->total,
+            ])
+            ->values()
+            ->all();
 
         // ── Recent activity ───────────────────────────────────────────
         $recentActivity = Ticket::with(['reporter', 'handlers', 'tags'])
@@ -555,7 +425,6 @@ class DashboardController extends Controller
             'stats' => $stats,
             'sparklineLabels' => $sparklineLabels,
             'trendData' => $trendData,
-            'chartTrend' => $chartTrend,
             'severities' => $severities,
             'categories' => $categories,
             'priorityLegend' => $priorityLegend,

@@ -15,7 +15,7 @@ class BulkTicketSeeder extends Seeder
 {
     private const TICKET_COUNT = 300;
 
-    private const STATUSES = ['Open', 'In Progress', 'On Hold', 'Resolved', 'Closed'];
+    private const STATUSES = ['Open', 'In Progress', 'On Hold', 'Resolved', 'Cancelled'];
 
     private const PRIORITIES = ['Low', 'Medium', 'High', 'Critical'];
 
@@ -204,11 +204,11 @@ class BulkTicketSeeder extends Seeder
                 'status' => $status,
                 'priority' => fake()->randomElement(self::PRIORITIES),
                 'category' => fake()->randomElement(self::CATEGORIES),
-                'solution' => in_array($status, ['Resolved', 'Closed'])
+                'solution' => in_array($status, ['Resolved', 'Cancelled'])
                     ? fake()->randomElement(self::SOLUTIONS)
                     : null,
                 'user_id' => $users->random()->id,
-                'resolved_at' => in_array($status, ['Resolved', 'Closed'])
+                'resolved_at' => in_array($status, ['Resolved', 'Cancelled'])
                     ? fake()->dateTimeBetween($createdAt, $now)
                     : null,
                 'created_at' => $createdAt,

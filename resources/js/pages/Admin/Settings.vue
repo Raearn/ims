@@ -138,7 +138,7 @@ const statuses = reactive<StatusRow[]>(
 
 // ── Category helpers ───────────────────────────────────────────────────────
 function addCategory(): void {
-    categories.push({ name: '', icon: 'Network', clientKey: crypto.randomUUID() });
+    categories.push({ name: '', icon: 'Network', clientKey: Math.random().toString(36).substring(2, 15) });
 }
 
 function ticketCountForCategoryRow(row: CategoryRow): number {
@@ -187,7 +187,7 @@ function moveCategoryDown(idx: number): void {
 
 // ── Priority helpers ───────────────────────────────────────────────────────
 function addPriority(): void {
-    priorities.push({ name: '', icon: 'AlertCircle', color: '#6b7280', clientKey: crypto.randomUUID() });
+    priorities.push({ name: '', icon: 'AlertCircle', color: '#6b7280', clientKey: Math.random().toString(36).substring(2, 15) });
 }
 
 function ticketCountForPriorityRow(row: PriorityRow): number {
@@ -241,7 +241,7 @@ function addStatus(): void {
         icon: 'Circle',
         color: '#64748b',
         handler_requirement: 'optional',
-        clientKey: crypto.randomUUID(),
+        clientKey: Math.random().toString(36).substring(2, 15),
     });
 }
 
@@ -518,6 +518,23 @@ watch(lucideIconsLoading, (loading) => {
 });
 
 async function openPicker(e: MouseEvent, type: 'cat' | 'pri' | 'stat', idx: number): Promise<void> {
+    if (type === 'cat') {
+        const row = categories[idx];
+        if (row && isProtectedCategoryRow(row)) {
+            return;
+        }
+    } else if (type === 'pri') {
+        const row = priorities[idx];
+        if (row && isProtectedPriorityRow(row)) {
+            return;
+        }
+    } else {
+        const row = statuses[idx];
+        if (row && isProtectedStatusRow(row)) {
+            return;
+        }
+    }
+
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const pickerWidth = 272;
     const pickerEstHeight = 360;
@@ -561,10 +578,22 @@ function selectIcon(icon: string): void {
     if (! activePicker.value) { return; }
     const { type, idx } = activePicker.value;
     if (type === 'cat') {
+        const row = categories[idx];
+        if (row && isProtectedCategoryRow(row)) {
+            return;
+        }
         categories[idx].icon = icon;
     } else if (type === 'pri') {
+        const row = priorities[idx];
+        if (row && isProtectedPriorityRow(row)) {
+            return;
+        }
         priorities[idx].icon = icon;
     } else {
+        const row = statuses[idx];
+        if (row && isProtectedStatusRow(row)) {
+            return;
+        }
         statuses[idx].icon = icon;
     }
     closePicker();
@@ -947,7 +976,7 @@ function submitAppearance(): void {
                                 <CardHeader>
                                     <CardTitle>Ticket Categories</CardTitle>
                                     <CardDescription>
-                                        Categories available when creating a ticket. Each entry can have an icon. Core defaults cannot be removed; the "Others" category and any extra rows you add can be deleted.
+                                        Categories available when creating a ticket. Default categories (Network, Hardware, Software, Access, Security) cannot be removed and their names and icons are fixed. The "Others" row and any categories you add can be renamed, re-iconed, reordered, or removed when unused.
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent class="flex flex-col gap-2">
@@ -975,15 +1004,22 @@ function submitAppearance(): void {
                                         <!-- Icon trigger -->
                                         <button
                                             type="button"
-                                            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-input bg-background text-foreground shadow-sm transition-all hover:border-primary/50 hover:ring-2 hover:ring-primary/20 focus:outline-none"
+                                            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-input bg-background text-foreground shadow-sm transition-all hover:border-primary/50 hover:ring-2 hover:ring-primary/20 focus:outline-none disabled:pointer-events-none disabled:opacity-50"
                                             :class="activePicker?.type === 'cat' && activePicker.idx === idx ? 'border-primary ring-2 ring-primary/20' : ''"
-                                            :title="`Change icon (${cat.icon})`"
+                                            :disabled="isProtectedCategoryRow(cat)"
+                                            :title="isProtectedCategoryRow(cat) ? 'Built-in category: icon cannot be changed' : `Change icon (${cat.icon})`"
                                             @click="openPicker($event, 'cat', idx)"
                                         >
                                             <component :is="resolveIcon(cat.icon)" class="h-4 w-4" />
                                         </button>
 
-                                        <Input v-model="cat.name" class="flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-0 font-medium" placeholder="Category name" />
+                                        <Input
+                                            v-model="cat.name"
+                                            class="flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-0 font-medium disabled:cursor-not-allowed disabled:opacity-70"
+                                            placeholder="Category name"
+                                            :disabled="isProtectedCategoryRow(cat)"
+                                            :title="isProtectedCategoryRow(cat) ? 'Built-in category: name cannot be changed' : undefined"
+                                        />
 
                                         <div class="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
                                             <button type="button" class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30" :disabled="idx === 0" @click="moveCategoryUp(idx)">
@@ -1024,7 +1060,7 @@ function submitAppearance(): void {
                                 <CardHeader>
                                     <CardTitle>Ticket Priorities</CardTitle>
                                     <CardDescription>
-                                        Priority levels for tickets. Each has an icon and a badge colour. Default priorities cannot be removed; you can still add custom levels.
+                                        Priority levels for tickets. Default priorities (Critical, High, Medium, Low) cannot be removed; their names, icons, and colours are fixed. You can add custom levels with your own styling.
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent class="flex flex-col gap-2">
@@ -1052,22 +1088,40 @@ function submitAppearance(): void {
                                         <!-- Icon trigger -->
                                         <button
                                             type="button"
-                                            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-input bg-background shadow-sm transition-all hover:border-primary/50 hover:ring-2 hover:ring-primary/20 focus:outline-none"
+                                            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-input bg-background shadow-sm transition-all hover:border-primary/50 hover:ring-2 hover:ring-primary/20 focus:outline-none disabled:pointer-events-none disabled:opacity-50"
                                             :class="activePicker?.type === 'pri' && activePicker.idx === idx ? 'border-primary ring-2 ring-primary/20' : ''"
                                             :style="{ color: pri.color }"
-                                            :title="`Change icon (${pri.icon})`"
+                                            :disabled="isProtectedPriorityRow(pri)"
+                                            :title="isProtectedPriorityRow(pri) ? 'Built-in priority: icon cannot be changed' : `Change icon (${pri.icon})`"
                                             @click="openPicker($event, 'pri', idx)"
                                         >
                                             <component :is="resolveIcon(pri.icon)" class="h-4 w-4" />
                                         </button>
 
-                                        <Input v-model="pri.name" class="flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-0 font-medium" placeholder="Priority name" />
+                                        <Input
+                                            v-model="pri.name"
+                                            class="flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-0 font-medium disabled:cursor-not-allowed disabled:opacity-70"
+                                            placeholder="Priority name"
+                                            :disabled="isProtectedPriorityRow(pri)"
+                                            :title="isProtectedPriorityRow(pri) ? 'Built-in priority: name cannot be changed' : undefined"
+                                        />
 
                                         <!-- Color swatch -->
-                                        <label class="relative flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md border border-input bg-background shadow-sm transition-all hover:border-primary/50 hover:ring-2 hover:ring-primary/20" :title="pri.color">
+                                        <label
+                                            v-if="!isProtectedPriorityRow(pri)"
+                                            class="relative flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md border border-input bg-background shadow-sm transition-all hover:border-primary/50 hover:ring-2 hover:ring-primary/20"
+                                            :title="pri.color"
+                                        >
                                             <span class="h-4 w-4 rounded-full border border-border/50 shadow-sm" :style="{ backgroundColor: pri.color }" />
                                             <input v-model="pri.color" type="color" class="sr-only" />
                                         </label>
+                                        <span
+                                            v-else
+                                            class="flex h-8 w-8 shrink-0 cursor-not-allowed items-center justify-center rounded-md border border-input bg-background opacity-70 shadow-sm"
+                                            title="Built-in priority: colour cannot be changed"
+                                        >
+                                            <span class="h-4 w-4 rounded-full border border-border/50 shadow-sm" :style="{ backgroundColor: pri.color }" />
+                                        </span>
 
                                         <div class="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
                                             <button type="button" class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30" :disabled="idx === 0" @click="movePriorityUp(idx)">
@@ -1108,7 +1162,7 @@ function submitAppearance(): void {
                                 <CardHeader>
                                     <CardTitle>Ticket Statuses</CardTitle>
                                     <CardDescription>
-                                        Workflow labels with icon and colour. For each status, choose whether the new-ticket and edit flows hide handlers, require at least one, or show them as optional (e.g. closed tickets). Default statuses cannot be removed; their handler rules are fixed.
+                                        Workflow labels with icon and colour. Default statuses (Open, In Progress, On Hold, Resolved, Cancelled) cannot be removed; their names, icons, colours, and handler rules are fixed. You can add custom statuses.
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent class="flex flex-col gap-2">
@@ -1134,15 +1188,22 @@ function submitAppearance(): void {
                                         </span>
                                         <button
                                             type="button"
-                                            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-input bg-background shadow-sm transition-all hover:border-primary/50 hover:ring-2 hover:ring-primary/20 focus:outline-none"
+                                            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-input bg-background shadow-sm transition-all hover:border-primary/50 hover:ring-2 hover:ring-primary/20 focus:outline-none disabled:pointer-events-none disabled:opacity-50"
                                             :class="activePicker?.type === 'stat' && activePicker.idx === idx ? 'border-primary ring-2 ring-primary/20' : ''"
                                             :style="{ color: st.color }"
-                                            :title="`Change icon (${st.icon})`"
+                                            :disabled="isProtectedStatusRow(st)"
+                                            :title="isProtectedStatusRow(st) ? 'Built-in status: icon cannot be changed' : `Change icon (${st.icon})`"
                                             @click="openPicker($event, 'stat', idx)"
                                         >
                                             <component :is="resolveIcon(st.icon)" class="h-4 w-4" />
                                         </button>
-                                        <Input v-model="statuses[idx].name" class="min-w-0 flex-1 border-0 bg-transparent px-0 font-medium shadow-none focus-visible:ring-0 focus-visible:ring-offset-0" placeholder="Status label" />
+                                        <Input
+                                            v-model="statuses[idx].name"
+                                            class="min-w-0 flex-1 border-0 bg-transparent px-0 font-medium shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-70"
+                                            placeholder="Status label"
+                                            :disabled="isProtectedStatusRow(st)"
+                                            :title="isProtectedStatusRow(st) ? 'Built-in status: name cannot be changed' : undefined"
+                                        />
                                         <Select
                                             :model-value="st.handler_requirement ?? 'optional'"
                                             :disabled="isProtectedStatusRow(st)"
@@ -1160,10 +1221,21 @@ function submitAppearance(): void {
                                                 <SelectItem value="required">Handlers required</SelectItem>
                                             </SelectContent>
                                         </Select>
-                                        <label class="relative flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md border border-input bg-background shadow-sm transition-all hover:border-primary/50 hover:ring-2 hover:ring-primary/20" :title="st.color">
+                                        <label
+                                            v-if="!isProtectedStatusRow(st)"
+                                            class="relative flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md border border-input bg-background shadow-sm transition-all hover:border-primary/50 hover:ring-2 hover:ring-primary/20"
+                                            :title="st.color"
+                                        >
                                             <span class="h-4 w-4 rounded-full border border-border/50 shadow-sm" :style="{ backgroundColor: st.color }" />
                                             <input v-model="st.color" type="color" class="sr-only" />
                                         </label>
+                                        <span
+                                            v-else
+                                            class="flex h-8 w-8 shrink-0 cursor-not-allowed items-center justify-center rounded-md border border-input bg-background opacity-70 shadow-sm"
+                                            title="Built-in status: colour cannot be changed"
+                                        >
+                                            <span class="h-4 w-4 rounded-full border border-border/50 shadow-sm" :style="{ backgroundColor: st.color }" />
+                                        </span>
                                         <div class="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
                                             <button type="button" class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30" :disabled="idx === 0" @click="moveStatusUp(idx)">
                                                 <ArrowUp class="h-3.5 w-3.5" />

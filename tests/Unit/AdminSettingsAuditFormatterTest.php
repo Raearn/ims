@@ -44,7 +44,7 @@ class AdminSettingsAuditFormatterTest extends TestCase
                 'handler_requirement' => TicketStatusHandlerRequirement::Required,
             ],
             [
-                'name' => 'Closed',
+                'name' => 'Cancelled',
                 'icon' => 'Ban',
                 'color' => '#64748b',
                 'handler_requirement' => TicketStatusHandlerRequirement::Optional,
@@ -54,7 +54,7 @@ class AdminSettingsAuditFormatterTest extends TestCase
         $expected = <<<'TXT'
 • Open · AlertTriangle · #f43f5e · —
 • In Progress · Play · #3b82f6 · Required
-• Closed · Ban · #64748b · Optional
+• Cancelled · Ban · #64748b · Optional
 TXT;
         $this->assertSame($expected, $text);
     }

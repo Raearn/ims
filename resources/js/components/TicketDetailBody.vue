@@ -476,7 +476,7 @@ function openInTickets(): void {
                     @click="openInTickets"
                 >
                     <ExternalLinkIcon class="h-3.5 w-3.5" />
-                    Open in Tickets
+                    Open in Incidents
                 </Button>
                 <Button
                     v-if="showEditButton"
@@ -498,7 +498,7 @@ function openInTickets(): void {
                     @click="openInTickets"
                 >
                     <ExternalLinkIcon class="h-3.5 w-3.5" />
-                    Open in Tickets
+                    Open in Incidents
                 </Button>
                 <Button
                     v-if="showEditButton"

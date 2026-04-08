@@ -26,7 +26,9 @@ class TicketConfigSettingsTest extends TestCase
             fn (array $r) => ['name' => $r['name'], 'icon' => $r['icon']],
             TicketConfigDefaults::categories(),
         );
-        $rows[0]['icon'] = 'Globe';
+        $othersIdx = array_search('Others', array_column($rows, 'name'), true);
+        $this->assertNotFalse($othersIdx);
+        $rows[$othersIdx]['icon'] = 'Globe';
 
         $this->actingAs($admin)
             ->put('/admin/ticket-categories', ['categories' => $rows])
@@ -34,7 +36,8 @@ class TicketConfigSettingsTest extends TestCase
             ->assertSessionHas('success');
 
         $this->assertDatabaseCount('ticket_categories', 6);
-        $this->assertDatabaseHas('ticket_categories', ['name' => 'Network', 'icon' => 'Globe', 'sort_order' => 0]);
+        $this->assertDatabaseHas('ticket_categories', ['name' => 'Network', 'icon' => 'Network', 'sort_order' => 0]);
+        $this->assertDatabaseHas('ticket_categories', ['name' => 'Others', 'icon' => 'Globe']);
         $this->assertDatabaseMissing('ticket_categories', ['name' => 'Old']);
     }
 
@@ -71,15 +74,16 @@ class TicketConfigSettingsTest extends TestCase
             fn (array $r) => ['name' => $r['name'], 'icon' => $r['icon'], 'color' => $r['color']],
             TicketConfigDefaults::priorities(),
         );
-        $rows[0]['color'] = '#ff0000';
+        $rows[] = ['name' => 'CustomPrio', 'icon' => 'Star', 'color' => '#aabbcc'];
 
         $this->actingAs($admin)
             ->put('/admin/ticket-priorities', ['priorities' => $rows])
             ->assertRedirect()
             ->assertSessionHas('success');
 
-        $this->assertDatabaseCount('ticket_priorities', 4);
-        $this->assertDatabaseHas('ticket_priorities', ['name' => 'Critical', 'color' => '#ff0000', 'sort_order' => 0]);
+        $this->assertDatabaseCount('ticket_priorities', 5);
+        $this->assertDatabaseHas('ticket_priorities', ['name' => 'Critical', 'color' => '#f43f5e', 'sort_order' => 0]);
+        $this->assertDatabaseHas('ticket_priorities', ['name' => 'CustomPrio', 'color' => '#aabbcc', 'sort_order' => 4]);
         $this->assertDatabaseMissing('ticket_priorities', ['name' => 'OldPriority']);
     }
 
@@ -118,15 +122,21 @@ class TicketConfigSettingsTest extends TestCase
             ],
             TicketConfigDefaults::statuses(),
         );
-        $rows[0]['icon'] = 'Circle';
+        $rows[] = [
+            'name' => 'CustomStatus',
+            'icon' => 'Flag',
+            'color' => '#9333ea',
+            'handler_requirement' => 'optional',
+        ];
 
         $this->actingAs($admin)
             ->put('/admin/ticket-statuses', ['statuses' => $rows])
             ->assertRedirect()
             ->assertSessionHas('success');
 
-        $this->assertDatabaseCount('ticket_statuses', 5);
-        $this->assertDatabaseHas('ticket_statuses', ['name' => 'Open', 'icon' => 'Circle', 'color' => '#f43f5e', 'handler_requirement' => 'none', 'sort_order' => 0]);
+        $this->assertDatabaseCount('ticket_statuses', 6);
+        $this->assertDatabaseHas('ticket_statuses', ['name' => 'Open', 'icon' => 'AlertTriangle', 'color' => '#f43f5e', 'handler_requirement' => 'none', 'sort_order' => 0]);
+        $this->assertDatabaseHas('ticket_statuses', ['name' => 'CustomStatus', 'color' => '#9333ea', 'sort_order' => 5]);
         $this->assertDatabaseMissing('ticket_statuses', ['name' => 'OldStatus']);
     }
 
@@ -176,6 +186,86 @@ class TicketConfigSettingsTest extends TestCase
         $this->actingAs($admin)
             ->put('/admin/ticket-categories', ['categories' => $rows])
             ->assertSessionHasErrors('categories');
+    }
+
+    public function test_cannot_change_built_in_category_icon(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $rows = array_map(
+            fn (array $r) => ['name' => $r['name'], 'icon' => $r['icon']],
+            TicketConfigDefaults::categories(),
+        );
+        $rows[0]['icon'] = 'Globe';
+
+        $this->actingAs($admin)
+            ->put('/admin/ticket-categories', ['categories' => $rows])
+            ->assertSessionHasErrors('categories.0.icon');
+    }
+
+    public function test_cannot_change_built_in_priority_icon(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $rows = array_map(
+            fn (array $r) => ['name' => $r['name'], 'icon' => $r['icon'], 'color' => $r['color']],
+            TicketConfigDefaults::priorities(),
+        );
+        $rows[0]['icon'] = 'Star';
+
+        $this->actingAs($admin)
+            ->put('/admin/ticket-priorities', ['priorities' => $rows])
+            ->assertSessionHasErrors('priorities.0.icon');
+    }
+
+    public function test_cannot_change_built_in_priority_color(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $rows = array_map(
+            fn (array $r) => ['name' => $r['name'], 'icon' => $r['icon'], 'color' => $r['color']],
+            TicketConfigDefaults::priorities(),
+        );
+        $rows[0]['color'] = '#ff0000';
+
+        $this->actingAs($admin)
+            ->put('/admin/ticket-priorities', ['priorities' => $rows])
+            ->assertSessionHasErrors('priorities.0.color');
+    }
+
+    public function test_cannot_change_built_in_status_icon(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $rows = array_map(
+            fn (array $r) => [
+                'name' => $r['name'],
+                'icon' => $r['icon'],
+                'color' => $r['color'],
+                'handler_requirement' => $r['handler_requirement'],
+            ],
+            TicketConfigDefaults::statuses(),
+        );
+        $rows[0]['icon'] = 'Circle';
+
+        $this->actingAs($admin)
+            ->put('/admin/ticket-statuses', ['statuses' => $rows])
+            ->assertSessionHasErrors('statuses.0.icon');
+    }
+
+    public function test_cannot_change_built_in_status_color(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $rows = array_map(
+            fn (array $r) => [
+                'name' => $r['name'],
+                'icon' => $r['icon'],
+                'color' => $r['color'],
+                'handler_requirement' => $r['handler_requirement'],
+            ],
+            TicketConfigDefaults::statuses(),
+        );
+        $rows[0]['color'] = '#ff00ff';
+
+        $this->actingAs($admin)
+            ->put('/admin/ticket-statuses', ['statuses' => $rows])
+            ->assertSessionHasErrors('statuses.0.color');
     }
 
     public function test_admin_can_remove_others_category(): void

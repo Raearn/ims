@@ -16,7 +16,7 @@ class TicketActivitySeeder extends Seeder
         'In Progress' => [['Open', 'In Progress']],
         'On Hold' => [['Open', 'In Progress'], ['In Progress', 'On Hold']],
         'Resolved' => [['Open', 'In Progress'], ['In Progress', 'Resolved']],
-        'Closed' => [['Open', 'In Progress'], ['In Progress', 'Resolved'], ['Resolved', 'Closed']],
+        'Cancelled' => [['Open', 'In Progress'], ['In Progress', 'Resolved'], ['Resolved', 'Cancelled']],
     ];
 
     private const COMMENT_BODIES = [
@@ -201,7 +201,7 @@ class TicketActivitySeeder extends Seeder
         }
 
         // ── 4. Solution added for resolved / closed tickets ───────────────────
-        if (in_array($ticket->status, ['Resolved', 'Closed'], true)) {
+        if (in_array($ticket->status, ['Resolved', 'Cancelled'], true)) {
             $cursor->addMinutes(fake()->numberBetween(5, 60));
             $solutions = [
                 'Replaced the faulty network cable on port 14. Connectivity restored.',

@@ -24,7 +24,7 @@ class WeeklyDataSeeder extends Seeder
         $technicians = $users->whereIn('role', ['technical', 'admin']);
 
         // ── 1. Tickets ───────────────────────────────────────────────────────
-        $statuses = ['Open', 'In Progress', 'On Hold', 'Resolved', 'Closed'];
+        $statuses = ['Open', 'In Progress', 'On Hold', 'Resolved', 'Cancelled'];
         $priorities = ['Low', 'Medium', 'High', 'Critical'];
         $categories = ['Network', 'Hardware', 'Software', 'Access', 'Security'];
 

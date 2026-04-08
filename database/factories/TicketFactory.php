@@ -21,7 +21,7 @@ class TicketFactory extends Factory
         return [
             'title' => fake()->sentence(),
             'description' => fake()->paragraph(),
-            'status' => fake()->randomElement(['Open', 'In Progress', 'On Hold', 'Resolved', 'Closed']),
+            'status' => fake()->randomElement(['Open', 'In Progress', 'On Hold', 'Resolved', 'Cancelled']),
             'priority' => fake()->randomElement(['Low', 'Medium', 'High', 'Critical']),
             'category' => fake()->randomElement(['Network', 'Hardware', 'Software', 'Access', 'Security']),
             'user_id' => User::factory(),

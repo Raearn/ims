@@ -38,7 +38,7 @@ class TicketBulkActionsTest extends TestCase
     public function test_bulk_status_requires_ticket_ids(): void
     {
         $this->actingAs($this->admin())
-            ->patch(route('tickets.bulk.status'), ['status' => 'Closed'])
+            ->patch(route('tickets.bulk.status'), ['status' => 'Cancelled'])
             ->assertSessionHasErrors('ticket_ids');
     }
 
@@ -95,7 +95,7 @@ class TicketBulkActionsTest extends TestCase
 
         $this->patch(route('tickets.bulk.status'), [
             'ticket_ids' => [$ticket->id],
-            'status' => 'Closed',
+            'status' => 'Cancelled',
         ])->assertRedirect(route('login'));
     }
 
@@ -106,7 +106,7 @@ class TicketBulkActionsTest extends TestCase
         $this->actingAs(User::factory()->create())
             ->patch(route('tickets.bulk.status'), [
                 'ticket_ids' => [$ticket->id],
-                'status' => 'Closed',
+                'status' => 'Cancelled',
             ])->assertForbidden();
     }
 

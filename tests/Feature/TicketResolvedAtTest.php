@@ -11,7 +11,7 @@ class TicketResolvedAtTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_model_preserves_resolved_at_when_status_moves_from_resolved_to_closed(): void
+    public function test_model_preserves_resolved_at_when_status_moves_from_resolved_to_cancelled(): void
     {
         $admin = User::factory()->admin()->create();
         $this->actingAs($admin);
@@ -22,7 +22,7 @@ class TicketResolvedAtTest extends TestCase
         $resolvedAt = $ticket->fresh()->resolved_at;
         $this->assertNotNull($resolvedAt);
 
-        $ticket->update(['status' => 'Closed']);
+        $ticket->update(['status' => 'Cancelled']);
 
         $this->assertTrue($resolvedAt->equalTo($ticket->fresh()->resolved_at));
     }
@@ -40,19 +40,19 @@ class TicketResolvedAtTest extends TestCase
         $this->assertNull($ticket->fresh()->resolved_at);
     }
 
-    public function test_bulk_close_preserves_resolved_at(): void
+    public function test_bulk_cancel_preserves_resolved_at(): void
     {
         $admin = User::factory()->admin()->create();
         $this->actingAs($admin);
 
         $ticket = Ticket::factory()->create(['status' => 'In Progress']);
-        $ticket->update(['status' => 'Resolved', 'solution' => 'Bulk close test']);
+        $ticket->update(['status' => 'Resolved', 'solution' => 'Bulk cancel test']);
         $resolvedAt = $ticket->fresh()->resolved_at;
         $this->assertNotNull($resolvedAt);
 
         $this->patch(route('tickets.bulk.status'), [
             'ticket_ids' => [$ticket->id],
-            'status' => 'Closed',
+            'status' => 'Cancelled',
         ])->assertRedirect();
 
         $this->assertTrue($resolvedAt->equalTo($ticket->fresh()->resolved_at));

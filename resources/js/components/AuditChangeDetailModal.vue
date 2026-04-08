@@ -222,7 +222,7 @@ function formatUserRoleLabel(role: string): string {
                                 <Ticket class="h-4 w-4" />
                             </span>
                             <div class="min-w-0">
-                                <p class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/90">Ticket</p>
+                                <p class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/90">Incident</p>
                                 <template v-if="entry.ticketId">
                                     <p class="mt-1 font-mono text-xs font-bold text-primary">
                                         {{ entry.ticketTktId }}
@@ -231,7 +231,7 @@ function formatUserRoleLabel(role: string): string {
                                         {{ entry.ticketTitle }}
                                     </p>
                                 </template>
-                                <p v-else class="mt-2 text-sm text-muted-foreground">No ticket linked</p>
+                                <p v-else class="mt-2 text-sm text-muted-foreground">No incident linked</p>
                             </div>
                         </div>
                     </div>
@@ -324,12 +324,12 @@ function formatUserRoleLabel(role: string): string {
                                 <LayoutList class="h-4 w-4" />
                             </span>
                             <h3 class="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                                Ticket snapshot
+                                Incident snapshot
                             </h3>
                             <Separator class="flex-1 bg-border/60" />
                         </div>
                         <p class="-mt-1 text-xs text-muted-foreground">
-                            Current ticket state (overview, history, and comments).
+                            Current incident state (overview, history, and comments).
                         </p>
                         <div
                             class="overflow-hidden rounded-2xl border border-border/50 bg-card shadow-md ring-1 ring-black/[0.03] dark:ring-white/[0.06]"

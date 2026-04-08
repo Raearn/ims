@@ -52,7 +52,7 @@ interface Props {
     storageWritable: boolean;
     dbStats: {
         users: { total: number; admins: number; supervisors: number; technicals: number };
-        tickets: { total: number; open: number; in_progress: number; on_hold: number; resolved: number; closed: number };
+        tickets: { total: number; open: number; in_progress: number; on_hold: number; resolved: number; cancelled: number };
         comments: { total: number; reactions: number; votes: number };
         auditLogCount: number;
     };
@@ -346,11 +346,11 @@ const ticketBarWidth = (count: number): string => {
                                 </div>
                                 <div class="space-y-1">
                                     <div class="flex items-center justify-between text-xs text-muted-foreground">
-                                        <span>Closed</span>
-                                        <span class="font-semibold tabular-nums">{{ dbStats.tickets.closed }}</span>
+                                        <span>Cancelled</span>
+                                        <span class="font-semibold tabular-nums">{{ dbStats.tickets.cancelled }}</span>
                                     </div>
                                     <div class="h-1.5 w-full overflow-hidden rounded-full bg-muted/60">
-                                        <div class="h-full rounded-full bg-muted-foreground/40 transition-all duration-500" :style="{ width: ticketBarWidth(dbStats.tickets.closed) }" />
+                                        <div class="h-full rounded-full bg-muted-foreground/40 transition-all duration-500" :style="{ width: ticketBarWidth(dbStats.tickets.cancelled) }" />
                                     </div>
                                 </div>
                             </div>

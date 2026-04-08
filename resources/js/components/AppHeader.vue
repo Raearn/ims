@@ -160,7 +160,7 @@ const rightNavItems: NavItem[] = [];
                             <DropdownMenuItem as-child class="cursor-pointer">
                                 <Link :href="route('tickets', { create: 'true' })" class="flex items-center w-full">
                                     <Ticket class="mr-2 h-4 w-4" />
-                                    <span>Add New Ticket</span>
+                                    <span>Add New Incident</span>
                                 </Link>
                             </DropdownMenuItem>
                             <DropdownMenuItem as-child class="cursor-pointer">

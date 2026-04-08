@@ -9,12 +9,12 @@ import RichTextEditor from '@/components/RichTextEditor.vue';
 import TicketComments from '@/components/TicketComments.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, Link, useForm } from '@inertiajs/vue3';
+import { Head, router, Link, useForm, usePage } from '@inertiajs/vue3';
 import { VisAxis, VisLine, VisXYContainer, VisArea } from '@unovis/vue';
 import { ChartCrosshair } from '@/components/ui/chart';
 import DonutChart from '@/components/DonutChart.vue';
 import { CurveType } from '@unovis/ts';
-import { AlertCircle, AlertTriangle, Ban, CheckCircle2, Circle, Clock, ImageIcon, Loader2, ListOrdered, Minus, Pause, Play, TrendingUp, BarChart2, PieChart, TrendingDown, RefreshCcw, ChevronRight, ArrowUpRight, UserPlus, MoreHorizontal, Search, X, MessageSquare, Crown, ShieldCheck, Headset, UserRound, Settings, Database, FileText } from 'lucide-vue-next';
+import { AlertCircle, AlertTriangle, Ban, CheckCircle2, Circle, Clock, ImageIcon, Loader2, ListOrdered, Pause, Play, BarChart2, PieChart, RefreshCcw, ChevronRight, ArrowUpRight, UserPlus, MoreHorizontal, Search, X, MessageSquare, Crown, ShieldCheck, Headset, UserRound, Settings, Database, FileText } from 'lucide-vue-next';
 import { cn } from '@/lib/utils';
 import { laravelFetch } from '@/lib/laravelFetch';
 import Sparkline from '@/components/Sparkline.vue';
@@ -25,15 +25,9 @@ interface Stat {
     title: string;
     value: string | number;
     description: string;
-    trend: string;
-    isUp: boolean;
-    /** When false, trend badge omits the directional arrow (e.g. "—" or non-comparable). */
-    showTrendArrow?: boolean;
     sparkline: number[];
     sparklineValueSuffix?: string;
     stroke: string;
-    textColor: string;
-    cardBg: string;
 }
 
 interface ChartItem {
@@ -55,9 +49,6 @@ interface TopRecurringTagRow {
     rank: number;
     tag: string;
     count: number;
-    previous_count: number | null;
-    trend: 'up' | 'down' | 'neutral' | 'new';
-    change: number | null;
 }
 
 interface ActivityItem {
@@ -117,14 +108,6 @@ interface SeverityTicket {
     createdAtFormatted: string; time: string;
 }
 
-interface ChartTrend {
-    /** Percentage change when comparable; null when prior baseline was zero. */
-    value: number | null;
-    isUp: boolean;
-    display: string;
-    showTrendArrow: boolean;
-}
-
 interface TicketStatusConfig {
     id: number;
     name: string;
@@ -150,7 +133,6 @@ const {
     periodLabel,
     sparklineLabels,
     trendData,
-    chartTrend,
     severities,
     categories,
     priorityLegend,
@@ -166,7 +148,6 @@ const {
     periodLabel: string;
     sparklineLabels: string[];
     trendData: TrendPoint[];
-    chartTrend: ChartTrend;
     severities: ChartItem[];
     categories: ChartItem[];
     priorityLegend: PriorityLegendItem[];
@@ -254,31 +235,6 @@ function categorySlicePct(count: number): number {
     return t > 0 ? (count / t) * 100 : 0;
 }
 
-function topRecurringTrendTitle(row: TopRecurringTagRow): string {
-    if (row.previous_count === null) {
-        return 'No prior-period comparison for this reporting window';
-    }
-    const prior = row.previous_count;
-    const cur = row.count;
-    return `Prior period: ${prior} ticket${prior === 1 ? '' : 's'} · Current: ${cur} ticket${cur === 1 ? '' : 's'}`;
-}
-
-function topRecurringTrendClass(row: TopRecurringTagRow): string {
-    if (row.previous_count === null) {
-        return 'bg-muted/80 text-muted-foreground';
-    }
-    if (row.trend === 'new') {
-        return 'bg-sky-500/10 text-sky-600 dark:text-sky-400';
-    }
-    if (row.trend === 'neutral') {
-        return 'bg-muted/80 text-muted-foreground';
-    }
-    if (row.trend === 'up') {
-        return 'bg-rose-500/10 text-rose-600 dark:text-rose-400';
-    }
-    return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400';
-}
-
 // Static color palettes per stat index so Tailwind can detect them at build time
 const statColors = [
     {
@@ -353,7 +309,7 @@ const statusDot: Record<string, string> = {
     'In Progress': 'bg-orange-400',
     'On Hold':   'bg-yellow-400',
     Resolved:    'bg-emerald-500',
-    Closed:      'bg-muted-foreground/40',
+    Cancelled:   'bg-muted-foreground/40',
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -370,7 +326,8 @@ const getStatusColor = (status: string) => {
         case 'In Progress': return 'bg-blue-500/15 text-blue-500 border-blue-500/30';
         case 'On Hold':     return 'bg-amber-500/15 text-amber-500 border-amber-500/30';
         case 'Resolved':    return 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30';
-        case 'Closed':      return 'bg-slate-500/15 text-slate-500 border-slate-500/30';
+        case 'Closed': // legacy audit / old data
+        case 'Cancelled':   return 'bg-slate-500/15 text-slate-500 border-slate-500/30';
         default:            return 'bg-secondary text-secondary-foreground';
     }
 };
@@ -381,7 +338,8 @@ const getStatusIcon = (status: string) => {
         case 'In Progress': return Play;
         case 'On Hold':     return Pause;
         case 'Resolved':    return CheckCircle2;
-        case 'Closed':      return Ban;
+        case 'Closed': // legacy
+        case 'Cancelled':   return Ban;
         default:            return Circle;
     }
 };
@@ -481,6 +439,18 @@ const severityModalPriority = ref('');
 const severityModalTickets  = ref<SeverityTicket[]>([]);
 const severityModalLoading  = ref(false);
 
+function dashboardReportingPeriod(): string {
+    return String(usePage().props.period ?? '7d');
+}
+
+/** Query string for dashboard drill-down JSON routes (always includes current reporting period). */
+function dashboardPeekQueryString(additional: Record<string, string> = {}): string {
+    return new URLSearchParams({
+        period: dashboardReportingPeriod(),
+        ...additional,
+    }).toString();
+}
+
 async function openSeverityModal(priority: string) {
     severityModalPriority.value = priority;
     severityModalTickets.value  = [];
@@ -488,7 +458,8 @@ async function openSeverityModal(priority: string) {
     severityModalLoading.value  = true;
     await nextTick();
     try {
-        const res = await laravelFetch(route('tickets.by-priority', { priority }));
+        const url = `${route('tickets.by-priority', { priority })}?${dashboardPeekQueryString()}`;
+        const res = await laravelFetch(url);
         if (res.ok) severityModalTickets.value = await res.json();
     } finally {
         severityModalLoading.value = false;
@@ -507,7 +478,8 @@ async function openCategoryModal(category: string) {
     categoryModalLoading.value = true;
     await nextTick();
     try {
-        const res = await laravelFetch(route('tickets.by-category', { category }));
+        const url = `${route('tickets.by-category', { category })}?${dashboardPeekQueryString()}`;
+        const res = await laravelFetch(url);
         if (res.ok) categoryModalTickets.value = await res.json();
     } finally {
         categoryModalLoading.value = false;
@@ -526,7 +498,7 @@ async function openTopRecurringThemeModal(themeLabel: string) {
     topRecurringThemeModalLoading.value  = true;
     await nextTick();
     try {
-        const url = route('tickets.by-tag', { name: themeLabel });
+        const url = `${route('tickets.by-tag')}?${dashboardPeekQueryString({ name: themeLabel })}`;
         const res = await laravelFetch(url);
         if (res.ok) topRecurringThemeModalTickets.value = await res.json();
     } finally {
@@ -659,12 +631,11 @@ watch(isAssignModalOpen, (val) => {
                         </CardTitle>
                     </CardHeader>
                     <CardContent class="pb-4">
-                        <div class="flex items-end justify-between">
-                            <div>
+                        <div class="flex items-end justify-between gap-3">
+                            <div class="min-w-0">
                                 <div class="text-2xl font-bold tracking-tight md:text-3xl">{{ stat.value }}</div>
                             </div>
-                            <!-- Sparkline -->
-                            <div class="h-12 w-24">
+                            <div class="h-12 w-24 shrink-0">
                                 <Sparkline
                                     :data="stat.sparkline"
                                     :labels="sparklineLabels"
@@ -675,17 +646,7 @@ watch(isAssignModalOpen, (val) => {
                                 />
                             </div>
                         </div>
-                        <div class="mt-4 flex items-center gap-2">
-                            <span class="text-xs text-muted-foreground">{{ stat.description }}</span>
-                            <Badge variant="outline" :class="cn('border-none px-1.5 py-0.5 text-[10px] font-bold h-5 shadow-sm bg-white/60 dark:bg-black/20', statColors[idx]?.text)">
-                                {{ stat.trend }}
-                                <TrendingUp
-                                    v-if="stat.showTrendArrow !== false"
-                                    class="ml-0.5 h-3.5 w-3.5"
-                                    :class="stat.isUp ? '' : 'rotate-180'"
-                                />
-                            </Badge>
-                        </div>
+                        <p class="mt-2 text-xs leading-relaxed text-muted-foreground">{{ stat.description }}</p>
                     </CardContent>
                 </Card>
             </div>
@@ -697,7 +658,7 @@ watch(isAssignModalOpen, (val) => {
                     <CardHeader class="pb-4">
                         <div class="flex items-start justify-between gap-2">
                             <div>
-                                <CardTitle class="text-lg font-semibold">Recent Open Tickets</CardTitle>
+                                <CardTitle class="text-lg font-semibold">Recent Open Incidents</CardTitle>
                                 <p class="mt-0.5 text-sm text-muted-foreground">Latest unresolved incidents</p>
                             </div>
                             <button
@@ -768,13 +729,20 @@ watch(isAssignModalOpen, (val) => {
                                 <span class="font-medium text-foreground/60">{{ item.reporter }}</span>
                             </div>
                         </div>
+                        <div v-if="recentActivity.length === 0" class="flex flex-col items-center justify-center py-10 transition-all duration-300">
+                            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-muted/50 mb-3 shadow-inner">
+                                <CheckCircle2 class="h-6 w-6 text-muted-foreground/40" />
+                            </div>
+                            <p class="text-sm font-semibold text-foreground">No open incidents</p>
+                            <p class="text-xs text-muted-foreground mt-1">You're all caught up!</p>
+                        </div>
                     </CardContent>
                     <div class="mt-auto border-t border-border/50 px-6 py-3">
                         <Link
                             :href="route('tickets')"
                             class="group flex items-center justify-between text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                         >
-                            <span>View all open tickets</span>
+                            <span>View all open incidents</span>
                             <ArrowUpRight class="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                         </Link>
                     </div>
@@ -804,7 +772,7 @@ watch(isAssignModalOpen, (val) => {
                             </div>
                         </div>
                     </CardHeader>
-                    <CardContent class="flex-1 pb-0 min-w-0">
+                    <CardContent class="flex-1 min-w-0 pb-4">
                         <svg width="0" height="0" class="block">
                             <defs>
                                 <linearGradient id="roseGradient" x1="0" y1="0" x2="0" y2="1">
@@ -838,27 +806,6 @@ watch(isAssignModalOpen, (val) => {
                             </VisXYContainer>
                         </div>
                     </CardContent>
-                    <div class="mt-3 flex flex-col gap-1 border-t border-border/50 p-4 sm:p-6">
-                        <div class="flex flex-wrap items-center gap-2 text-sm font-medium">
-                            <template v-if="chartTrend.value != null && chartTrend.value > 0">
-                                {{ chartTrend.isUp ? 'Trending up' : 'Trending down' }} by {{ chartTrend.value }}% vs prior period
-                                <TrendingUp
-                                    v-if="chartTrend.showTrendArrow"
-                                    class="h-4 w-4"
-                                    :class="chartTrend.isUp ? 'text-rose-500' : 'text-emerald-500 rotate-180'"
-                                />
-                            </template>
-                            <template v-else-if="chartTrend.display === 'New'">
-                                Higher volume than the prior period (no tickets in the prior window to compare).
-                                <TrendingUp v-if="chartTrend.showTrendArrow" class="h-4 w-4 text-rose-500" />
-                            </template>
-                            <template v-else-if="chartTrend.display === '—'">
-                                Not enough data to compare with the prior period.
-                            </template>
-                            <template v-else>No change from previous period</template>
-                        </div>
-                        <p class="text-xs text-muted-foreground">New incidents compared to previous period</p>
-                    </div>
                 </Card>
 
             </div>
@@ -965,7 +912,7 @@ watch(isAssignModalOpen, (val) => {
                             <div class="min-w-0 space-y-1">
                                 <CardTitle class="text-lg font-semibold tracking-tight">Top Recurring Incidents</CardTitle>
                                 <p class="text-sm leading-relaxed text-muted-foreground">
-                                    Highest-volume themes compared to the prior period.
+                                    Highest-volume tag themes in the selected period.
                                 </p>
                             </div>
                             <div
@@ -984,7 +931,7 @@ watch(isAssignModalOpen, (val) => {
                                 :key="row.tag"
                                 role="button"
                                 tabindex="0"
-                                class="group flex cursor-pointer items-stretch gap-3 px-4 py-3.5 transition-colors hover:bg-muted/25 active:scale-[0.998] sm:gap-4 sm:px-5 sm:py-4"
+                                class="group flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-muted/25 active:scale-[0.998] sm:gap-4 sm:px-5 sm:py-4"
                                 @click="openTopRecurringThemeModal(row.tag)"
                                 @keydown.enter.prevent="openTopRecurringThemeModal(row.tag)"
                                 @keydown.space.prevent="openTopRecurringThemeModal(row.tag)"
@@ -1010,34 +957,6 @@ watch(isAssignModalOpen, (val) => {
                                             <span class="ml-1 text-[11px] font-medium text-muted-foreground">{{ row.count === 1 ? 'ticket' : 'tickets' }}</span>
                                         </span>
                                     </div>
-                                </div>
-                                <div class="flex shrink-0 flex-col items-end justify-center gap-1 pl-1">
-                                    <span class="hidden text-[9px] font-bold uppercase tracking-wider text-muted-foreground/70 sm:block">vs prior</span>
-                                    <span
-                                        :class="[
-                                            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums',
-                                            topRecurringTrendClass(row),
-                                        ]"
-                                        :title="topRecurringTrendTitle(row)"
-                                    >
-                                        <Minus v-if="row.previous_count === null" class="h-3 w-3 shrink-0 opacity-70" />
-                                        <template v-else-if="row.trend === 'new'">
-                                            <ArrowUpRight class="h-3 w-3 shrink-0" />
-                                            <span>New</span>
-                                        </template>
-                                        <template v-else-if="row.trend === 'neutral'">
-                                            <Minus class="h-3 w-3 shrink-0 opacity-80" />
-                                            <span>0%</span>
-                                        </template>
-                                        <template v-else-if="row.trend === 'up'">
-                                            <TrendingUp class="h-3 w-3 shrink-0" />
-                                            <span>+{{ row.change }}%</span>
-                                        </template>
-                                        <template v-else>
-                                            <TrendingDown class="h-3 w-3 shrink-0" />
-                                            <span>{{ row.change }}%</span>
-                                        </template>
-                                    </span>
                                 </div>
                             </li>
                         </ul>
@@ -1468,7 +1387,7 @@ watch(isAssignModalOpen, (val) => {
                             <DialogTitle class="text-base font-bold">{{ severityModalPriority }} Priority Tickets</DialogTitle>
                         </div>
                         <DialogDescription class="text-xs text-muted-foreground">
-                            All tickets with {{ severityModalPriority.toLowerCase() }} severity
+                            {{ severityModalPriority }} priority · tickets created in {{ periodLabel }}
                         </DialogDescription>
                     </DialogHeader>
                 </div>
@@ -1486,7 +1405,7 @@ watch(isAssignModalOpen, (val) => {
                         <div class="flex flex-col items-center gap-3 text-center">
                             <Loader2 class="h-9 w-9 animate-spin text-primary" aria-hidden="true" />
                             <p class="text-sm font-medium text-foreground">Loading tickets…</p>
-                            <p class="text-xs text-muted-foreground max-w-[240px]">Fetching {{ severityModalPriority.toLowerCase() }} priority incidents</p>
+                            <p class="text-xs text-muted-foreground max-w-[240px]">Fetching {{ severityModalPriority.toLowerCase() }} priority for {{ periodLabel }}</p>
                         </div>
                         <div class="w-full max-w-md flex flex-col gap-2.5">
                             <div v-for="i in 5" :key="i" class="flex gap-3 rounded-lg border border-border/40 bg-muted/20 p-3">
@@ -1503,7 +1422,7 @@ watch(isAssignModalOpen, (val) => {
                     <!-- Empty -->
                     <div v-else-if="!severityModalTickets.length" class="flex flex-col items-center justify-center gap-3 py-12 text-center">
                         <AlertCircle class="h-8 w-8 text-muted-foreground/40" />
-                        <p class="text-sm text-muted-foreground">No {{ severityModalPriority.toLowerCase() }} priority tickets found.</p>
+                        <p class="text-sm text-muted-foreground">No {{ severityModalPriority.toLowerCase() }} priority tickets in {{ periodLabel }}.</p>
                     </div>
 
                     <!-- Ticket rows -->
@@ -1560,7 +1479,7 @@ watch(isAssignModalOpen, (val) => {
                             <DialogTitle class="text-base font-bold">{{ categoryModalName }} Tickets</DialogTitle>
                         </div>
                         <DialogDescription class="text-xs text-muted-foreground">
-                            All tickets in the {{ categoryModalName }} category
+                            {{ categoryModalName }} category · tickets created in {{ periodLabel }}
                         </DialogDescription>
                     </DialogHeader>
                 </div>
@@ -1578,7 +1497,7 @@ watch(isAssignModalOpen, (val) => {
                         <div class="flex flex-col items-center gap-3 text-center">
                             <Loader2 class="h-9 w-9 animate-spin text-primary" aria-hidden="true" />
                             <p class="text-sm font-medium text-foreground">Loading tickets…</p>
-                            <p class="text-xs text-muted-foreground max-w-[240px]">Fetching incidents in {{ categoryModalName }}</p>
+                            <p class="text-xs text-muted-foreground max-w-[240px]">Fetching {{ categoryModalName }} for {{ periodLabel }}</p>
                         </div>
                         <div class="w-full max-w-md flex flex-col gap-2.5">
                             <div v-for="i in 5" :key="i" class="flex gap-3 rounded-lg border border-border/40 bg-muted/20 p-3">
@@ -1595,7 +1514,7 @@ watch(isAssignModalOpen, (val) => {
                     <!-- Empty -->
                     <div v-else-if="!categoryModalTickets.length" class="flex flex-col items-center justify-center gap-3 py-12 text-center">
                         <AlertCircle class="h-8 w-8 text-muted-foreground/40" />
-                        <p class="text-sm text-muted-foreground">No tickets found in the {{ categoryModalName }} category.</p>
+                        <p class="text-sm text-muted-foreground">No tickets in {{ categoryModalName }} for {{ periodLabel }}.</p>
                     </div>
 
                     <!-- Ticket rows -->
@@ -1651,7 +1570,7 @@ watch(isAssignModalOpen, (val) => {
                             <DialogTitle class="text-base font-bold">{{ topRecurringThemeModalLabel }}</DialogTitle>
                         </div>
                         <DialogDescription class="text-xs text-muted-foreground">
-                            All tickets linked to this theme
+                            Tickets with this tag created in {{ periodLabel }}
                         </DialogDescription>
                     </DialogHeader>
                 </div>

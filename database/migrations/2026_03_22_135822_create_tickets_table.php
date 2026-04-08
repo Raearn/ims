@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->string('title');
             $table->text('description')->nullable();
-            $table->string('status')->default('Open'); // Open, In Progress, Resolved, Closed
+            $table->string('status')->default('Open'); // Open, In Progress, On Hold, Resolved, Cancelled
             $table->string('priority')->default('Medium'); // Low, Medium, High, Critical
             $table->string('category'); // Network, Hardware, Software, Access, Security
             $table->foreignId('user_id')->constrained()->onDelete('cascade'); // The reporter

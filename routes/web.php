@@ -37,7 +37,7 @@ Route::get('/', function () {
         return redirect()->route('dashboard'); // technical users or others can have a default too
     }
 
-    return Inertia::render('Welcome');
+    return redirect()->route('login');
 })->name('home');
 
 Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(function () {
@@ -53,8 +53,8 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
             'action' => 'tickets_export_excel',
             'old_value' => null,
             'new_value' => $count !== null
-                ? "Exported {$count} ticket(s)"
-                : 'Tickets list (Excel)',
+                ? "Exported {$count} incident(s)"
+                : 'Incidents list (Excel)',
             'created_at' => now(),
         ]);
 
@@ -63,8 +63,16 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     Route::get('tickets/by-priority/{priority}', function (string $priority) {
+        $validated = request()->validate([
+            'period' => ['sometimes', 'string', Rule::in(['7d', '30d', 'this_month', 'last_month', 'ytd', 'all'])],
+        ]);
+        $period = $validated['period'] ?? '7d';
+        [$windowStart, $windowEnd] = DashboardController::reportingPeriodBounds($period);
+
         $tickets = Ticket::with(['reporter', 'handlers', 'tags'])
             ->where('priority', $priority)
+            ->where('created_at', '>=', $windowStart)
+            ->where('created_at', '<=', $windowEnd)
             ->latest()
             ->get()
             ->map(fn ($t) => [
@@ -90,8 +98,16 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
     })->name('tickets.by-priority');
 
     Route::get('tickets/by-category/{category}', function (string $category) {
+        $validated = request()->validate([
+            'period' => ['sometimes', 'string', Rule::in(['7d', '30d', 'this_month', 'last_month', 'ytd', 'all'])],
+        ]);
+        $period = $validated['period'] ?? '7d';
+        [$windowStart, $windowEnd] = DashboardController::reportingPeriodBounds($period);
+
         $tickets = Ticket::with(['reporter', 'handlers', 'tags'])
             ->where('category', $category)
+            ->where('created_at', '>=', $windowStart)
+            ->where('created_at', '<=', $windowEnd)
             ->latest()
             ->get()
             ->map(fn ($t) => [
@@ -119,7 +135,11 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
     Route::get('tickets/by-tag', function () {
         $validated = request()->validate([
             'name' => ['required', 'string', 'max:255'],
+            'period' => ['sometimes', 'string', Rule::in(['7d', '30d', 'this_month', 'last_month', 'ytd', 'all'])],
         ]);
+
+        $period = $validated['period'] ?? '7d';
+        [$windowStart, $windowEnd] = DashboardController::reportingPeriodBounds($period);
 
         $tag = Tag::where('name', $validated['name'])->first();
         if ($tag === null) {
@@ -128,6 +148,8 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
 
         $tickets = Ticket::with(['reporter', 'handlers', 'tags'])
             ->whereHas('tags', fn ($q) => $q->where('tags.id', $tag->id))
+            ->where('created_at', '>=', $windowStart)
+            ->where('created_at', '<=', $windowEnd)
             ->latest()
             ->get()
             ->map(fn ($t) => [
@@ -1362,7 +1384,7 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
             'in_progress' => Ticket::where('status', 'In Progress')->count(),
             'on_hold' => Ticket::where('status', 'On Hold')->count(),
             'resolved' => Ticket::where('status', 'Resolved')->count(),
-            'closed' => Ticket::where('status', 'Closed')->count(),
+            'cancelled' => Ticket::where('status', 'Cancelled')->count(),
         ];
 
         $commentStats = [

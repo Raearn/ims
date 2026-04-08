@@ -31,7 +31,7 @@ class CheckSlaBreaches extends Command
 
         foreach (self::SLA_HOURS as $priority => $hours) {
             $breachedTickets = Ticket::with(['handlers', 'reporter'])
-                ->whereNotIn('status', ['Resolved', 'Closed'])
+                ->whereNotIn('status', ['Resolved', 'Cancelled'])
                 ->where('priority', $priority)
                 ->where('created_at', '<=', now()->subHours($hours))
                 ->get();

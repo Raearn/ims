@@ -152,6 +152,7 @@ class SettingsController extends Controller
         ]);
 
         $this->assertBuiltInCategoryNamesPreserved($validated['categories']);
+        $this->assertBuiltInCategoryIconsMatchDefaults($validated['categories']);
 
         $beforeSnapshot = TicketCategory::query()
             ->orderBy('sort_order')
@@ -230,6 +231,8 @@ class SettingsController extends Controller
         ]);
 
         $this->assertBuiltInPriorityNamesPreserved($validated['priorities']);
+        $this->assertBuiltInPriorityIconsMatchDefaults($validated['priorities']);
+        $this->assertBuiltInPriorityColorsMatchDefaults($validated['priorities']);
 
         $beforeSnapshot = TicketPriority::query()
             ->orderBy('sort_order')
@@ -319,6 +322,8 @@ class SettingsController extends Controller
 
         $this->assertBuiltInStatusNamesPreserved($validated['statuses']);
         $this->assertBuiltInStatusHandlerRequirementsMatchDefaults($validated['statuses']);
+        $this->assertBuiltInStatusIconsMatchDefaults($validated['statuses']);
+        $this->assertBuiltInStatusColorsMatchDefaults($validated['statuses']);
 
         $beforeSnapshot = TicketStatus::query()
             ->orderBy('sort_order')
@@ -502,6 +507,126 @@ class SettingsController extends Controller
             if ($actual !== $expected) {
                 throw ValidationException::withMessages([
                     "statuses.{$index}.handler_requirement" => 'Handler assignment rules for built-in statuses cannot be changed.',
+                ]);
+            }
+        }
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     */
+    private function assertBuiltInCategoryIconsMatchDefaults(array $rows): void
+    {
+        $defaults = TicketConfigDefaults::protectedCategoryIconByName();
+
+        foreach ($rows as $index => $row) {
+            $name = trim((string) ($row['name'] ?? ''));
+            if ($name === '' || ! isset($defaults[$name])) {
+                continue;
+            }
+
+            $expectedIcon = $defaults[$name];
+            $actualIcon = (string) ($row['icon'] ?? '');
+
+            if ($actualIcon !== $expectedIcon) {
+                throw ValidationException::withMessages([
+                    "categories.{$index}.icon" => "The label and icon for \"{$name}\" are fixed and cannot be changed.",
+                ]);
+            }
+        }
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     */
+    private function assertBuiltInPriorityIconsMatchDefaults(array $rows): void
+    {
+        $defaults = TicketConfigDefaults::priorityIconByName();
+
+        foreach ($rows as $index => $row) {
+            $name = trim((string) ($row['name'] ?? ''));
+            if ($name === '' || ! isset($defaults[$name])) {
+                continue;
+            }
+
+            $expectedIcon = $defaults[$name];
+            $actualIcon = (string) ($row['icon'] ?? '');
+
+            if ($actualIcon !== $expectedIcon) {
+                throw ValidationException::withMessages([
+                    "priorities.{$index}.icon" => "The label and icon for \"{$name}\" are fixed and cannot be changed.",
+                ]);
+            }
+        }
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     */
+    private function assertBuiltInStatusIconsMatchDefaults(array $rows): void
+    {
+        $defaults = TicketConfigDefaults::statusIconByName();
+
+        foreach ($rows as $index => $row) {
+            $name = trim((string) ($row['name'] ?? ''));
+            if ($name === '' || ! isset($defaults[$name])) {
+                continue;
+            }
+
+            $expectedIcon = $defaults[$name];
+            $actualIcon = (string) ($row['icon'] ?? '');
+
+            if ($actualIcon !== $expectedIcon) {
+                throw ValidationException::withMessages([
+                    "statuses.{$index}.icon" => "The label and icon for \"{$name}\" are fixed and cannot be changed.",
+                ]);
+            }
+        }
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     */
+    private function assertBuiltInPriorityColorsMatchDefaults(array $rows): void
+    {
+        $defaults = TicketConfigDefaults::priorityColorByName();
+
+        foreach ($rows as $index => $row) {
+            $name = trim((string) ($row['name'] ?? ''));
+            if ($name === '' || ! isset($defaults[$name])) {
+                continue;
+            }
+
+            $expected = strtolower(trim($defaults[$name]));
+            $actual = strtolower(trim((string) ($row['color'] ?? '')));
+
+            if ($actual !== $expected) {
+                throw ValidationException::withMessages([
+                    "priorities.{$index}.color" => "The colour for \"{$name}\" is fixed and cannot be changed.",
+                ]);
+            }
+        }
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     */
+    private function assertBuiltInStatusColorsMatchDefaults(array $rows): void
+    {
+        $defaults = TicketConfigDefaults::statusColorByName();
+
+        foreach ($rows as $index => $row) {
+            $name = trim((string) ($row['name'] ?? ''));
+            if ($name === '' || ! isset($defaults[$name])) {
+                continue;
+            }
+
+            $expected = strtolower(trim($defaults[$name]));
+            $actual = strtolower(trim((string) ($row['color'] ?? '')));
+
+            if ($actual !== $expected) {
+                throw ValidationException::withMessages([
+                    "statuses.{$index}.color" => "The colour for \"{$name}\" is fixed and cannot be changed.",
                 ]);
             }
         }

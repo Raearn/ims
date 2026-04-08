@@ -219,7 +219,7 @@ class AuditLogTest extends TestCase
             'user_id' => $admin->id,
             'action' => 'status_changed',
             'old_value' => 'Open',
-            'new_value' => 'Closed',
+            'new_value' => 'Cancelled',
             'created_at' => now()->subDays(10),
         ]);
 
@@ -240,8 +240,8 @@ class AuditLogTest extends TestCase
                 ->where('filters.from', $today)
                 ->where('filters.to', $today)
                 ->where('activities.data', fn ($data) =>
-                    // status_changed (Closed) from 10 days ago must not be present
-                    collect($data)->every(fn ($row) => ! ($row['action'] === 'status_changed' && $row['newValue'] === 'Closed'))
+                    // status_changed (Cancelled) from 10 days ago must not be present
+                    collect($data)->every(fn ($row) => ! ($row['action'] === 'status_changed' && $row['newValue'] === 'Cancelled'))
                 )
             );
     }
@@ -368,7 +368,7 @@ class AuditLogTest extends TestCase
             'user_id' => $admin->id,
             'ticket_id' => null,
             'action' => 'tickets_export_excel',
-            'new_value' => 'Exported 12 ticket(s)',
+            'new_value' => 'Exported 12 incident(s)',
         ]);
     }
 

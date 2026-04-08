@@ -29,7 +29,7 @@ class ReportGenerationService
             : 0;
 
         // Open tickets backlog (overall backlog, not just from the last X days)
-        $backlog = Ticket::whereIn('status', ['Open', 'In Progress'])->count();
+        $backlog = Ticket::whereIn('status', ['Open', 'In Progress', 'On Hold'])->count();
 
         // 2. Breakdowns
         $byPriority = Ticket::where('created_at', '>=', $startDate)
@@ -54,7 +54,7 @@ class ReportGenerationService
         $workload = User::select('users.id', 'users.name')
             ->withCount([
                 'handledTickets as open_tickets_count' => function ($query) {
-                    $query->whereIn('status', ['Open', 'In Progress']);
+                    $query->whereIn('status', ['Open', 'In Progress', 'On Hold']);
                 },
                 'handledTickets as resolved_tickets_count' => function ($query) use ($startDate) {
                     $query->where('status', 'Resolved')->where('resolved_at', '>=', $startDate);
@@ -95,7 +95,7 @@ class ReportGenerationService
         }
 
         // 5. Action Items
-        $staleTickets = Ticket::whereIn('status', ['Open', 'In Progress'])
+        $staleTickets = Ticket::whereIn('status', ['Open', 'In Progress', 'On Hold'])
             ->orderBy('created_at', 'asc')
             ->take(5)
             ->get();

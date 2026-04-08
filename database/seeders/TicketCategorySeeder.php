@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\TicketCategory;
+use App\Support\TicketConfigDefaults;
 use Illuminate\Database\Seeder;
 
 class TicketCategorySeeder extends Seeder
@@ -12,16 +13,7 @@ class TicketCategorySeeder extends Seeder
      */
     public function run(): void
     {
-        $categories = [
-            ['name' => 'Network', 'icon' => 'Wifi'],
-            ['name' => 'Software', 'icon' => 'MonitorPlay'],
-            ['name' => 'Hardware', 'icon' => 'MonitorSmartphone'],
-            ['name' => 'Security', 'icon' => 'ShieldAlert'],
-            ['name' => 'Access', 'icon' => 'Key'],
-            ['name' => 'Others', 'icon' => 'HelpCircle'],
-        ];
-
-        foreach ($categories as $index => $category) {
+        foreach (TicketConfigDefaults::categories() as $index => $category) {
             TicketCategory::updateOrCreate(
                 ['name' => $category['name']],
                 array_merge($category, ['sort_order' => $index])

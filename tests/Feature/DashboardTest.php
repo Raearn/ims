@@ -32,8 +32,13 @@ class DashboardTest extends TestCase
         $response = $this->get(route('dashboard'));
         $response->assertStatus(200)
             ->assertInertia(fn ($page) => $page
+                ->has('trendData')
                 ->has('sparklineLabels')
                 ->where('sparklineLabels', fn ($labels) => count($labels) === 11)
+                ->has('stats.0.title')
+                ->has('stats.0.value')
+                ->has('stats.0.description')
+                ->has('stats.0.sparkline')
                 ->has('stats.0.sparklineValueSuffix')
                 ->has('priorityLegend')
                 ->has('categoryLegend')
@@ -67,54 +72,6 @@ class DashboardTest extends TestCase
         // CheckRole middleware currently redirects based on role
         // For technical, it hits the abort(403)
         $response->assertStatus(403);
-    }
-
-    public function test_dashboard_open_incidents_trend_shows_new_when_prior_window_has_no_matching_tickets(): void
-    {
-        if (config('database.default') !== 'mysql' && config('database.default') !== 'mariadb') {
-            $this->markTestSkipped('This test requires MySQL for TIMESTAMPDIFF function.');
-        }
-
-        $user = User::factory()->create(['role' => 'admin']);
-        Ticket::factory()->count(2)->create([
-            'status' => 'Open',
-            'created_at' => now()->subDays(2),
-        ]);
-
-        $this->actingAs($user);
-
-        $this->get(route('dashboard'))
-            ->assertOk()
-            ->assertInertia(fn ($page) => $page
-                ->where('stats.0.trend', 'New')
-                ->where('stats.0.showTrendArrow', true)
-            );
-    }
-
-    public function test_dashboard_open_incidents_trend_percent_matches_prior_and_current_counts(): void
-    {
-        if (config('database.default') !== 'mysql' && config('database.default') !== 'mariadb') {
-            $this->markTestSkipped('This test requires MySQL for TIMESTAMPDIFF function.');
-        }
-
-        $user = User::factory()->create(['role' => 'admin']);
-        Ticket::factory()->create([
-            'status' => 'Open',
-            'created_at' => now()->subDays(10),
-        ]);
-        Ticket::factory()->count(3)->create([
-            'status' => 'Open',
-            'created_at' => now()->subDays(2),
-        ]);
-
-        $this->actingAs($user);
-
-        $this->get(route('dashboard'))
-            ->assertOk()
-            ->assertInertia(fn ($page) => $page
-                ->where('stats.0.trend', '200%')
-                ->where('stats.0.showTrendArrow', true)
-            );
     }
 
     public function test_dashboard_top_recurring_lists_tags_by_ticket_volume_in_period(): void
@@ -160,7 +117,7 @@ class DashboardTest extends TestCase
             'created_at' => $resolvedAt->copy()->subHours(2),
         ]);
         Ticket::factory()->create([
-            'status' => 'Closed',
+            'status' => 'Cancelled',
             'resolved_at' => $resolvedAt,
             'created_at' => $resolvedAt->copy()->subHours(2),
         ]);

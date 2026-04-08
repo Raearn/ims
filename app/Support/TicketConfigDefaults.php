@@ -46,6 +46,64 @@ final class TicketConfigDefaults
     }
 
     /**
+     * Built-in category name => icon (excludes optional "Others").
+     *
+     * @return array<string, string>
+     */
+    public static function protectedCategoryIconByName(): array
+    {
+        $map = [];
+        foreach (self::categories() as $row) {
+            if ($row['name'] === 'Others') {
+                continue;
+            }
+            $map[$row['name']] = $row['icon'];
+        }
+
+        return $map;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function priorityIconByName(): array
+    {
+        return collect(self::priorities())->mapWithKeys(
+            fn (array $row): array => [$row['name'] => $row['icon']],
+        )->all();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function statusIconByName(): array
+    {
+        return collect(self::statuses())->mapWithKeys(
+            fn (array $row): array => [$row['name'] => $row['icon']],
+        )->all();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function priorityColorByName(): array
+    {
+        return collect(self::priorities())->mapWithKeys(
+            fn (array $row): array => [$row['name'] => $row['color']],
+        )->all();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function statusColorByName(): array
+    {
+        return collect(self::statuses())->mapWithKeys(
+            fn (array $row): array => [$row['name'] => $row['color']],
+        )->all();
+    }
+
+    /**
      * @return list<array{name: string, icon: string, color: string}>
      */
     public static function priorities(): array
@@ -76,7 +134,7 @@ final class TicketConfigDefaults
             ['name' => 'In Progress', 'icon' => 'Play', 'color' => '#3b82f6', 'handler_requirement' => 'required'],
             ['name' => 'On Hold', 'icon' => 'Pause', 'color' => '#f59e0b', 'handler_requirement' => 'required'],
             ['name' => 'Resolved', 'icon' => 'CheckCircle2', 'color' => '#059669', 'handler_requirement' => 'required'],
-            ['name' => 'Closed', 'icon' => 'Ban', 'color' => '#64748b', 'handler_requirement' => 'optional'],
+            ['name' => 'Cancelled', 'icon' => 'Ban', 'color' => '#64748b', 'handler_requirement' => 'optional'],
         ];
     }
 

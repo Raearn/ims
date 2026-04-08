@@ -37,17 +37,17 @@ class TicketStatusUpdateTest extends TestCase
         $ticket = Ticket::factory()->create(['status' => 'Resolved']);
 
         $this->actingAs($admin)
-            ->patch(route('tickets.status.update', $ticket), ['status' => 'Closed'])
+            ->patch(route('tickets.status.update', $ticket), ['status' => 'Cancelled'])
             ->assertRedirect();
 
-        $this->assertSame('Closed', $ticket->fresh()->status);
+        $this->assertSame('Cancelled', $ticket->fresh()->status);
     }
 
     public function test_admin_can_set_any_valid_status(): void
     {
         $admin = $this->admin();
 
-        foreach (['Open', 'In Progress', 'On Hold', 'Resolved', 'Closed'] as $status) {
+        foreach (['Open', 'In Progress', 'On Hold', 'Resolved', 'Cancelled'] as $status) {
             $ticket = Ticket::factory()->create();
 
             $data = ['status' => $status];

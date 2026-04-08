@@ -91,7 +91,7 @@ const dashboardRoute = computed(() =>
                                 <SidebarMenuButton as-child :is-active="route().current('tickets')">
                                     <Link :href="route('tickets')">
                                         <Folder />
-                                        <span class="flex-1">Tickets</span>
+                                        <span class="flex-1">Incidents</span>
                                         <span
                                             v-if="openTicketsCount && openTicketsCount > 0"
                                             class="ml-auto inline-flex items-center gap-1 rounded-full border border-rose-500/20 bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-bold leading-none text-rose-500 tabular-nums group-data-[collapsible=icon]:hidden"

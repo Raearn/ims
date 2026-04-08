@@ -144,10 +144,10 @@ const ALL_ACTIONS = [
 ] as const;
 
 const ACTION_LABELS: Record<string, string> = {
-    created:           'Ticket Created',
-    ticket_edited:     'Ticket Edited',
+    created:           'Incident Created',
+    ticket_edited:     'Incident Edited',
     dashboard_export_pdf: 'Dashboard Export (PDF)',
-    tickets_export_excel: 'Tickets Export (Excel)',
+    tickets_export_excel: 'Incidents Export (Excel)',
     status_changed:    'Status Changed',
     priority_changed:  'Priority Changed',
     solution_updated:  'Solution Updated',
@@ -164,7 +164,7 @@ const ACTION_LABELS: Record<string, string> = {
     downvote_added:    'Downvote Added',
     downvote_removed:  'Downvote Removed',
     vote_changed:      'Vote Changed',
-    ticket_deleted:    'Ticket Deleted',
+    ticket_deleted:    'Incident Deleted',
     user_login:        'User Login',
     user_logout:       'User Logout',
     user_created:      'User Created',
@@ -172,9 +172,9 @@ const ACTION_LABELS: Record<string, string> = {
     user_role_changed: 'User Role Changed',
     user_deleted:      'User Deleted',
     settings_updated:  'App Settings Updated',
-    ticket_categories_updated: 'Ticket Categories Updated',
-    ticket_priorities_updated: 'Ticket Priorities Updated',
-    ticket_statuses_updated:   'Ticket Statuses Updated',
+    ticket_categories_updated: 'Incident Categories Updated',
+    ticket_priorities_updated: 'Incident Priorities Updated',
+    ticket_statuses_updated:   'Incident Statuses Updated',
 };
 
 type IconComponent = typeof History;
@@ -441,7 +441,7 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                         Audit Log
                     </h1>
                     <p class="mt-0.5 text-sm text-muted-foreground">
-                        Tickets, comments, user roles, and admin settings (priorities, statuses, categories, app options)
+                        Incidents, comments, user roles, and admin settings (priorities, statuses, categories, app options)
                     </p>
                 </div>
 
@@ -461,7 +461,7 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                     <Input
                         v-model="filterSearch"
                         type="text"
-                        placeholder="Search title, ticket ID, action, values…"
+                        placeholder="Search title, incident ID, action, values…"
                         class="h-9 pl-9 w-full bg-background shadow-sm border-border/60 transition-colors focus-visible:border-primary"
                     />
                     <!-- Clear search shortcut hint -->
@@ -664,7 +664,7 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                                 <th class="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Date / Time</th>
                                 <th class="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Actor</th>
                                 <th class="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Action</th>
-                                <th class="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Ticket</th>
+                                <th class="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Incident</th>
                                 <th class="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Change</th>
                             </tr>
                         </thead>
@@ -742,7 +742,7 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                                     </span>
                                 </td>
 
-                                <!-- Ticket -->
+                                <!-- Incident -->
                                 <td class="px-4 py-3 min-w-0 align-middle">
                                     <template v-if="entry.ticketId">
                                         <p class="text-[10px] font-bold text-primary/70">{{ entry.ticketTktId }}</p>
@@ -778,9 +778,6 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                                                 </p>
                                             </template>
                                             <template v-else-if="entry.oldValue">
-                                                <p class="text-[10px] font-medium text-muted-foreground">
-                                                    Click row for change details
-                                                </p>
                                             </template>
                                             <span v-else class="text-[10px] text-muted-foreground/40">—</span>
                                         </div>
@@ -788,8 +785,8 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                                             v-if="entry.ticketId"
                                             type="button"
                                             class="inline-flex shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                            title="Open ticket"
-                                            aria-label="Open ticket"
+                                            title="Open incident"
+                                            aria-label="Open incident"
                                             @click.stop="openTicket(entry.ticketId)"
                                         >
                                             <ExternalLink class="h-4 w-4" />

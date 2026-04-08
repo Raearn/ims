@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\TicketPriority;
+use App\Support\TicketConfigDefaults;
 use Illuminate\Database\Seeder;
 
 class TicketPrioritySeeder extends Seeder
@@ -12,17 +13,14 @@ class TicketPrioritySeeder extends Seeder
      */
     public function run(): void
     {
-        $priorities = [
-            ['name' => 'Low', 'icon' => 'ArrowDown', 'color' => '#3b82f6'],
-            ['name' => 'Medium', 'icon' => 'Minus', 'color' => '#f59e0b'],
-            ['name' => 'High', 'icon' => 'ArrowUp', 'color' => '#f97316'],
-            ['name' => 'Critical', 'icon' => 'AlertTriangle', 'color' => '#ef4444'],
-        ];
-
-        foreach ($priorities as $index => $priority) {
+        foreach (TicketConfigDefaults::priorities() as $index => $priority) {
             TicketPriority::updateOrCreate(
                 ['name' => $priority['name']],
-                array_merge($priority, ['sort_order' => $index])
+                [
+                    'icon' => $priority['icon'],
+                    'color' => $priority['color'],
+                    'sort_order' => $index,
+                ]
             );
         }
     }

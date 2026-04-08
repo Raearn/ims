@@ -61,7 +61,7 @@ import { laravelFetch } from '@/lib/laravelFetch';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
-        title: 'Tickets',
+        title: 'Incidents',
         href: route('tickets'),
     },
 ];
@@ -194,7 +194,6 @@ const primaryQueueStatusName = computed(
 const assignModalTargetStatuses = computed(() => props.statuses.filter((s) => s.handler_requirement === 'required'));
 
 const isCreateModalOpen = ref(false);
-const currentStep = ref(1);
 
 const isDetailModalOpen = ref(false);
 const selectedTicket = ref<typeof props.tickets[0] | null>(null);
@@ -255,7 +254,6 @@ const openEditModal = (ticket: typeof props.tickets[0]) => {
     form.solution = ticket.solution ?? '';
     form.attachment = null;
     attachmentPreview.value = ticket.attachmentUrl ?? null;
-    currentStep.value = 1;
     isCreateModalOpen.value = true;
 };
 
@@ -591,13 +589,13 @@ const exportToExcel = async () => {
         workbook.creator = 'IMS';
         workbook.created = new Date();
 
-        const sheet = workbook.addWorksheet('Tickets', {
+        const sheet = workbook.addWorksheet('Incidents', {
             views: [{ state: 'frozen', ySplit: 1 }],
         });
 
         // ── Column definitions ──────────────────────────────────────────
         sheet.columns = [
-            { key: 'ticketId',   header: 'Ticket ID',   width: 13 },
+            { key: 'ticketId',   header: 'Incident ID',   width: 13 },
             { key: 'title',      header: 'Title',        width: 42 },
             { key: 'status',     header: 'Status',       width: 14 },
             { key: 'priority',   header: 'Priority',     width: 12 },
@@ -723,7 +721,7 @@ const exportToExcel = async () => {
         const url     = URL.createObjectURL(blob);
         const a       = document.createElement('a');
         a.href        = url;
-        a.download    = `tickets-${dateStr}.xlsx`;
+        a.download    = `incidents-${dateStr}.xlsx`;
         a.click();
         URL.revokeObjectURL(url);
     } finally {
@@ -748,7 +746,6 @@ const submit = () => {
                     isCreateModalOpen.value = false;
                     form.reset();
                     attachmentPreview.value = null;
-                    currentStep.value = 1;
                     editingTicket.value = null;
                 },
             }
@@ -759,7 +756,6 @@ const submit = () => {
             onSuccess: () => {
                 isCreateModalOpen.value = false;
                 form.reset();
-                currentStep.value = 1;
             },
         });
     }
@@ -767,7 +763,6 @@ const submit = () => {
 
 watch(isCreateModalOpen, (val) => {
     if (val && !editingTicket.value) {
-        currentStep.value = 1;
         form.reset();
         form.status = defaultNewTicketStatusName.value;
         attachmentPreview.value = null;
@@ -1067,7 +1062,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
 </script>
 
 <template>
-    <Head title="Tickets" />
+    <Head title="Incidents" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-4 p-3 sm:p-4 md:gap-6 md:p-6">
@@ -1098,7 +1093,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <div class="flex items-center gap-2.5">
-                        <h2 class="text-xl font-bold tracking-tight sm:text-2xl">Tickets</h2>
+                        <h2 class="text-xl font-bold tracking-tight sm:text-2xl">Incidents</h2>
                         <span
                             v-if="ticketStats.find(s => s.status === primaryQueueStatusName)?.value ?? 0 > 0"
                             class="inline-flex items-center gap-1 rounded-full bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 text-[10px] font-bold text-rose-500"
@@ -1110,7 +1105,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                             {{ ticketStats.find(s => s.status === primaryQueueStatusName)?.value }} open
                         </span>
                     </div>
-                    <p class="text-xs text-muted-foreground sm:text-sm">Manage and track all incident tickets.</p>
+                    <p class="text-xs text-muted-foreground sm:text-sm">Manage and track all incidents.</p>
                 </div>
 
                 <div class="flex items-center gap-2">
@@ -1121,7 +1116,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                             ref="searchInputRef"
                             v-model="search"
                             type="text"
-                            placeholder="Search tickets, tags, reporters…"
+                            placeholder="Search incidents, tags, reporters…"
                             class="flex h-9 w-full rounded-lg border border-input bg-background py-1 pl-9 pr-8 text-sm shadow-sm placeholder:text-muted-foreground/50 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
                         />
                         <!-- Shortcut hint (empty state) -->
@@ -1153,57 +1148,43 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                         <span class="hidden sm:inline">Export</span>
                     </button>
 
-                    <!-- New Ticket -->
+                    <!-- New Incident -->
                     <Dialog v-model:open="isCreateModalOpen">
                         <DialogTrigger as-child>
                             <Button class="h-9 shrink-0 gap-1.5 px-3 shadow-sm sm:px-4">
                                 <Plus class="h-4 w-4" />
-                                <span class="hidden sm:inline text-xs font-bold uppercase tracking-wide">New Ticket</span>
+                                <span class="hidden sm:inline text-xs font-bold uppercase tracking-wide">New Incident</span>
                             </Button>
                         </DialogTrigger>
 
                         <!-- Create / Edit Modal -->
-                        <DialogContent class="sm:max-w-[550px] p-0 overflow-hidden border-none shadow-2xl flex flex-col max-h-[92dvh]">
+                        <DialogContent class="w-[calc(100vw-1.5rem)] sm:max-w-7xl p-0 overflow-hidden border-none shadow-2xl flex flex-col max-h-[92dvh]">
                             <form @submit.prevent="submit" class="flex flex-col min-h-0 flex-1">
                                 <div class="bg-primary/5 px-5 pt-5 pb-4 border-b border-primary/10">
                                     <DialogHeader>
-                                        <div class="flex items-center justify-between mb-2">
+                                        <div class="mb-2">
                                             <Badge variant="outline" class="bg-primary/10 text-primary border-primary/20 px-2 py-0 text-[10px] font-bold uppercase tracking-wider">
-                                                {{ editingTicket ? 'Edit Ticket' : 'Incident Report' }}
+                                                {{ editingTicket ? 'Edit Incident' : 'Incident Report' }}
                                             </Badge>
-                                            <div class="flex gap-1">
-                                                <div
-                                                    v-for="i in 2"
-                                                    :key="i"
-                                                    class="h-1.5 w-8 rounded-full transition-all duration-300"
-                                                    :class="currentStep >= i ? 'bg-primary' : 'bg-primary/20'"
-                                                />
-                                            </div>
                                         </div>
                                         <DialogTitle class="text-lg font-bold tracking-tight">
-                                            <template v-if="editingTicket">
-                                                {{ currentStep === 1 ? 'Update Details' : 'Update Category & Status' }}
-                                            </template>
-                                            <template v-else>
-                                                {{ currentStep === 1 ? "What's the issue?" : 'Set Importance' }}
-                                            </template>
+                                            {{ editingTicket ? 'Update incident' : 'New incident' }}
                                         </DialogTitle>
                                         <DialogDescription class="text-muted-foreground/80 text-xs">
-                                            <template v-if="editingTicket">
-                                                {{ currentStep === 1 ? 'Update the ticket title and description.' : 'Adjust the category, priority, and status.' }}
-                                            </template>
-                                            <template v-else>
-                                                {{ currentStep === 1 ? 'Describe the incident so we can help you resolve it.' : 'Categorize and prioritize this ticket for the team.' }}
-                                            </template>
+                                            {{
+                                                editingTicket
+                                                    ? 'Update details, tags, category, priority, status, and handlers in one place.'
+                                                    : 'Describe the issue, add tags, and set category, priority, and status before launching.'
+                                            }}
                                         </DialogDescription>
                                     </DialogHeader>
                                 </div>
 
-                                <div class="modal-body px-5 py-5 min-h-[280px] overflow-y-auto flex-1">
-                                    <!-- Step 1 -->
-                                    <div v-if="currentStep === 1" class="grid gap-5 animate-in fade-in slide-in-from-right-4 duration-300">
+                                <div class="modal-body px-5 py-5 min-h-0 overflow-y-auto flex-1">
+                                    <div class="grid gap-6 lg:grid-cols-2 lg:items-start">
+                                    <div class="grid gap-5">
                                         <div class="grid gap-2">
-                                            <Label for="title" class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Ticket Title</Label>
+                                            <Label for="title" class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Incident Title</Label>
                                             <Input
                                                 id="title"
                                                 v-model="form.title"
@@ -1348,8 +1329,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                                         </div>
                                     </div>
 
-                                    <!-- Step 2 -->
-                                    <div v-if="currentStep === 2" class="grid gap-5 animate-in fade-in slide-in-from-right-4 duration-300">
+                                    <div class="grid gap-5">
                                         <div class="grid gap-3">
                                             <Label class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Category</Label>
                                             <div class="grid grid-cols-3 gap-2">
@@ -1489,48 +1469,33 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                                             <Info class="h-4 w-4 text-primary shrink-0 mt-0.5" />
                                             <p class="text-xs text-muted-foreground leading-relaxed">
                                                 <template v-if="editingTicket">
-                                                    Ticket will be updated to <span class="font-bold text-foreground">{{ form.category }}</span> / <span class="font-bold text-foreground">{{ form.priority }}</span> priority / <span class="font-bold text-foreground">{{ form.status }}</span>.
+                                                    Incident will be updated to <span class="font-bold text-foreground">{{ form.category }}</span> / <span class="font-bold text-foreground">{{ form.priority }}</span> priority / <span class="font-bold text-foreground">{{ form.status }}</span>.
                                                 </template>
                                                 <template v-else>
-                                                    Your ticket will be assigned to the <span class="font-bold text-foreground">{{ form.category }}</span> team with <span class="font-bold text-foreground">{{ form.priority }}</span> priority.
+                                                    Your incident will be assigned to the <span class="font-bold text-foreground">{{ form.category }}</span> team with <span class="font-bold text-foreground">{{ form.priority }}</span> priority.
                                                 </template>
                                             </p>
                                         </div>
                                     </div>
+                                    </div>
                                 </div>
 
                                 <DialogFooter class="px-5 py-4 bg-muted/20 border-t border-border/50">
-                                    <div class="flex w-full items-center justify-between gap-2">
-                                        <Button v-if="currentStep > 1" type="button" variant="ghost" @click="currentStep--" class="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                                            ← Back
+                                    <div class="flex w-full items-center justify-end gap-2">
+                                        <Button type="button" variant="outline" @click="isCreateModalOpen = false" class="text-xs font-bold">Cancel</Button>
+                                        <Button
+                                            type="submit"
+                                            :disabled="form.processing || !form.title || (handlerRequired && form.handler_ids.length === 0)"
+                                            class="text-xs font-bold gap-1.5 shadow-md shadow-primary/20"
+                                        >
+                                            <span v-if="!form.processing" class="flex items-center gap-1.5">
+                                                <template v-if="editingTicket">Save Changes <Save class="h-3.5 w-3.5" /></template>
+                                                <template v-else>Launch Incident <Plus class="h-3.5 w-3.5" /></template>
+                                            </span>
+                                            <span v-else class="flex items-center gap-1.5">
+                                                Processing <span class="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                                            </span>
                                         </Button>
-                                        <div v-else />
-                                        <div class="flex items-center gap-2">
-                                            <Button type="button" variant="outline" @click="isCreateModalOpen = false" class="text-xs font-bold">Cancel</Button>
-                                            <Button
-                                                v-if="currentStep < 2"
-                                                type="button"
-                                                @click="currentStep++"
-                                                :disabled="!form.title"
-                                                class="text-xs font-bold gap-1.5"
-                                            >
-                                                Next <ChevronRight class="h-3.5 w-3.5" />
-                                            </Button>
-                                            <Button
-                                                v-else
-                                                type="submit"
-                                                :disabled="form.processing || (handlerRequired && form.handler_ids.length === 0)"
-                                                class="text-xs font-bold gap-1.5 shadow-md shadow-primary/20"
-                                            >
-                                                <span v-if="!form.processing" class="flex items-center gap-1.5">
-                                                    <template v-if="editingTicket">Save Changes <Save class="h-3.5 w-3.5" /></template>
-                                                    <template v-else>Launch Ticket <Plus class="h-3.5 w-3.5" /></template>
-                                                </span>
-                                                <span v-else class="flex items-center gap-1.5">
-                                                    Processing <span class="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                                                </span>
-                                            </Button>
-                                        </div>
                                     </div>
                                 </DialogFooter>
                             </form>
@@ -1619,7 +1584,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                         <div class="h-1 w-full rounded-full bg-muted/50 overflow-hidden">
                             <div class="h-full rounded-full bg-primary/40 w-full transition-all duration-700 ease-out" />
                         </div>
-                        <span class="text-[10px] font-semibold text-muted-foreground/70">All tickets</span>
+                        <span class="text-[10px] font-semibold text-muted-foreground/70">All incidents</span>
                     </template>
                 </button>
             </div>
@@ -1778,9 +1743,9 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                             </div>
                         </div>
                         <div>
-                            <p class="font-semibold text-foreground text-sm">No tickets found</p>
+                            <p class="font-semibold text-foreground text-sm">No incidents found</p>
                             <p class="text-xs text-muted-foreground mt-1 max-w-[260px]">
-                                {{ search ? `No results for "${search}".` : 'No tickets match the current filters.' }}
+                                {{ search ? `No results for "${search}".` : 'No incidents match the current filters.' }}
                             </p>
                         </div>
                         <button
@@ -1835,10 +1800,10 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                                                     </button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end" class="w-48">
-                                                    <DropdownMenuLabel>Ticket Actions</DropdownMenuLabel>
+                                                    <DropdownMenuLabel>Incident Actions</DropdownMenuLabel>
                                                     <DropdownMenuSeparator />
                                                     <DropdownMenuItem @click="openDetailModal(ticket)"><ExternalLink class="mr-2 h-4 w-4" />View Details</DropdownMenuItem>
-                                                    <DropdownMenuItem @click="openEditModal(ticket)"><Pencil class="mr-2 h-4 w-4" />Edit Ticket</DropdownMenuItem>
+                                                    <DropdownMenuItem @click="openEditModal(ticket)"><Pencil class="mr-2 h-4 w-4" />Edit Incident</DropdownMenuItem>
                                                     <DropdownMenuItem @click="openAssignModal(ticket)">
                                                         <UserPlus class="mr-2 h-4 w-4" />
                                                         Assign Handler
@@ -1849,7 +1814,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                                                     </DropdownMenuItem>
                                                     <DropdownMenuSeparator />
                                                     <DropdownMenuItem
-                                                        v-if="ticket.status !== 'Resolved' && ticket.status !== 'Closed'"
+                                                        v-if="ticket.status !== 'Resolved' && ticket.status !== 'Cancelled'"
                                                         @click="isStatusNoHandlers(ticket.status) ? openAssignModal(ticket, 'Resolved') : updateStatus(ticket, 'Resolved')"
                                                         :disabled="statusProcessing === ticket.numericId"
                                                         class="text-emerald-600 focus:bg-emerald-50 focus:text-emerald-700 dark:text-emerald-400 dark:focus:bg-emerald-950/40 dark:focus:text-emerald-300"
@@ -1859,17 +1824,17 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                                                         Mark as Resolved
                                                     </DropdownMenuItem>
                                                     <DropdownMenuItem
-                                                        v-if="!['Resolved', 'Closed'].includes(ticket.status)"
-                                                        @click="updateStatus(ticket, 'Closed')"
+                                                        v-if="!['Resolved', 'Cancelled'].includes(ticket.status)"
+                                                        @click="updateStatus(ticket, 'Cancelled')"
                                                         :disabled="statusProcessing === ticket.numericId"
                                                         class="text-slate-500 focus:bg-slate-100 focus:text-slate-700 dark:text-slate-400 dark:focus:bg-slate-800/50 dark:focus:text-slate-300"
                                                     >
                                                         <span v-if="statusProcessing === ticket.numericId" class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent inline-block" />
                                                         <Lock v-else class="mr-2 h-4 w-4" />
-                                                        Close Ticket
+                                                        Mark as Cancelled
                                                     </DropdownMenuItem>
                                                     <DropdownMenuSeparator />
-                                                    <DropdownMenuItem @click="openDeleteModal(ticket)" class="text-destructive focus:bg-destructive/10 focus:text-destructive"><Trash2 class="mr-2 h-4 w-4" />Delete Ticket</DropdownMenuItem>
+                                                    <DropdownMenuItem @click="openDeleteModal(ticket)" class="text-destructive focus:bg-destructive/10 focus:text-destructive"><Trash2 class="mr-2 h-4 w-4" />Delete Incident</DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
                                         </div>
@@ -1953,7 +1918,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                                     </th>
                                     <th class="px-3 py-3.5">
                                         <button @click="toggleSort('title')" class="inline-flex items-center gap-1 hover:text-foreground transition-colors">
-                                            Ticket
+                                            Incident
                                             <ChevronUp v-if="sortKey === 'title' && sortDir === 'asc'" class="h-3 w-3 text-primary" />
                                             <ChevronDown v-else-if="sortKey === 'title' && sortDir === 'desc'" class="h-3 w-3 text-primary" />
                                             <ChevronsUpDown v-else class="h-3 w-3 opacity-30" />
@@ -2084,7 +2049,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                                         <!-- Inline quick actions (visible on hover) -->
                                         <div class="flex items-center justify-end gap-1">
                                             <button
-                                                v-if="ticket.status !== 'Resolved' && ticket.status !== 'Closed'"
+                                                v-if="ticket.status !== 'Resolved' && ticket.status !== 'Cancelled'"
                                                 @click.stop="isStatusNoHandlers(ticket.status) ? openAssignModal(ticket, 'Resolved') : updateStatus(ticket, 'Resolved')"
                                                 :disabled="statusProcessing === ticket.numericId"
                                                 class="h-7 w-7 inline-flex items-center justify-center rounded-lg text-muted-foreground/0 group-hover:text-emerald-500 hover:bg-emerald-500/10 transition-all duration-150 disabled:opacity-50"
@@ -2107,10 +2072,10 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                                                     </button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end" class="w-48">
-                                                    <DropdownMenuLabel>Ticket Actions</DropdownMenuLabel>
+                                                    <DropdownMenuLabel>Incident Actions</DropdownMenuLabel>
                                                     <DropdownMenuSeparator />
                                                     <DropdownMenuItem @click="openDetailModal(ticket)"><ExternalLink class="mr-2 h-4 w-4" />View Details</DropdownMenuItem>
-                                                    <DropdownMenuItem @click="openEditModal(ticket)"><Pencil class="mr-2 h-4 w-4" />Edit Ticket</DropdownMenuItem>
+                                                    <DropdownMenuItem @click="openEditModal(ticket)"><Pencil class="mr-2 h-4 w-4" />Edit Incident</DropdownMenuItem>
                                                     <DropdownMenuItem @click="openAssignModal(ticket)">
                                                         <UserPlus class="mr-2 h-4 w-4" />
                                                         Assign Handler
@@ -2121,7 +2086,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                                                     </DropdownMenuItem>
                                                     <DropdownMenuSeparator />
                                                     <DropdownMenuItem
-                                                        v-if="ticket.status !== 'Resolved' && ticket.status !== 'Closed'"
+                                                        v-if="ticket.status !== 'Resolved' && ticket.status !== 'Cancelled'"
                                                         @click="isStatusNoHandlers(ticket.status) ? openAssignModal(ticket, 'Resolved') : updateStatus(ticket, 'Resolved')"
                                                         :disabled="statusProcessing === ticket.numericId"
                                                         class="text-emerald-600 focus:bg-emerald-50 focus:text-emerald-700 dark:text-emerald-400 dark:focus:bg-emerald-950/40 dark:focus:text-emerald-300"
@@ -2131,17 +2096,17 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                                                         Mark as Resolved
                                                     </DropdownMenuItem>
                                                     <DropdownMenuItem
-                                                        v-if="!['Resolved', 'Closed'].includes(ticket.status)"
-                                                        @click="updateStatus(ticket, 'Closed')"
+                                                        v-if="!['Resolved', 'Cancelled'].includes(ticket.status)"
+                                                        @click="updateStatus(ticket, 'Cancelled')"
                                                         :disabled="statusProcessing === ticket.numericId"
                                                         class="text-slate-500 focus:bg-slate-100 focus:text-slate-700 dark:text-slate-400 dark:focus:bg-slate-800/50 dark:focus:text-slate-300"
                                                     >
                                                         <span v-if="statusProcessing === ticket.numericId" class="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent inline-block" />
                                                         <Lock v-else class="mr-2 h-4 w-4" />
-                                                        Close Ticket
+                                                        Mark as Cancelled
                                                     </DropdownMenuItem>
                                                     <DropdownMenuSeparator />
-                                                    <DropdownMenuItem @click="openDeleteModal(ticket)" class="text-destructive focus:bg-destructive/10 focus:text-destructive"><Trash2 class="mr-2 h-4 w-4" />Delete Ticket</DropdownMenuItem>
+                                                    <DropdownMenuItem @click="openDeleteModal(ticket)" class="text-destructive focus:bg-destructive/10 focus:text-destructive"><Trash2 class="mr-2 h-4 w-4" />Delete Incident</DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
                                         </div>
@@ -2229,7 +2194,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                             <span class="text-[9px] font-black text-primary-foreground leading-none">{{ selectedIds.length }}</span>
                         </div>
                         <span class="text-xs font-semibold text-foreground whitespace-nowrap">
-                            ticket{{ selectedIds.length !== 1 ? 's' : '' }} selected
+                            incident{{ selectedIds.length !== 1 ? 's' : '' }} selected
                         </span>
                     </div>
 
@@ -2675,7 +2640,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                             Bulk Change Status
                         </DialogTitle>
                         <DialogDescription class="text-xs text-muted-foreground/80 mt-0.5">
-                            Applies to <span class="font-semibold text-foreground">{{ selectedIds.length }}</span> selected ticket{{ selectedIds.length !== 1 ? 's' : '' }}.
+                            Applies to <span class="font-semibold text-foreground">{{ selectedIds.length }}</span> selected incident{{ selectedIds.length !== 1 ? 's' : '' }}.
                         </DialogDescription>
                     </DialogHeader>
                 </div>
@@ -2707,7 +2672,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                         <div v-if="isStatusNoHandlers(bulkStatusValue)" class="flex items-start gap-2.5 rounded-xl border border-rose-500/20 bg-rose-500/5 px-3.5 py-2.5">
                             <AlertTriangle class="h-3.5 w-3.5 text-rose-500 shrink-0 mt-0.5" />
                             <p class="text-xs text-rose-600 dark:text-rose-400 leading-relaxed">
-                                All handlers will be <span class="font-semibold">removed</span> from the selected tickets when using a status that does not use handlers.
+                                All handlers will be <span class="font-semibold">removed</span> from the selected incidents when using a status that does not use handlers.
                             </p>
                         </div>
                     </div>
@@ -2825,7 +2790,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                                 class="text-xs font-bold gap-1.5"
                             >
                                 <span v-if="!bulkStatusForm.processing" class="flex items-center gap-1.5">
-                                    <RefreshCcw class="h-3.5 w-3.5" /> Apply to {{ selectedIds.length }} Ticket{{ selectedIds.length !== 1 ? 's' : '' }}
+                                    <RefreshCcw class="h-3.5 w-3.5" /> Apply to {{ selectedIds.length }} Incident{{ selectedIds.length !== 1 ? 's' : '' }}
                                 </span>
                                 <span v-else class="flex items-center gap-1.5">
                                     Saving… <span class="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -2847,7 +2812,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                             <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-rose-100 dark:bg-rose-500/15 ring-1 ring-rose-200 dark:ring-rose-500/25">
                                 <Trash2 class="h-4 w-4 text-rose-600 dark:text-rose-400" />
                             </div>
-                            Delete Ticket?
+                            Delete Incident?
                         </DialogTitle>
                         <DialogDescription class="text-xs text-muted-foreground mt-1 leading-relaxed">
                             This action is permanent and cannot be undone.
@@ -2857,7 +2822,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
 
                 <!-- Body -->
                 <div class="px-5 py-4 flex flex-col gap-3">
-                    <!-- Ticket preview -->
+                    <!-- Incident preview -->
                     <div v-if="deleteTarget" class="rounded-xl border border-border bg-muted/50 px-4 py-3 flex flex-col gap-1.5">
                         <div class="flex items-center gap-2">
                             <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{{ deleteTarget.id }}</span>
@@ -2891,7 +2856,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                             class="text-xs font-semibold gap-1.5"
                         >
                             <span v-if="!deleteForm.processing" class="flex items-center gap-1.5">
-                                <Trash2 class="h-3.5 w-3.5" /> Delete Ticket
+                                <Trash2 class="h-3.5 w-3.5" /> Delete Incident
                             </span>
                             <span v-else class="flex items-center gap-1.5">
                                 Deleting… <span class="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -2912,7 +2877,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                             <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-rose-100 dark:bg-rose-500/15 ring-1 ring-rose-200 dark:ring-rose-500/25">
                                 <Trash2 class="h-4 w-4 text-rose-600 dark:text-rose-400" />
                             </div>
-                            Delete {{ selectedIds.length }} Ticket{{ selectedIds.length !== 1 ? 's' : '' }}?
+                            Delete {{ selectedIds.length }} Incident{{ selectedIds.length !== 1 ? 's' : '' }}?
                         </DialogTitle>
                         <DialogDescription class="text-xs text-muted-foreground mt-1 leading-relaxed">
                             This action is permanent and cannot be undone.
@@ -2929,7 +2894,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                         </div>
                         <div>
                             <p class="text-sm font-semibold text-foreground leading-snug">
-                                {{ selectedIds.length }} ticket{{ selectedIds.length !== 1 ? 's' : '' }} selected
+                                {{ selectedIds.length }} incident{{ selectedIds.length !== 1 ? 's' : '' }} selected
                             </p>
                             <p class="text-[11px] text-muted-foreground">All of their data will be removed.</p>
                         </div>
@@ -2939,7 +2904,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                     <div class="flex items-start gap-3 rounded-xl border border-amber-200 dark:border-amber-500/25 bg-amber-50 dark:bg-amber-500/10 px-4 py-3">
                         <AlertTriangle class="h-4 w-4 text-amber-500 dark:text-amber-400 shrink-0 mt-0.5" />
                         <p class="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">
-                            Handlers, attachments, and history for all selected tickets will be <span class="font-semibold">permanently removed</span>.
+                            Handlers, attachments, and history for all selected incidents will be <span class="font-semibold">permanently removed</span>.
                         </p>
                     </div>
                 </div>
@@ -2959,7 +2924,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                             class="text-xs font-semibold gap-1.5"
                         >
                             <span v-if="!bulkDeleteForm.processing" class="flex items-center gap-1.5">
-                                <Trash2 class="h-3.5 w-3.5" /> Delete {{ selectedIds.length }} Ticket{{ selectedIds.length !== 1 ? 's' : '' }}
+                                <Trash2 class="h-3.5 w-3.5" /> Delete {{ selectedIds.length }} Incident{{ selectedIds.length !== 1 ? 's' : '' }}
                             </span>
                             <span v-else class="flex items-center gap-1.5">
                                 Deleting… <span class="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />

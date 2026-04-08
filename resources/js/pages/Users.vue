@@ -124,7 +124,8 @@ const getStatusColor = (status: string) => {
         case 'In Progress': return 'bg-blue-500/15 text-blue-500 border-blue-500/30';
         case 'On Hold':     return 'bg-amber-500/15 text-amber-500 border-amber-500/30';
         case 'Resolved':    return 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30';
-        case 'Closed':      return 'bg-slate-500/15 text-slate-500 border-slate-500/30';
+        case 'Closed': // legacy
+        case 'Cancelled':   return 'bg-slate-500/15 text-slate-500 border-slate-500/30';
         default:            return 'bg-secondary text-secondary-foreground';
     }
 };
@@ -135,7 +136,8 @@ const getStatusIcon = (status: string) => {
         case 'In Progress': return Play;
         case 'On Hold':     return Pause;
         case 'Resolved':    return CheckCircle2;
-        case 'Closed':      return Ban;
+        case 'Closed': // legacy
+        case 'Cancelled':   return Ban;
         default:            return Circle;
     }
 };
