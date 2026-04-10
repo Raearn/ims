@@ -14,7 +14,7 @@ import { VisAxis, VisLine, VisXYContainer, VisArea } from '@unovis/vue';
 import { ChartCrosshair } from '@/components/ui/chart';
 import DonutChart from '@/components/DonutChart.vue';
 import { CurveType } from '@unovis/ts';
-import { AlertCircle, AlertTriangle, Ban, CheckCircle2, Circle, Clock, ImageIcon, Loader2, ListOrdered, Pause, Play, BarChart2, PieChart, RefreshCcw, ChevronRight, ArrowUpRight, UserPlus, MoreHorizontal, Search, X, MessageSquare, Crown, ShieldCheck, Headset, UserRound, Settings, Database, FileText } from 'lucide-vue-next';
+import { AlertCircle, AlertTriangle, Ban, CheckCircle2, Circle, Clock, ImageIcon, Loader2, ListOrdered, Pause, Play, BarChart2, PieChart, RefreshCcw, ChevronRight, ArrowUpRight, UserPlus, MoreHorizontal, Search, X, MessageSquare, Crown, ShieldCheck, Headset, UserRound, Settings, Database, FileText, Timer } from 'lucide-vue-next';
 import { cn } from '@/lib/utils';
 import { laravelFetch } from '@/lib/laravelFetch';
 import Sparkline from '@/components/Sparkline.vue';
@@ -238,22 +238,28 @@ function categorySlicePct(count: number): number {
 // Static color palettes per stat index so Tailwind can detect them at build time
 const statColors = [
     {
-        card: 'bg-gradient-to-br from-rose-50/80 to-rose-100/30 dark:from-rose-950/40 dark:to-rose-950/10 border-rose-200/60 dark:border-rose-800/40 shadow-sm transition-all duration-300 hover:shadow-md hover:border-rose-300/60 dark:hover:border-rose-700/50',
-        text: 'text-rose-600 dark:text-rose-400',
+        card: 'border-0 bg-gradient-to-br from-rose-50/90 via-rose-50/40 to-background dark:from-rose-950/35 dark:via-rose-950/15 dark:to-card shadow-sm ring-1 ring-rose-200/70 ring-inset dark:ring-rose-800/45 transition-all duration-300 hover:shadow-md hover:ring-rose-300/80 dark:hover:ring-rose-700/55',
+        text: 'text-rose-800 dark:text-rose-200',
+        iconBg: 'bg-rose-500/[0.14] text-rose-600 shadow-inner shadow-rose-900/5 ring-1 ring-rose-500/20 dark:bg-rose-500/25 dark:text-rose-300 dark:ring-rose-400/20',
     },
     {
-        card: 'bg-gradient-to-br from-orange-50/80 to-orange-100/30 dark:from-orange-950/40 dark:to-orange-950/10 border-orange-200/60 dark:border-orange-800/40 shadow-sm transition-all duration-300 hover:shadow-md hover:border-orange-300/60 dark:hover:border-orange-700/50',
-        text: 'text-orange-600 dark:text-orange-400',
+        card: 'border-0 bg-gradient-to-br from-orange-50/90 via-orange-50/40 to-background dark:from-orange-950/35 dark:via-orange-950/15 dark:to-card shadow-sm ring-1 ring-orange-200/70 ring-inset dark:ring-orange-800/45 transition-all duration-300 hover:shadow-md hover:ring-orange-300/80 dark:hover:ring-orange-700/55',
+        text: 'text-orange-900 dark:text-orange-200',
+        iconBg: 'bg-orange-500/[0.14] text-orange-600 shadow-inner shadow-orange-900/5 ring-1 ring-orange-500/20 dark:bg-orange-500/25 dark:text-orange-300 dark:ring-orange-400/20',
     },
     {
-        card: 'bg-gradient-to-br from-blue-50/80 to-blue-100/30 dark:from-blue-950/40 dark:to-blue-950/10 border-blue-200/60 dark:border-blue-800/40 shadow-sm transition-all duration-300 hover:shadow-md hover:border-blue-300/60 dark:hover:border-blue-700/50',
-        text: 'text-blue-600 dark:text-blue-400',
+        card: 'border-0 bg-gradient-to-br from-blue-50/90 via-blue-50/40 to-background dark:from-blue-950/35 dark:via-blue-950/15 dark:to-card shadow-sm ring-1 ring-blue-200/70 ring-inset dark:ring-blue-800/45 transition-all duration-300 hover:shadow-md hover:ring-blue-300/80 dark:hover:ring-blue-700/55',
+        text: 'text-blue-900 dark:text-blue-200',
+        iconBg: 'bg-blue-500/[0.14] text-blue-600 shadow-inner shadow-blue-900/5 ring-1 ring-blue-500/20 dark:bg-blue-500/25 dark:text-blue-300 dark:ring-blue-400/20',
     },
     {
-        card: 'bg-gradient-to-br from-emerald-50/80 to-emerald-100/30 dark:from-emerald-950/40 dark:to-emerald-950/10 border-emerald-200/60 dark:border-emerald-800/40 shadow-sm transition-all duration-300 hover:shadow-md hover:border-emerald-300/60 dark:hover:border-emerald-700/50',
-        text: 'text-emerald-600 dark:text-emerald-400',
+        card: 'border-0 bg-gradient-to-br from-emerald-50/90 via-emerald-50/40 to-background dark:from-emerald-950/35 dark:via-emerald-950/15 dark:to-card shadow-sm ring-1 ring-emerald-200/70 ring-inset dark:ring-emerald-800/45 transition-all duration-300 hover:shadow-md hover:ring-emerald-300/80 dark:hover:ring-emerald-700/55',
+        text: 'text-emerald-900 dark:text-emerald-200',
+        iconBg: 'bg-emerald-500/[0.14] text-emerald-600 shadow-inner shadow-emerald-900/5 ring-1 ring-emerald-500/20 dark:bg-emerald-500/25 dark:text-emerald-300 dark:ring-emerald-400/20',
     },
-];
+] as const;
+
+const statWidgetIcons = [AlertCircle, Clock, CheckCircle2, Timer] as const;
 
 const categoryChartType = ref<'bar' | 'donut'>('bar');
 const severityChartType = ref<'bar' | 'donut'>('donut');
@@ -623,17 +629,36 @@ watch(isAssignModalOpen, (val) => {
             </div>
 
             <!-- Stats Grid -->
-            <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <Card v-for="(stat, idx) in stats" :key="stat.title" :class="cn('border', statColors[idx]?.card)">
-                    <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle :class="cn('text-sm font-medium opacity-80', statColors[idx]?.text)">
-                            {{ stat.title }}
-                        </CardTitle>
+            <div class="grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-2 lg:grid-cols-4">
+                <Card
+                    v-for="(stat, idx) in stats"
+                    :key="stat.title"
+                    :class="cn('group relative overflow-hidden', statColors[idx]?.card)"
+                >
+                    <div
+                        class="pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full opacity-[0.12] blur-2xl transition-opacity duration-300 group-hover:opacity-[0.18]"
+                        :style="{ backgroundColor: stat.stroke }"
+                        aria-hidden="true"
+                    />
+                    <CardHeader class="relative flex flex-row items-start gap-3 space-y-0 p-5 pb-3">
+                        <div
+                            :class="cn(
+                                'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-[1.03]',
+                                statColors[idx]?.iconBg,
+                            )"
+                        >
+                            <component :is="statWidgetIcons[idx] ?? AlertCircle" class="h-5 w-5" stroke-width="2" />
+                        </div>
+                        <div class="min-w-0 flex-1 pt-0.5">
+                            <CardTitle :class="cn('text-sm font-semibold leading-snug tracking-tight', statColors[idx]?.text)">
+                                {{ stat.title }}
+                            </CardTitle>
+                        </div>
                     </CardHeader>
-                    <CardContent class="pb-4">
+                    <CardContent class="relative px-5 pb-5 pt-0">
                         <div class="flex items-end justify-between gap-3">
                             <div class="min-w-0">
-                                <div class="text-2xl font-bold tracking-tight md:text-3xl">{{ stat.value }}</div>
+                                <div class="text-2xl font-bold tracking-tight text-foreground md:text-3xl">{{ stat.value }}</div>
                             </div>
                             <div class="h-12 w-24 shrink-0">
                                 <Sparkline
