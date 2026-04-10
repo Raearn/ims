@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/layouts/AppLayout.vue';
+import IncidentCategoryPicker from '@/components/IncidentCategoryPicker.vue';
 import TicketDetailModal from '@/components/TicketDetailModal.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
@@ -56,6 +57,7 @@ import { ref, watch, computed, onMounted, onUnmounted } from 'vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import { ensureLucideIconsLoaded, lucideAllIconMap, resolveLucideIcon } from '@/composables/useLucideIconRegistry';
 import { Ticket, TicketCheck, Loader, X, ChevronsUpDown, ChevronUp, ChevronDown, ChevronLeft } from 'lucide-vue-next';
+import { ticketMatchesCategorySubtreeFilter } from '@/lib/ticketCategoryFilter';
 import { compressImage } from '@/lib/utils';
 import { laravelFetch } from '@/lib/laravelFetch';
 
@@ -130,6 +132,7 @@ const props = defineProps<{
         status: string;
         priority: string;
         category: string;
+        ticketCategoryId: number | null;
         handlerIds: number[];
         handlers: { id: number; name: string }[];
         reporter: string;
@@ -148,7 +151,7 @@ const props = defineProps<{
         id: number;
         name: string;
     }[];
-    categories: { id: number; name: string; icon: string }[];
+    categories: { id: number; name: string; icon: string; parent_id: number | null }[];
     priorities: { id: number; name: string; icon: string; color: string }[];
     statuses: {
         id: number;
@@ -247,7 +250,7 @@ const openEditModal = (ticket: typeof props.tickets[0]) => {
     form.title = ticket.title;
     form.description = ticket.description ?? '';
     form.priority = ticket.priority;
-    form.category = ticket.category;
+    form.ticket_category_id = ticket.ticketCategoryId ?? props.categories[0]?.id ?? null;
     form.status = ticket.status;
     form.handler_ids = [...ticket.handlerIds];
     form.tags = [...ticket.tags];
@@ -261,12 +264,20 @@ const form = useForm({
     title: '',
     description: '',
     priority: 'Medium',
-    category: 'Software',
+    ticket_category_id: props.categories[0]?.id ?? (null as number | null),
     status: props.statuses.find((s) => s.handler_requirement === 'none')?.name ?? props.statuses[0]?.name ?? 'Open',
     handler_ids: [] as number[],
     tags: [] as string[],
     solution: '',
     attachment: null as File | null,
+});
+
+const selectedCategoryLabel = computed((): string => {
+    const id = form.ticket_category_id;
+    if (id == null) {
+        return '';
+    }
+    return props.categories.find((c) => c.id === id)?.name ?? '';
 });
 
 const handlerRequired = computed(() => isStatusHandlerRequired(form.status));
@@ -765,6 +776,7 @@ watch(isCreateModalOpen, (val) => {
     if (val && !editingTicket.value) {
         form.reset();
         form.status = defaultNewTicketStatusName.value;
+        form.ticket_category_id = props.categories[0]?.id ?? null;
         attachmentPreview.value = null;
     }
     if (!val) {
@@ -785,6 +797,7 @@ const statusOptions = computed(() => ['All', ...props.statuses.map((s) => s.name
 const categoryOptions = computed(() =>
     props.categories.map((c) => ({
         ...c,
+        filterLabel: c.parent_id != null ? `↳ ${c.name}` : c.name,
         iconComponent: resolveLucideIcon(c.icon, HelpCircle),
     })),
 );
@@ -857,7 +870,17 @@ const searchDateFiltered = computed(() => {
     }
 
     if (currentCategory.value !== 'All') {
-        base = base.filter(t => t.category === currentCategory.value);
+        const filterId = Number(currentCategory.value);
+        if (Number.isFinite(filterId)) {
+            base = base.filter((t) =>
+                ticketMatchesCategorySubtreeFilter(
+                    props.categories,
+                    filterId,
+                    t.ticketCategoryId,
+                    t.category,
+                ),
+            );
+        }
     }
 
     return base;
@@ -1332,26 +1355,10 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                                     <div class="grid gap-5">
                                         <div class="grid gap-3">
                                             <Label class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Category</Label>
-                                            <div class="grid grid-cols-3 gap-2">
-                                                <button
-                                                    v-for="cat in categoryOptions"
-                                                    :key="cat.name"
-                                                    type="button"
-                                                    @click="form.category = cat.name"
-                                                    :class="[
-                                                        'flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border-2 transition-all relative group',
-                                                        form.category === cat.name
-                                                            ? 'border-primary bg-primary/5 text-primary shadow-sm'
-                                                            : 'border-muted hover:border-primary/30 hover:bg-muted/50 text-muted-foreground'
-                                                    ]"
-                                                >
-                                                    <component :is="cat.iconComponent" class="h-4 w-4" />
-                                                    <span class="text-[10px] font-bold uppercase truncate w-full text-center">{{ cat.name }}</span>
-                                                    <div v-if="form.category === cat.name" class="absolute -top-1.5 -right-1.5">
-                                                        <CheckCircle2 class="h-4 w-4 fill-primary text-white" />
-                                                    </div>
-                                                </button>
-                                            </div>
+                                            <IncidentCategoryPicker v-model="form.ticket_category_id" :categories="categories" />
+                                            <span v-if="form.errors.ticket_category_id" class="text-xs font-medium text-destructive">{{
+                                                form.errors.ticket_category_id
+                                            }}</span>
                                         </div>
 
                                         <div class="grid gap-3">
@@ -1469,10 +1476,10 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                                             <Info class="h-4 w-4 text-primary shrink-0 mt-0.5" />
                                             <p class="text-xs text-muted-foreground leading-relaxed">
                                                 <template v-if="editingTicket">
-                                                    Incident will be updated to <span class="font-bold text-foreground">{{ form.category }}</span> / <span class="font-bold text-foreground">{{ form.priority }}</span> priority / <span class="font-bold text-foreground">{{ form.status }}</span>.
+                                                    Incident will be updated to <span class="font-bold text-foreground">{{ selectedCategoryLabel }}</span> / <span class="font-bold text-foreground">{{ form.priority }}</span> priority / <span class="font-bold text-foreground">{{ form.status }}</span>.
                                                 </template>
                                                 <template v-else>
-                                                    Your incident will be assigned to the <span class="font-bold text-foreground">{{ form.category }}</span> team with <span class="font-bold text-foreground">{{ form.priority }}</span> priority.
+                                                    Your incident will be assigned to the <span class="font-bold text-foreground">{{ selectedCategoryLabel }}</span> team with <span class="font-bold text-foreground">{{ form.priority }}</span> priority.
                                                 </template>
                                             </p>
                                         </div>
@@ -1485,7 +1492,7 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                                         <Button type="button" variant="outline" @click="isCreateModalOpen = false" class="text-xs font-bold">Cancel</Button>
                                         <Button
                                             type="submit"
-                                            :disabled="form.processing || !form.title || (handlerRequired && form.handler_ids.length === 0)"
+                                            :disabled="form.processing || !form.title || form.ticket_category_id == null || (handlerRequired && form.handler_ids.length === 0)"
                                             class="text-xs font-bold gap-1.5 shadow-md shadow-primary/20"
                                         >
                                             <span v-if="!form.processing" class="flex items-center gap-1.5">
@@ -1623,12 +1630,12 @@ const getPriorityStyle = (priority: string): Record<string, string> => {
                             </SelectItem>
                             <SelectItem
                                 v-for="c in categoryOptions"
-                                :key="c.name"
-                                :value="c.name"
+                                :key="c.id"
+                                :value="String(c.id)"
                             >
                                 <span class="flex items-center gap-2">
                                     <component :is="c.iconComponent" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                                    <span>{{ c.name }}</span>
+                                    <span>{{ c.filterLabel }}</span>
                                 </span>
                             </SelectItem>
                         </SelectContent>

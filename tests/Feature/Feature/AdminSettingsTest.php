@@ -3,9 +3,6 @@
 namespace Tests\Feature\Feature;
 
 use App\Models\Setting;
-use App\Models\TicketCategory;
-use App\Models\TicketPriority;
-use App\Models\TicketStatus;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -55,9 +52,6 @@ class AdminSettingsTest extends TestCase
 
     public function test_settings_page_includes_ticket_config_props(): void
     {
-        TicketCategory::create(['name' => 'Network', 'icon' => 'Network', 'sort_order' => 0]);
-        TicketPriority::create(['name' => 'High', 'icon' => 'AlertTriangle', 'color' => '#f97316', 'sort_order' => 0]);
-        TicketStatus::create(['name' => 'Open', 'sort_order' => 0]);
         $admin = User::factory()->admin()->create();
 
         $this->actingAs($admin)

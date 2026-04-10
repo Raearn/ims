@@ -14,6 +14,7 @@ use App\Support\TicketConfigDefaults;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -34,17 +35,25 @@ class SettingsController extends Controller
                 'type' => $s->type,
             ]));
 
-        $categories = TicketCategory::orderBy('sort_order')->get(['id', 'name', 'icon']);
+        $categories = TicketCategory::orderedTreeForSettings()->map(fn (TicketCategory $c): array => [
+            'id' => $c->id,
+            'name' => $c->name,
+            'icon' => $c->icon,
+            'parent_id' => $c->parent_id,
+        ])->values()->all();
 
-        $categoryCountsByName = Ticket::query()
-            ->selectRaw('category, COUNT(*) as aggregate')
-            ->groupBy('category')
-            ->pluck('aggregate', 'category')
+        $countsByCategoryId = Ticket::query()
+            ->whereNotNull('ticket_category_id')
+            ->selectRaw('ticket_category_id, COUNT(*) as aggregate')
+            ->groupBy('ticket_category_id')
+            ->pluck('aggregate', 'ticket_category_id')
             ->map(fn ($count) => (int) $count);
 
-        $categoryTicketCountsById = $categories->mapWithKeys(
-            fn (TicketCategory $row): array => [$row->id => (int) ($categoryCountsByName[$row->name] ?? 0)],
-        )->all();
+        $categoryTicketCountsById = collect($categories)
+            ->mapWithKeys(fn (array $row): array => [
+                $row['id'] => (int) ($countsByCategoryId[$row['id']] ?? 0),
+            ])
+            ->all();
 
         $priorities = TicketPriority::orderBy('sort_order')->get(['id', 'name', 'icon', 'color']);
 
@@ -79,7 +88,7 @@ class SettingsController extends Controller
             'priorityTicketCountsById' => $priorityTicketCountsById,
             'statusTicketCountsById' => $statusTicketCountsById,
             'ticketConfigProtectedNames' => [
-                'categories' => TicketConfigDefaults::protectedCategoryNames(),
+                'categories' => [],
                 'priorities' => TicketConfigDefaults::priorityNames(),
                 'statuses' => TicketConfigDefaults::statusNames(),
             ],
@@ -141,43 +150,64 @@ class SettingsController extends Controller
     }
 
     /**
-     * Bulk-replace ticket categories.
+     * Sync ticket categories (tree: one level of subcategories under roots).
      */
     public function updateCategories(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'categories' => ['required', 'array'],
+            'categories' => ['required', 'array', 'min:1'],
+            'categories.*.id' => ['nullable', 'integer', 'exists:ticket_categories,id'],
+            'categories.*.client_key' => ['nullable', 'string', 'max:64'],
             'categories.*.name' => ['required', 'string', 'max:100'],
             'categories.*.icon' => ['required', 'string', 'max:100'],
+            'categories.*.sort_order' => ['required', 'integer', 'min:0', 'max:65535'],
+            'categories.*.parent_id' => ['nullable', 'integer', 'exists:ticket_categories,id'],
+            'categories.*.parent_client_key' => ['nullable', 'string', 'max:64'],
         ]);
 
-        $this->assertBuiltInCategoryNamesPreserved($validated['categories']);
-        $this->assertBuiltInCategoryIconsMatchDefaults($validated['categories']);
+        $rows = $validated['categories'];
+        $trimmedNames = collect($rows)->map(fn (array $r) => trim((string) $r['name']))->all();
+        if (count($trimmedNames) !== count(array_unique($trimmedNames))) {
+            throw ValidationException::withMessages([
+                'categories' => 'Each category name must be unique.',
+            ]);
+        }
 
-        $beforeSnapshot = TicketCategory::query()
-            ->orderBy('sort_order')
-            ->get(['name', 'icon'])
-            ->map(fn (TicketCategory $c): array => ['name' => $c->name, 'icon' => $c->icon])
+        foreach ($rows as $row) {
+            $hasPid = isset($row['parent_id']) && $row['parent_id'] !== null && $row['parent_id'] !== '';
+            $hasPck = ! empty($row['parent_client_key']);
+            if ($hasPid && $hasPck) {
+                throw ValidationException::withMessages([
+                    'categories' => 'A subcategory cannot set both parent_id and parent_client_key.',
+                ]);
+            }
+        }
+
+        $existingIds = TicketCategory::query()->pluck('id')->all();
+        $submittedIds = collect($rows)
+            ->pluck('id')
+            ->filter(fn ($id) => $id !== null && $id !== '')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
             ->values()
             ->all();
+        $removedIds = array_values(array_diff($existingIds, $submittedIds));
 
-        $existingNames = TicketCategory::query()->orderBy('sort_order')->pluck('name')->all();
-        $newNames = collect($validated['categories'])->pluck('name')->all();
-        $removedNames = array_values(array_diff($existingNames, $newNames));
-
-        if ($removedNames !== []) {
-            $inUse = collect($removedNames)
-                ->filter(fn (string $name) => Ticket::query()->where('category', $name)->exists())
-                ->sort()
+        if ($removedIds !== []) {
+            $inUseIds = Ticket::query()
+                ->whereIn('ticket_category_id', $removedIds)
+                ->distinct()
+                ->pluck('ticket_category_id')
+                ->filter()
                 ->values()
                 ->all();
-
-            if ($inUse !== []) {
-                $quoted = array_map(fn (string $n) => '"'.$n.'"', $inUse);
+            if ($inUseIds !== []) {
+                $labels = TicketCategory::query()->whereIn('id', $inUseIds)->pluck('name')->sort()->values()->all();
+                $quoted = array_map(fn (string $n) => '"'.$n.'"', $labels);
                 $list = implode(', ', $quoted);
-                $message = count($inUse) === 1
-                    ? "Cannot remove category {$list} because one or more tickets still use it. Reassign those tickets first."
-                    : "Cannot remove categories {$list} because tickets still use them. Reassign those tickets first.";
+                $message = count($labels) === 1
+                    ? "Cannot remove category {$list} because one or more incidents still use it. Reassign those incidents first."
+                    : "Cannot remove categories {$list} because incidents still use them. Reassign those incidents first.";
 
                 throw ValidationException::withMessages([
                     'categories' => $message,
@@ -185,20 +215,104 @@ class SettingsController extends Controller
             }
         }
 
-        TicketCategory::truncate();
+        $beforeSnapshot = TicketCategory::orderedTreeForSettings()
+            ->map(fn (TicketCategory $c): array => [
+                'name' => ($c->parent_id ? '↳ ' : '').$c->name,
+                'icon' => $c->icon,
+            ])
+            ->values()
+            ->all();
 
-        foreach ($validated['categories'] as $index => $row) {
-            TicketCategory::create([
-                'name' => $row['name'],
-                'icon' => $row['icon'],
-                'sort_order' => $index,
+        $roots = collect($rows)->filter(function (array $r): bool {
+            $hasPid = isset($r['parent_id']) && $r['parent_id'] !== null && $r['parent_id'] !== '';
+            $hasPck = ! empty($r['parent_client_key']);
+
+            return ! $hasPid && ! $hasPck;
+        })->sortBy('sort_order')->values();
+
+        $children = collect($rows)->filter(function (array $r): bool {
+            $hasPid = isset($r['parent_id']) && $r['parent_id'] !== null && $r['parent_id'] !== '';
+            $hasPck = ! empty($r['parent_client_key']);
+
+            return $hasPid || $hasPck;
+        })->sortBy('sort_order')->values();
+
+        if ($roots->isEmpty()) {
+            throw ValidationException::withMessages([
+                'categories' => 'At least one top-level category is required.',
             ]);
         }
 
-        $afterSnapshot = TicketCategory::query()
-            ->orderBy('sort_order')
-            ->get(['name', 'icon'])
-            ->map(fn (TicketCategory $c): array => ['name' => $c->name, 'icon' => $c->icon])
+        DB::transaction(function () use ($removedIds, $roots, $children): void {
+            if ($removedIds !== []) {
+                $toDelete = TicketCategory::query()->whereIn('id', $removedIds)->get();
+                $childDeletes = $toDelete->whereNotNull('parent_id')->pluck('id')->all();
+                $rootDeletes = $toDelete->whereNull('parent_id')->pluck('id')->all();
+                if ($childDeletes !== []) {
+                    TicketCategory::query()->whereIn('id', $childDeletes)->delete();
+                }
+                if ($rootDeletes !== []) {
+                    TicketCategory::query()->whereIn('id', $rootDeletes)->delete();
+                }
+            }
+
+            /** @var array<string, int> $clientKeyToId */
+            $clientKeyToId = [];
+
+            foreach ($roots as $r) {
+                $data = [
+                    'name' => trim((string) $r['name']),
+                    'icon' => $r['icon'],
+                    'parent_id' => null,
+                    'sort_order' => (int) $r['sort_order'],
+                ];
+                if (! empty($r['id'])) {
+                    TicketCategory::query()->whereKey((int) $r['id'])->update($data);
+                    $id = (int) $r['id'];
+                } else {
+                    $c = TicketCategory::query()->create($data);
+                    $id = $c->id;
+                }
+                if (! empty($r['client_key'])) {
+                    $clientKeyToId[(string) $r['client_key']] = $id;
+                }
+            }
+
+            foreach ($children as $r) {
+                $hasPid = isset($r['parent_id']) && $r['parent_id'] !== null && $r['parent_id'] !== '';
+                $parentId = $hasPid
+                    ? (int) $r['parent_id']
+                    : (int) ($clientKeyToId[(string) ($r['parent_client_key'] ?? '')] ?? 0);
+                if ($parentId < 1) {
+                    throw ValidationException::withMessages([
+                        'categories' => 'Each subcategory must have a valid top-level parent.',
+                    ]);
+                }
+                $parent = TicketCategory::query()->find($parentId);
+                if ($parent === null || $parent->parent_id !== null) {
+                    throw ValidationException::withMessages([
+                        'categories' => 'Subcategories must be attached to a top-level category only.',
+                    ]);
+                }
+                $data = [
+                    'name' => trim((string) $r['name']),
+                    'icon' => $r['icon'],
+                    'parent_id' => $parentId,
+                    'sort_order' => (int) $r['sort_order'],
+                ];
+                if (! empty($r['id'])) {
+                    TicketCategory::query()->whereKey((int) $r['id'])->update($data);
+                } else {
+                    TicketCategory::query()->create($data);
+                }
+            }
+        });
+
+        $afterSnapshot = TicketCategory::orderedTreeForSettings()
+            ->map(fn (TicketCategory $c): array => [
+                'name' => ($c->parent_id ? '↳ ' : '').$c->name,
+                'icon' => $c->icon,
+            ])
             ->values()
             ->all();
 
@@ -260,8 +374,8 @@ class SettingsController extends Controller
                 $quoted = array_map(fn (string $n) => '"'.$n.'"', $inUse);
                 $list = implode(', ', $quoted);
                 $message = count($inUse) === 1
-                    ? "Cannot remove priority {$list} because one or more tickets still use it. Reassign those tickets first."
-                    : "Cannot remove priorities {$list} because tickets still use them. Reassign those tickets first.";
+                    ? "Cannot remove priority {$list} because one or more incidents still use it. Reassign those incidents first."
+                    : "Cannot remove priorities {$list} because incidents still use them. Reassign those incidents first.";
 
                 throw ValidationException::withMessages([
                     'priorities' => $message,
@@ -352,8 +466,8 @@ class SettingsController extends Controller
                 $quoted = array_map(fn (string $n) => '"'.$n.'"', $inUse);
                 $list = implode(', ', $quoted);
                 $message = count($inUse) === 1
-                    ? "Cannot remove status {$list} because one or more tickets still use it. Reassign those tickets first."
-                    : "Cannot remove statuses {$list} because tickets still use them. Reassign those tickets first.";
+                    ? "Cannot remove status {$list} because one or more incidents still use it. Reassign those incidents first."
+                    : "Cannot remove statuses {$list} because incidents still use them. Reassign those incidents first.";
 
                 throw ValidationException::withMessages([
                     'statuses' => $message,
@@ -408,8 +522,8 @@ class SettingsController extends Controller
     {
         return $this->destroyTicketsMatching(
             Ticket::query()->where('status', $ticketStatus->name),
-            'No tickets used that status.',
-            fn (int $n): string => "{$n} ticket(s) with status \"{$ticketStatus->name}\" were deleted. You can remove the status from the list, then save.",
+            'No incidents used that status.',
+            fn (int $n): string => "{$n} incident(s) with status \"{$ticketStatus->name}\" were deleted. You can remove the status from the list, then save.",
         );
     }
 
@@ -419,9 +533,14 @@ class SettingsController extends Controller
     public function destroyTicketsForCategory(TicketCategory $ticketCategory): RedirectResponse
     {
         return $this->destroyTicketsMatching(
-            Ticket::query()->where('category', $ticketCategory->name),
-            'No tickets used that category.',
-            fn (int $n): string => "{$n} ticket(s) in category \"{$ticketCategory->name}\" were deleted. You can remove the category from the list, then save.",
+            Ticket::query()->where(function (Builder $q) use ($ticketCategory): void {
+                $q->where('ticket_category_id', $ticketCategory->id)
+                    ->orWhere(function (Builder $q2) use ($ticketCategory): void {
+                        $q2->whereNull('ticket_category_id')->where('category', $ticketCategory->name);
+                    });
+            }),
+            'No incidents used that category.',
+            fn (int $n): string => "{$n} incident(s) in category \"{$ticketCategory->name}\" were deleted. You can remove the category from the list, then save.",
         );
     }
 
@@ -432,26 +551,9 @@ class SettingsController extends Controller
     {
         return $this->destroyTicketsMatching(
             Ticket::query()->where('priority', $ticketPriority->name),
-            'No tickets used that priority.',
-            fn (int $n): string => "{$n} ticket(s) with priority \"{$ticketPriority->name}\" were deleted. You can remove the priority from the list, then save.",
+            'No incidents used that priority.',
+            fn (int $n): string => "{$n} incident(s) with priority \"{$ticketPriority->name}\" were deleted. You can remove the priority from the list, then save.",
         );
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $rows
-     */
-    private function assertBuiltInCategoryNamesPreserved(array $rows): void
-    {
-        $submitted = collect($rows)->pluck('name')->map(fn ($n) => trim((string) $n))->all();
-        $missing = array_values(array_diff(TicketConfigDefaults::protectedCategoryNames(), $submitted));
-        if ($missing === []) {
-            return;
-        }
-
-        throw ValidationException::withMessages([
-            'categories' => 'These built-in categories cannot be removed: '
-                .collect($missing)->map(fn (string $n) => '"'.$n.'"')->implode(', ').'.',
-        ]);
     }
 
     /**
@@ -507,30 +609,6 @@ class SettingsController extends Controller
             if ($actual !== $expected) {
                 throw ValidationException::withMessages([
                     "statuses.{$index}.handler_requirement" => 'Handler assignment rules for built-in statuses cannot be changed.',
-                ]);
-            }
-        }
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $rows
-     */
-    private function assertBuiltInCategoryIconsMatchDefaults(array $rows): void
-    {
-        $defaults = TicketConfigDefaults::protectedCategoryIconByName();
-
-        foreach ($rows as $index => $row) {
-            $name = trim((string) ($row['name'] ?? ''));
-            if ($name === '' || ! isset($defaults[$name])) {
-                continue;
-            }
-
-            $expectedIcon = $defaults[$name];
-            $actualIcon = (string) ($row['icon'] ?? '');
-
-            if ($actualIcon !== $expectedIcon) {
-                throw ValidationException::withMessages([
-                    "categories.{$index}.icon" => "The label and icon for \"{$name}\" are fixed and cannot be changed.",
                 ]);
             }
         }

@@ -18,6 +18,7 @@ import {
     GripVertical,
     HelpCircle,
     Loader2,
+    Pencil,
     Plus,
     Search,
     Settings,
@@ -48,6 +49,10 @@ interface CategoryRow {
     icon: string;
     /** Stable key for new rows before save (drag + :key). */
     clientKey?: string;
+    /** DB parent (root has null). */
+    parent_id?: number | null;
+    /** When parent row is new, matches that row's `clientKey`. */
+    parentClientKey?: string | null;
 }
 
 interface PriorityRow {
@@ -78,7 +83,7 @@ interface Props {
     categories: CategoryRow[];
     priorities: PriorityRow[];
     statuses: StatusRow[];
-    /** Names that cannot be removed from the list (server-enforced). Categories omit optional "Others". */
+    /** Names that cannot be removed or have fixed styling (server-enforced). Categories: none. */
     ticketConfigProtectedNames: {
         categories: string[];
         priorities: string[];
@@ -127,7 +132,18 @@ function rawVal(group: SettingsGroup | undefined, key: string, fallback: unknown
 }
 
 // ── Reactive lists (initialised from server props) ─────────────────────────
-const categories = reactive<CategoryRow[]>(props.categories.map((c) => ({ ...c })));
+/** Row `rowKey*` must match for name edit mode (one at a time per list). */
+const editingNameKeyCategories = ref<string | null>(null);
+const editingNameKeyPriorities = ref<string | null>(null);
+const editingNameKeyStatuses = ref<string | null>(null);
+
+const categories = reactive<CategoryRow[]>(
+    props.categories.map((c) => ({
+        ...c,
+        parent_id: (c as CategoryRow).parent_id ?? null,
+        parentClientKey: (c as CategoryRow).parentClientKey ?? null,
+    })),
+);
 const priorities = reactive<PriorityRow[]>(props.priorities.map((p) => ({ ...p })));
 const statuses = reactive<StatusRow[]>(
     props.statuses.map((s) => ({
@@ -137,8 +153,154 @@ const statuses = reactive<StatusRow[]>(
 );
 
 // ── Category helpers ───────────────────────────────────────────────────────
+function isDirectChildOf(row: CategoryRow, parent: CategoryRow): boolean {
+    if (parent.id != null && row.parent_id === parent.id) {
+        return true;
+    }
+    if (parent.clientKey != null && row.parentClientKey === parent.clientKey) {
+        return true;
+    }
+
+    return false;
+}
+
+/** Sibling group: same parent (null for roots). */
+function categoryParentGroupKey(cat: CategoryRow): string | number | null {
+    if (cat.parent_id != null) {
+        return cat.parent_id;
+    }
+    if (cat.parentClientKey) {
+        return `ck:${cat.parentClientKey}`;
+    }
+
+    return null;
+}
+
+function isCategoryRootRow(cat: CategoryRow): boolean {
+    return cat.parent_id == null && ! cat.parentClientKey;
+}
+
+/** Index of the top-level row that owns this row (walk left to the root). */
+function rootIndexContainingRow(idx: number): number {
+    let i = idx;
+    while (i >= 0) {
+        const r = categories[i];
+        if (isCategoryRootRow(r)) {
+            return i;
+        }
+        i--;
+    }
+
+    return 0;
+}
+
+/** Contiguous block [start,end] for a top-level category and its direct children. */
+function categorySubtreeRangeFromRoot(rootIdx: number): { start: number; end: number } {
+    const row = categories[rootIdx];
+    if (! row || ! isCategoryRootRow(row)) {
+        return { start: rootIdx, end: rootIdx };
+    }
+    let end = rootIdx;
+    while (end + 1 < categories.length && isDirectChildOf(categories[end + 1], row)) {
+        end++;
+    }
+
+    return { start: rootIdx, end };
+}
+
+/** Siblings under the same parent (subcategories only — not used for roots). */
+function categoryChildSiblingBounds(idx: number): { start: number; end: number } {
+    const ref = categoryParentGroupKey(categories[idx]);
+    let start = idx;
+    while (start > 0 && categoryParentGroupKey(categories[start - 1]) === ref) {
+        start--;
+    }
+    let end = idx;
+    while (end < categories.length - 1 && categoryParentGroupKey(categories[end + 1]) === ref) {
+        end++;
+    }
+
+    return { start, end };
+}
+
+/**
+ * Where a dragged root subtree should begin in the list (original indices).
+ * Dropping on a root inserts before it; dropping on a subcategory inserts after that parent's block.
+ */
+function categoryDropInsertIndex(toIdx: number, dragFs: number, dragFe: number): number {
+    if (toIdx >= dragFs && toIdx <= dragFe) {
+        return dragFs;
+    }
+    const targetRow = categories[toIdx];
+    if (isCategoryRootRow(targetRow)) {
+        return toIdx;
+    }
+    const rootIdx = rootIndexContainingRow(toIdx);
+    const { end } = categorySubtreeRangeFromRoot(rootIdx);
+
+    return end + 1;
+}
+
+function categoryRootHasChildren(idx: number): boolean {
+    const row = categories[idx];
+    if (row.parent_id != null || row.parentClientKey) {
+        return false;
+    }
+    for (let i = idx + 1; i < categories.length; i++) {
+        const c = categories[i];
+        if (c.parent_id == null && ! c.parentClientKey) {
+            break;
+        }
+        if (isDirectChildOf(c, row)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function insertIndexAfterCategorySubtree(parentIdx: number): number {
+    const parent = categories[parentIdx];
+    if (! parent) {
+        return categories.length;
+    }
+    let i = parentIdx + 1;
+    while (i < categories.length && isDirectChildOf(categories[i], parent)) {
+        i++;
+    }
+
+    return i;
+}
+
 function addCategory(): void {
-    categories.push({ name: '', icon: 'Network', clientKey: Math.random().toString(36).substring(2, 15) });
+    const clientKey = Math.random().toString(36).substring(2, 15);
+    categories.push({ name: '', icon: 'Network', clientKey, parent_id: null, parentClientKey: null });
+    editingNameKeyPriorities.value = null;
+    editingNameKeyStatuses.value = null;
+    editingNameKeyCategories.value = clientKey;
+}
+
+function addSubcategory(parentIdx: number): void {
+    const parent = categories[parentIdx];
+    if (! parent) {
+        return;
+    }
+    if (parent.parent_id != null || parent.parentClientKey) {
+        return;
+    }
+    const clientKey = Math.random().toString(36).substring(2, 15);
+    const row: CategoryRow = {
+        name: '',
+        icon: parent.icon || 'Network',
+        clientKey,
+        parent_id: parent.id ?? null,
+        parentClientKey: parent.id == null ? parent.clientKey ?? null : null,
+    };
+    const at = insertIndexAfterCategorySubtree(parentIdx);
+    categories.splice(at, 0, row);
+    editingNameKeyPriorities.value = null;
+    editingNameKeyStatuses.value = null;
+    editingNameKeyCategories.value = clientKey;
 }
 
 function ticketCountForCategoryRow(row: CategoryRow): number {
@@ -159,13 +321,24 @@ function requestRemoveCategory(idx: number): void {
     if (isProtectedCategoryRow(row)) {
         return;
     }
+    if (categoryRootHasChildren(idx)) {
+        inUseModalMessage.value =
+            'Remove or move subcategories under this category before removing the parent.';
+        inUseModalKind.value = null;
+        inUseModalEntityId.value = null;
+        inUseModalTicketCount.value = 0;
+        pendingRemoveAfterTicketDelete.value = null;
+        inUseModalStep.value = 'info';
+        inUseModalOpen.value = true;
+        return;
+    }
     const count = ticketCountForCategoryRow(row);
     if (count > 0) {
         const label = row.name.trim() || 'This category';
         inUseModalMessage.value =
             count === 1
-                ? `Cannot remove "${label}" because 1 ticket still uses it. Reassign that ticket first, or delete it below.`
-                : `Cannot remove "${label}" because ${count} tickets still use it. Reassign those tickets first, or delete them below.`;
+                ? `Cannot remove "${label}" because 1 incident still uses it. Reassign that incident first, or delete it below.`
+                : `Cannot remove "${label}" because ${count} incidents still use it. Reassign those incidents first, or delete them below.`;
         inUseModalKind.value = 'category';
         inUseModalEntityId.value = row.id ?? null;
         inUseModalTicketCount.value = count;
@@ -174,20 +347,85 @@ function requestRemoveCategory(idx: number): void {
         inUseModalOpen.value = true;
         return;
     }
+    if (editingNameKeyCategories.value === rowKeyCategory(row, idx)) {
+        editingNameKeyCategories.value = null;
+    }
     categories.splice(idx, 1);
 }
+function moveRootSubtreeUp(rootIdx: number): void {
+    const { start, end } = categorySubtreeRangeFromRoot(rootIdx);
+    if (start <= 0) {
+        return;
+    }
+    let prevRootStart = start - 1;
+    while (prevRootStart >= 0 && ! isCategoryRootRow(categories[prevRootStart])) {
+        prevRootStart--;
+    }
+    if (prevRootStart < 0) {
+        return;
+    }
+    const before = categories.slice(0, prevRootStart);
+    const bBlock = categories.slice(prevRootStart, start);
+    const aBlock = categories.slice(start, end + 1);
+    const after = categories.slice(end + 1);
+    categories.splice(0, categories.length, ...before, ...aBlock, ...bBlock, ...after);
+}
+
+function moveRootSubtreeDown(rootIdx: number): void {
+    const { start, end } = categorySubtreeRangeFromRoot(rootIdx);
+    if (end >= categories.length - 1) {
+        return;
+    }
+    const nextRootStart = end + 1;
+    if (! isCategoryRootRow(categories[nextRootStart])) {
+        return;
+    }
+    const { end: nextEnd } = categorySubtreeRangeFromRoot(nextRootStart);
+    const before = categories.slice(0, start);
+    const aBlock = categories.slice(start, end + 1);
+    const bBlock = categories.slice(nextRootStart, nextEnd + 1);
+    const after = categories.slice(nextEnd + 1);
+    categories.splice(0, categories.length, ...before, ...bBlock, ...aBlock, ...after);
+}
+
 function moveCategoryUp(idx: number): void {
-    if (idx === 0) { return; }
+    const row = categories[idx];
+    if (! row) {
+        return;
+    }
+    if (isCategoryRootRow(row)) {
+        moveRootSubtreeUp(idx);
+        return;
+    }
+    const { start } = categoryChildSiblingBounds(idx);
+    if (idx <= start) {
+        return;
+    }
     [categories[idx - 1], categories[idx]] = [categories[idx], categories[idx - 1]];
 }
 function moveCategoryDown(idx: number): void {
-    if (idx === categories.length - 1) { return; }
+    const row = categories[idx];
+    if (! row) {
+        return;
+    }
+    if (isCategoryRootRow(row)) {
+        moveRootSubtreeDown(idx);
+        return;
+    }
+    const { end } = categoryChildSiblingBounds(idx);
+    if (idx >= end) {
+        return;
+    }
     [categories[idx], categories[idx + 1]] = [categories[idx + 1], categories[idx]];
 }
 
 // ── Priority helpers ───────────────────────────────────────────────────────
 function addPriority(): void {
-    priorities.push({ name: '', icon: 'AlertCircle', color: '#6b7280', clientKey: Math.random().toString(36).substring(2, 15) });
+    const clientKey = Math.random().toString(36).substring(2, 15);
+    priorities.push({ name: '', icon: 'AlertCircle', color: '#6b7280', clientKey });
+    editingNameKeyCategories.value = null;
+    editingNameKeyStatuses.value = null;
+    editingNameKeyPriorities.value = clientKey;
 }
 
 function ticketCountForPriorityRow(row: PriorityRow): number {
@@ -213,8 +451,8 @@ function requestRemovePriority(idx: number): void {
         const label = row.name.trim() || 'This priority';
         inUseModalMessage.value =
             count === 1
-                ? `Cannot remove "${label}" because 1 ticket still uses it. Reassign that ticket first, or delete it below.`
-                : `Cannot remove "${label}" because ${count} tickets still use it. Reassign those tickets first, or delete them below.`;
+                ? `Cannot remove "${label}" because 1 incident still uses it. Reassign that incident first, or delete it below.`
+                : `Cannot remove "${label}" because ${count} incidents still use it. Reassign those incidents first, or delete them below.`;
         inUseModalKind.value = 'priority';
         inUseModalEntityId.value = row.id ?? null;
         inUseModalTicketCount.value = count;
@@ -222,6 +460,9 @@ function requestRemovePriority(idx: number): void {
         inUseModalStep.value = 'info';
         inUseModalOpen.value = true;
         return;
+    }
+    if (editingNameKeyPriorities.value === rowKeyPriority(row, idx)) {
+        editingNameKeyPriorities.value = null;
     }
     priorities.splice(idx, 1);
 }
@@ -236,13 +477,17 @@ function movePriorityDown(idx: number): void {
 
 // ── Status helpers ─────────────────────────────────────────────────────────
 function addStatus(): void {
+    const clientKey = Math.random().toString(36).substring(2, 15);
     statuses.push({
         name: '',
         icon: 'Circle',
         color: '#64748b',
         handler_requirement: 'optional',
-        clientKey: Math.random().toString(36).substring(2, 15),
+        clientKey,
     });
+    editingNameKeyCategories.value = null;
+    editingNameKeyPriorities.value = null;
+    editingNameKeyStatuses.value = clientKey;
 }
 
 function ticketCountForStatusRow(row: StatusRow): number {
@@ -268,8 +513,8 @@ function requestRemoveStatus(idx: number): void {
         const label = row.name.trim() || 'This status';
         inUseModalMessage.value =
             count === 1
-                ? `Cannot remove "${label}" because 1 ticket still uses it. Reassign that ticket first, or delete it below.`
-                : `Cannot remove "${label}" because ${count} tickets still use it. Reassign those tickets first, or delete them below.`;
+                ? `Cannot remove "${label}" because 1 incident still uses it. Reassign that incident first, or delete it below.`
+                : `Cannot remove "${label}" because ${count} incidents still use it. Reassign those incidents first, or delete them below.`;
         inUseModalKind.value = 'status';
         inUseModalEntityId.value = row.id ?? null;
         inUseModalTicketCount.value = count;
@@ -277,6 +522,9 @@ function requestRemoveStatus(idx: number): void {
         inUseModalStep.value = 'info';
         inUseModalOpen.value = true;
         return;
+    }
+    if (editingNameKeyStatuses.value === rowKeyStatus(row, idx)) {
+        editingNameKeyStatuses.value = null;
     }
     statuses.splice(idx, 1);
 }
@@ -310,7 +558,83 @@ function rowKeyStatus(st: StatusRow, idx: number): string {
     return st.id != null ? `st-id-${st.id}` : (st.clientKey ?? `st-fallback-${idx}`);
 }
 
+function isEditingCategoryName(cat: CategoryRow, idx: number): boolean {
+    return editingNameKeyCategories.value === rowKeyCategory(cat, idx);
+}
+
+function startEditingCategoryName(cat: CategoryRow, idx: number): void {
+    if (isProtectedCategoryRow(cat)) {
+        return;
+    }
+    editingNameKeyPriorities.value = null;
+    editingNameKeyStatuses.value = null;
+    editingNameKeyCategories.value = rowKeyCategory(cat, idx);
+}
+
+function finishEditingCategoryName(): void {
+    if (activePicker.value?.type === 'cat') {
+        closePicker();
+    }
+    editingNameKeyCategories.value = null;
+}
+
+function isEditingPriorityName(pri: PriorityRow, idx: number): boolean {
+    return editingNameKeyPriorities.value === rowKeyPriority(pri, idx);
+}
+
+function startEditingPriorityName(pri: PriorityRow, idx: number): void {
+    if (isProtectedPriorityRow(pri)) {
+        return;
+    }
+    editingNameKeyCategories.value = null;
+    editingNameKeyStatuses.value = null;
+    editingNameKeyPriorities.value = rowKeyPriority(pri, idx);
+}
+
+function finishEditingPriorityName(): void {
+    if (activePicker.value?.type === 'pri') {
+        closePicker();
+    }
+    editingNameKeyPriorities.value = null;
+}
+
+function isEditingStatusName(st: StatusRow, idx: number): boolean {
+    return editingNameKeyStatuses.value === rowKeyStatus(st, idx);
+}
+
+function startEditingStatusName(st: StatusRow, idx: number): void {
+    if (isProtectedStatusRow(st)) {
+        return;
+    }
+    editingNameKeyCategories.value = null;
+    editingNameKeyPriorities.value = null;
+    editingNameKeyStatuses.value = rowKeyStatus(st, idx);
+}
+
+function finishEditingStatusName(): void {
+    if (activePicker.value?.type === 'stat') {
+        closePicker();
+    }
+    editingNameKeyStatuses.value = null;
+}
+
+watch([editingNameKeyCategories, editingNameKeyPriorities, editingNameKeyStatuses], async () => {
+    const active =
+        editingNameKeyCategories.value ??
+        editingNameKeyPriorities.value ??
+        editingNameKeyStatuses.value;
+    if (active === null) {
+        return;
+    }
+    await nextTick();
+    document.getElementById('ticket-config-editing-name-input')?.focus();
+});
+
 function onConfigDragStart(kind: ConfigListKind, idx: number, e: DragEvent): void {
+    editingNameKeyCategories.value = null;
+    editingNameKeyPriorities.value = null;
+    editingNameKeyStatuses.value = null;
+    closePicker();
     dragConfig.value = { kind, from: idx };
     e.dataTransfer?.setData('text/plain', `${kind}:${idx}`);
     if (e.dataTransfer) {
@@ -362,8 +686,11 @@ function onConfigDragEnd(): void {
         configDragGhostEl.remove();
         configDragGhostEl = null;
     }
-    dragConfig.value = null;
-    dragOverConfig.value = null;
+    // Defer clearing so `drop` always runs first when the browser fires dragend before drop.
+    queueMicrotask(() => {
+        dragConfig.value = null;
+        dragOverConfig.value = null;
+    });
 }
 
 function onConfigDragOver(kind: ConfigListKind, idx: number, e: DragEvent): void {
@@ -401,8 +728,38 @@ function onConfigDrop(kind: ConfigListKind, toIdx: number, e: DragEvent): void {
         return;
     }
     if (kind === 'categories') {
-        const [moved] = categories.splice(from, 1);
-        categories.splice(toIdx, 0, moved);
+        const fromRow = categories[from];
+        if (! fromRow) {
+            return;
+        }
+        if (isCategoryRootRow(fromRow)) {
+            const { start: fs, end: fe } = categorySubtreeRangeFromRoot(from);
+            const toInsertBefore = categoryDropInsertIndex(toIdx, fs, fe);
+            if (toInsertBefore === fs) {
+                return;
+            }
+            const blockLen = fe - fs + 1;
+            const block = categories.slice(fs, fe + 1);
+            const rest = [...categories.slice(0, fs), ...categories.slice(fe + 1)];
+            let pos = toInsertBefore;
+            if (toInsertBefore > fs) {
+                pos -= blockLen;
+            }
+            rest.splice(pos, 0, ...block);
+            categories.splice(0, categories.length, ...rest);
+        } else {
+            const fromRef = categoryParentGroupKey(fromRow);
+            const toRef = categoryParentGroupKey(categories[toIdx]);
+            if (fromRef !== toRef) {
+                return;
+            }
+            const [moved] = categories.splice(from, 1);
+            let target = toIdx;
+            if (from < toIdx) {
+                target = toIdx - 1;
+            }
+            categories.splice(target, 0, moved);
+        }
     } else if (kind === 'priorities') {
         const [moved] = priorities.splice(from, 1);
         priorities.splice(toIdx, 0, moved);
@@ -420,9 +777,25 @@ function configRowDragOverClass(kind: ConfigListKind, idx: number): string {
 }
 
 function configRowDraggingClass(kind: ConfigListKind, idx: number): string {
-    if (dragConfig.value?.kind !== kind || dragConfig.value.from !== idx) {
+    const state = dragConfig.value;
+    if (state?.kind !== kind) {
         return '';
     }
+    if (kind === 'categories') {
+        const fromRow = categories[state.from];
+        if (fromRow && isCategoryRootRow(fromRow)) {
+            const { start, end } = categorySubtreeRangeFromRoot(state.from);
+            if (idx >= start && idx <= end) {
+                return 'opacity-[0.38] scale-[0.985] shadow-inner';
+            }
+
+            return '';
+        }
+    }
+    if (state.from !== idx) {
+        return '';
+    }
+
     return 'opacity-[0.38] scale-[0.985] shadow-inner';
 }
 
@@ -520,17 +893,17 @@ watch(lucideIconsLoading, (loading) => {
 async function openPicker(e: MouseEvent, type: 'cat' | 'pri' | 'stat', idx: number): Promise<void> {
     if (type === 'cat') {
         const row = categories[idx];
-        if (row && isProtectedCategoryRow(row)) {
+        if (! row || isProtectedCategoryRow(row) || ! isEditingCategoryName(row, idx)) {
             return;
         }
     } else if (type === 'pri') {
         const row = priorities[idx];
-        if (row && isProtectedPriorityRow(row)) {
+        if (! row || isProtectedPriorityRow(row) || ! isEditingPriorityName(row, idx)) {
             return;
         }
     } else {
         const row = statuses[idx];
-        if (row && isProtectedStatusRow(row)) {
+        if (! row || isProtectedStatusRow(row) || ! isEditingStatusName(row, idx)) {
             return;
         }
     }
@@ -579,19 +952,19 @@ function selectIcon(icon: string): void {
     const { type, idx } = activePicker.value;
     if (type === 'cat') {
         const row = categories[idx];
-        if (row && isProtectedCategoryRow(row)) {
+        if (! row || isProtectedCategoryRow(row) || ! isEditingCategoryName(row, idx)) {
             return;
         }
         categories[idx].icon = icon;
     } else if (type === 'pri') {
         const row = priorities[idx];
-        if (row && isProtectedPriorityRow(row)) {
+        if (! row || isProtectedPriorityRow(row) || ! isEditingPriorityName(row, idx)) {
             return;
         }
         priorities[idx].icon = icon;
     } else {
         const row = statuses[idx];
-        if (row && isProtectedStatusRow(row)) {
+        if (! row || isProtectedStatusRow(row) || ! isEditingStatusName(row, idx)) {
             return;
         }
         statuses[idx].icon = icon;
@@ -729,13 +1102,86 @@ function submitGeneral(): void {
     generalForm.put(route('admin.settings.update'));
 }
 
+function serializeCategoriesForSave(): Record<string, unknown>[] {
+    const childOrder = new Map<string | number, number>();
+    const nextChildOrder = (parentKey: string | number): number => {
+        const cur = childOrder.get(parentKey) ?? 0;
+        childOrder.set(parentKey, cur + 1);
+
+        return cur;
+    };
+    let rootOrder = 0;
+    const out: Record<string, unknown>[] = [];
+    for (const row of categories) {
+        const isRoot = row.parent_id == null && ! row.parentClientKey;
+        if (isRoot) {
+            out.push({
+                id: row.id ?? null,
+                client_key: row.clientKey ?? null,
+                name: row.name,
+                icon: row.icon,
+                sort_order: rootOrder,
+                parent_id: null,
+                parent_client_key: null,
+            });
+            rootOrder += 1;
+        } else {
+            const parentKey =
+                row.parent_id != null && row.parent_id !== undefined
+                    ? row.parent_id
+                    : `ck:${row.parentClientKey ?? ''}`;
+            out.push({
+                id: row.id ?? null,
+                client_key: row.clientKey ?? null,
+                name: row.name,
+                icon: row.icon,
+                sort_order: nextChildOrder(parentKey),
+                parent_id: row.parent_id != null && row.parent_id !== undefined ? row.parent_id : null,
+                parent_client_key:
+                    row.parent_id != null && row.parent_id !== undefined ? null : (row.parentClientKey ?? null),
+            });
+        }
+    }
+
+    return out;
+}
+
+function categoryCanMoveUp(idx: number): boolean {
+    const row = categories[idx];
+    if (! row) {
+        return false;
+    }
+    if (isCategoryRootRow(row)) {
+        return categorySubtreeRangeFromRoot(idx).start > 0;
+    }
+
+    return idx > categoryChildSiblingBounds(idx).start;
+}
+
+function categoryCanMoveDown(idx: number): boolean {
+    const row = categories[idx];
+    if (! row) {
+        return false;
+    }
+    if (isCategoryRootRow(row)) {
+        const { end } = categorySubtreeRangeFromRoot(idx);
+        return end < categories.length - 1;
+    }
+
+    return idx < categoryChildSiblingBounds(idx).end;
+}
+
 function submitCategories(): void {
     if (hasEmptyTicketConfigLabel(categories)) {
         openEmptyLabelWarning('categories');
         return;
     }
-    categoriesForm.categories = [...categories] as CategoryRow[];
+    categoriesForm.categories = serializeCategoriesForSave() as unknown as CategoryRow[];
     categoriesForm.put(route('admin.ticket-categories.update'), {
+        onSuccess: () => {
+            closePicker();
+            editingNameKeyCategories.value = null;
+        },
         onError: (errors) => {
             const raw = errors.categories;
             if (raw === undefined || raw === null || raw === '') {
@@ -761,6 +1207,10 @@ function submitPriorities(): void {
     }
     prioritiesForm.priorities = [...priorities] as PriorityRow[];
     prioritiesForm.put(route('admin.ticket-priorities.update'), {
+        onSuccess: () => {
+            closePicker();
+            editingNameKeyPriorities.value = null;
+        },
         onError: (errors) => {
             const raw = errors.priorities;
             if (raw === undefined || raw === null || raw === '') {
@@ -789,6 +1239,10 @@ function submitStatuses(): void {
         handler_requirement: s.handler_requirement ?? 'optional',
     })) as StatusRow[];
     statusesForm.put(route('admin.ticket-statuses.update'), {
+        onSuccess: () => {
+            closePicker();
+            editingNameKeyStatuses.value = null;
+        },
         onError: (errors) => {
             const raw = errors.statuses;
             if (raw === undefined || raw === null || raw === '') {
@@ -854,21 +1308,34 @@ function executeDeleteTicketsForInUse(): void {
                 if (pending.kind === 'status') {
                     const i = statuses.findIndex((s) => s.id === pending.id);
                     if (i !== -1) {
+                        const row = statuses[i];
+                        if (editingNameKeyStatuses.value === rowKeyStatus(row, i)) {
+                            editingNameKeyStatuses.value = null;
+                        }
                         statuses.splice(i, 1);
                     }
                 } else if (pending.kind === 'category') {
                     const i = categories.findIndex((c) => c.id === pending.id);
                     if (i !== -1) {
+                        const row = categories[i];
+                        if (editingNameKeyCategories.value === rowKeyCategory(row, i)) {
+                            editingNameKeyCategories.value = null;
+                        }
                         categories.splice(i, 1);
                     }
                 } else {
                     const i = priorities.findIndex((p) => p.id === pending.id);
                     if (i !== -1) {
+                        const row = priorities[i];
+                        if (editingNameKeyPriorities.value === rowKeyPriority(row, i)) {
+                            editingNameKeyPriorities.value = null;
+                        }
                         priorities.splice(i, 1);
                     }
                 }
             }
             pendingRemoveAfterTicketDelete.value = null;
+            closePicker();
             onInUseModalOpen(false);
         },
     });
@@ -924,7 +1391,7 @@ function submitAppearance(): void {
                     Settings
                 </h1>
                 <p class="mt-1 text-sm text-muted-foreground">
-                    Manage global application configuration, ticket options, and UI preferences.
+                    Manage global application configuration, incident options, and UI preferences.
                 </p>
             </div>
 
@@ -932,7 +1399,7 @@ function submitAppearance(): void {
             <Tabs default-value="general">
                 <TabsList class="mb-4 grid w-full grid-cols-3">
                     <TabsTrigger value="general">General</TabsTrigger>
-                    <TabsTrigger value="tickets">Ticket Config</TabsTrigger>
+                    <TabsTrigger value="tickets">Incident Config</TabsTrigger>
                     <TabsTrigger value="appearance">Appearance</TabsTrigger>
                 </TabsList>
 
@@ -966,7 +1433,7 @@ function submitAppearance(): void {
                     </form>
                 </TabsContent>
 
-                <!-- ══ TICKETS TAB ════════════════════════════════════════ -->
+                <!-- ══ INCIDENT CONFIG TAB ════════════════════════════════ -->
                 <TabsContent value="tickets">
                     <div class="space-y-6">
 
@@ -974,9 +1441,9 @@ function submitAppearance(): void {
                         <form @submit.prevent="submitCategories">
                             <Card class="shadow-sm border border-border/60 transition-all duration-300 hover:shadow-md">
                                 <CardHeader>
-                                    <CardTitle>Ticket Categories</CardTitle>
+                                    <CardTitle>Incident Categories</CardTitle>
                                     <CardDescription>
-                                        Categories available when creating a ticket. Default categories (Network, Hardware, Software, Access, Security) cannot be removed and their names and icons are fixed. The "Others" row and any categories you add can be renamed, re-iconed, reordered, or removed when unused.
+                                        Top-level categories and optional subcategories (one level). Use the pencil (right side) to edit name and icon; drag a top-level row or use the arrows to move the whole category with its subcategories. Drag within subcategories to reorder only among siblings. Remove subcategories before removing a parent. At least one top-level category must remain.
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent class="flex flex-col gap-2">
@@ -986,7 +1453,11 @@ function submitAppearance(): void {
                                         :key="rowKeyCategory(cat, idx)"
                                         data-config-dnd-row
                                         class="group flex items-center gap-2 rounded-lg border border-border/50 bg-muted/20 px-3 py-2 transition-[transform,opacity,box-shadow,background-color] duration-300 ease-out hover:bg-muted/40"
-                                        :class="[configRowDragOverClass('categories', idx), configRowDraggingClass('categories', idx)]"
+                                        :class="[
+                                            configRowDragOverClass('categories', idx),
+                                            configRowDraggingClass('categories', idx),
+                                            cat.parent_id != null || cat.parentClientKey ? 'ml-4 border-l-2 border-primary/25 pl-3' : '',
+                                        ]"
                                         @dragover.prevent="onConfigDragOver('categories', idx, $event)"
                                         @dragleave="onConfigDragLeave('categories', idx, $event)"
                                         @drop.prevent="onConfigDrop('categories', idx, $event)"
@@ -1001,31 +1472,76 @@ function submitAppearance(): void {
                                             <GripVertical class="h-4 w-4 pointer-events-none" />
                                         </span>
 
-                                        <!-- Icon trigger -->
+                                        <!-- Icon trigger (only while row edit mode) -->
                                         <button
                                             type="button"
                                             class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-input bg-background text-foreground shadow-sm transition-all hover:border-primary/50 hover:ring-2 hover:ring-primary/20 focus:outline-none disabled:pointer-events-none disabled:opacity-50"
                                             :class="activePicker?.type === 'cat' && activePicker.idx === idx ? 'border-primary ring-2 ring-primary/20' : ''"
-                                            :disabled="isProtectedCategoryRow(cat)"
-                                            :title="isProtectedCategoryRow(cat) ? 'Built-in category: icon cannot be changed' : `Change icon (${cat.icon})`"
+                                            :disabled="isProtectedCategoryRow(cat) || !isEditingCategoryName(cat, idx)"
+                                            :title="
+                                                isProtectedCategoryRow(cat)
+                                                    ? 'Built-in category: icon cannot be changed'
+                                                    : isEditingCategoryName(cat, idx)
+                                                      ? `Change icon (${cat.icon})`
+                                                      : 'Click Edit to change icon'
+                                            "
                                             @click="openPicker($event, 'cat', idx)"
                                         >
                                             <component :is="resolveIcon(cat.icon)" class="h-4 w-4" />
                                         </button>
 
-                                        <Input
-                                            v-model="cat.name"
-                                            class="flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-0 font-medium disabled:cursor-not-allowed disabled:opacity-70"
-                                            placeholder="Category name"
-                                            :disabled="isProtectedCategoryRow(cat)"
-                                            :title="isProtectedCategoryRow(cat) ? 'Built-in category: name cannot be changed' : undefined"
-                                        />
+                                        <div class="flex min-w-0 flex-1 items-center gap-1.5">
+                                            <template v-if="isEditingCategoryName(cat, idx)">
+                                                <Input
+                                                    id="ticket-config-editing-name-input"
+                                                    v-model="cat.name"
+                                                    class="min-w-0 flex-1 border-0 bg-transparent px-2 py-1 text-sm font-medium shadow-none focus-visible:ring-2 focus-visible:ring-ring"
+                                                    placeholder="Category name"
+                                                    @keydown.enter.prevent="finishEditingCategoryName"
+                                                    @keydown.escape.prevent="finishEditingCategoryName"
+                                                />
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="icon"
+                                                    class="h-8 w-8 shrink-0"
+                                                    title="Done editing"
+                                                    @click="finishEditingCategoryName"
+                                                >
+                                                    <Check class="h-3.5 w-3.5" />
+                                                </Button>
+                                            </template>
+                                            <template v-else>
+                                                <span
+                                                    class="min-w-0 flex-1 truncate px-0.5 py-1 text-sm"
+                                                    :class="
+                                                        ! cat.name.trim()
+                                                            ? 'text-muted-foreground italic font-normal'
+                                                            : isProtectedCategoryRow(cat)
+                                                              ? 'select-none font-normal text-muted-foreground'
+                                                              : 'font-medium text-foreground'
+                                                    "
+                                                    :title="isProtectedCategoryRow(cat) ? 'Built-in category: name is fixed' : undefined"
+                                                >
+                                                    {{ cat.name.trim() || 'Unnamed category' }}
+                                                </span>
+                                            </template>
+                                        </div>
 
                                         <div class="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                                            <button type="button" class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30" :disabled="idx === 0" @click="moveCategoryUp(idx)">
+                                            <button
+                                                v-if="cat.parent_id == null && !cat.parentClientKey"
+                                                type="button"
+                                                class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+                                                title="Add subcategory"
+                                                @click="addSubcategory(idx)"
+                                            >
+                                                <Plus class="h-3.5 w-3.5" />
+                                            </button>
+                                            <button type="button" class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30" :disabled="!categoryCanMoveUp(idx)" @click="moveCategoryUp(idx)">
                                                 <ArrowUp class="h-3.5 w-3.5" />
                                             </button>
-                                            <button type="button" class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30" :disabled="idx === categories.length - 1" @click="moveCategoryDown(idx)">
+                                            <button type="button" class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30" :disabled="!categoryCanMoveDown(idx)" @click="moveCategoryDown(idx)">
                                                 <ArrowDown class="h-3.5 w-3.5" />
                                             </button>
                                             <button
@@ -1037,13 +1553,22 @@ function submitAppearance(): void {
                                             >
                                                 <Trash2 class="h-3.5 w-3.5" />
                                             </button>
+                                            <button
+                                                v-if="!isProtectedCategoryRow(cat)"
+                                                type="button"
+                                                class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+                                                title="Edit name and icon"
+                                                @click="startEditingCategoryName(cat, idx)"
+                                            >
+                                                <Pencil class="h-3.5 w-3.5" />
+                                            </button>
                                         </div>
                                     </div>
                                     </TransitionGroup>
 
                                     <div class="flex items-center justify-between pt-1">
                                         <Button type="button" variant="ghost" size="sm" class="h-8 gap-1.5 text-xs" @click="addCategory">
-                                            <Plus class="h-3.5 w-3.5" /> Add Category
+                                            <Plus class="h-3.5 w-3.5" /> Add top-level category
                                         </Button>
                                         <Button type="submit" size="sm" :disabled="categoriesForm.processing">
                                             <Check class="mr-1.5 h-3.5 w-3.5" />
@@ -1058,9 +1583,9 @@ function submitAppearance(): void {
                         <form @submit.prevent="submitPriorities">
                             <Card class="shadow-sm border border-border/60 transition-all duration-300 hover:shadow-md">
                                 <CardHeader>
-                                    <CardTitle>Ticket Priorities</CardTitle>
+                                    <CardTitle>Incident Priorities</CardTitle>
                                     <CardDescription>
-                                        Priority levels for tickets. Default priorities (Critical, High, Medium, Low) cannot be removed; their names, icons, and colours are fixed. You can add custom levels with your own styling.
+                                        Priority levels for incidents. Default priorities cannot be removed; their names, icons, and colours are fixed. Custom rows: use the pencil (right side) to edit name, icon, and colour. You can add levels with your own styling.
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent class="flex flex-col gap-2">
@@ -1085,36 +1610,79 @@ function submitAppearance(): void {
                                             <GripVertical class="h-4 w-4 pointer-events-none" />
                                         </span>
 
-                                        <!-- Icon trigger -->
+                                        <!-- Icon trigger (custom rows: only while row edit mode) -->
                                         <button
                                             type="button"
                                             class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-input bg-background shadow-sm transition-all hover:border-primary/50 hover:ring-2 hover:ring-primary/20 focus:outline-none disabled:pointer-events-none disabled:opacity-50"
                                             :class="activePicker?.type === 'pri' && activePicker.idx === idx ? 'border-primary ring-2 ring-primary/20' : ''"
                                             :style="{ color: pri.color }"
-                                            :disabled="isProtectedPriorityRow(pri)"
-                                            :title="isProtectedPriorityRow(pri) ? 'Built-in priority: icon cannot be changed' : `Change icon (${pri.icon})`"
+                                            :disabled="isProtectedPriorityRow(pri) || !isEditingPriorityName(pri, idx)"
+                                            :title="
+                                                isProtectedPriorityRow(pri)
+                                                    ? 'Built-in priority: icon cannot be changed'
+                                                    : isEditingPriorityName(pri, idx)
+                                                      ? `Change icon (${pri.icon})`
+                                                      : 'Click Edit to change icon'
+                                            "
                                             @click="openPicker($event, 'pri', idx)"
                                         >
                                             <component :is="resolveIcon(pri.icon)" class="h-4 w-4" />
                                         </button>
 
-                                        <Input
-                                            v-model="pri.name"
-                                            class="flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-0 font-medium disabled:cursor-not-allowed disabled:opacity-70"
-                                            placeholder="Priority name"
-                                            :disabled="isProtectedPriorityRow(pri)"
-                                            :title="isProtectedPriorityRow(pri) ? 'Built-in priority: name cannot be changed' : undefined"
-                                        />
+                                        <div class="flex min-w-0 flex-1 items-center gap-1.5">
+                                            <template v-if="isEditingPriorityName(pri, idx)">
+                                                <Input
+                                                    id="ticket-config-editing-name-input"
+                                                    v-model="pri.name"
+                                                    class="min-w-0 flex-1 border-0 bg-transparent px-2 py-1 text-sm font-medium shadow-none focus-visible:ring-2 focus-visible:ring-ring"
+                                                    placeholder="Priority name"
+                                                    @keydown.enter.prevent="finishEditingPriorityName"
+                                                    @keydown.escape.prevent="finishEditingPriorityName"
+                                                />
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="icon"
+                                                    class="h-8 w-8 shrink-0"
+                                                    title="Done editing"
+                                                    @click="finishEditingPriorityName"
+                                                >
+                                                    <Check class="h-3.5 w-3.5" />
+                                                </Button>
+                                            </template>
+                                            <template v-else>
+                                                <span
+                                                    class="min-w-0 flex-1 truncate px-0.5 py-1 text-sm"
+                                                    :class="
+                                                        ! pri.name.trim()
+                                                            ? 'text-muted-foreground italic font-normal'
+                                                            : isProtectedPriorityRow(pri)
+                                                              ? 'select-none font-normal text-muted-foreground'
+                                                              : 'font-medium text-foreground'
+                                                    "
+                                                    :title="isProtectedPriorityRow(pri) ? 'Built-in priority: name is fixed' : undefined"
+                                                >
+                                                    {{ pri.name.trim() || 'Unnamed priority' }}
+                                                </span>
+                                            </template>
+                                        </div>
 
                                         <!-- Color swatch -->
                                         <label
-                                            v-if="!isProtectedPriorityRow(pri)"
+                                            v-if="!isProtectedPriorityRow(pri) && isEditingPriorityName(pri, idx)"
                                             class="relative flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md border border-input bg-background shadow-sm transition-all hover:border-primary/50 hover:ring-2 hover:ring-primary/20"
                                             :title="pri.color"
                                         >
                                             <span class="h-4 w-4 rounded-full border border-border/50 shadow-sm" :style="{ backgroundColor: pri.color }" />
                                             <input v-model="pri.color" type="color" class="sr-only" />
                                         </label>
+                                        <span
+                                            v-else-if="!isProtectedPriorityRow(pri)"
+                                            class="flex h-8 w-8 shrink-0 cursor-default items-center justify-center rounded-md border border-input bg-background opacity-90 shadow-sm"
+                                            title="Click Edit to change colour"
+                                        >
+                                            <span class="h-4 w-4 rounded-full border border-border/50 shadow-sm" :style="{ backgroundColor: pri.color }" />
+                                        </span>
                                         <span
                                             v-else
                                             class="flex h-8 w-8 shrink-0 cursor-not-allowed items-center justify-center rounded-md border border-input bg-background opacity-70 shadow-sm"
@@ -1139,6 +1707,15 @@ function submitAppearance(): void {
                                             >
                                                 <Trash2 class="h-3.5 w-3.5" />
                                             </button>
+                                            <button
+                                                v-if="!isProtectedPriorityRow(pri)"
+                                                type="button"
+                                                class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+                                                title="Edit name, icon, and colour"
+                                                @click="startEditingPriorityName(pri, idx)"
+                                            >
+                                                <Pencil class="h-3.5 w-3.5" />
+                                            </button>
                                         </div>
                                     </div>
                                     </TransitionGroup>
@@ -1160,9 +1737,9 @@ function submitAppearance(): void {
                         <form @submit.prevent="submitStatuses">
                             <Card class="shadow-sm border border-border/60 transition-all duration-300 hover:shadow-md">
                                 <CardHeader>
-                                    <CardTitle>Ticket Statuses</CardTitle>
+                                    <CardTitle>Incident Statuses</CardTitle>
                                     <CardDescription>
-                                        Workflow labels with icon and colour. Default statuses (Open, In Progress, On Hold, Resolved, Cancelled) cannot be removed; their names, icons, colours, and handler rules are fixed. You can add custom statuses.
+                                        Workflow labels with icon and colour. Default statuses cannot be removed; their names, icons, colours, and handler rules are fixed. Custom rows: use the pencil (right side) to edit name, icon, colour, and handler rules.
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent class="flex flex-col gap-2">
@@ -1191,27 +1768,69 @@ function submitAppearance(): void {
                                             class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-input bg-background shadow-sm transition-all hover:border-primary/50 hover:ring-2 hover:ring-primary/20 focus:outline-none disabled:pointer-events-none disabled:opacity-50"
                                             :class="activePicker?.type === 'stat' && activePicker.idx === idx ? 'border-primary ring-2 ring-primary/20' : ''"
                                             :style="{ color: st.color }"
-                                            :disabled="isProtectedStatusRow(st)"
-                                            :title="isProtectedStatusRow(st) ? 'Built-in status: icon cannot be changed' : `Change icon (${st.icon})`"
+                                            :disabled="isProtectedStatusRow(st) || !isEditingStatusName(st, idx)"
+                                            :title="
+                                                isProtectedStatusRow(st)
+                                                    ? 'Built-in status: icon cannot be changed'
+                                                    : isEditingStatusName(st, idx)
+                                                      ? `Change icon (${st.icon})`
+                                                      : 'Click Edit to change icon'
+                                            "
                                             @click="openPicker($event, 'stat', idx)"
                                         >
                                             <component :is="resolveIcon(st.icon)" class="h-4 w-4" />
                                         </button>
-                                        <Input
-                                            v-model="statuses[idx].name"
-                                            class="min-w-0 flex-1 border-0 bg-transparent px-0 font-medium shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-70"
-                                            placeholder="Status label"
-                                            :disabled="isProtectedStatusRow(st)"
-                                            :title="isProtectedStatusRow(st) ? 'Built-in status: name cannot be changed' : undefined"
-                                        />
+                                        <div class="flex min-w-0 flex-1 items-center gap-1.5">
+                                            <template v-if="isEditingStatusName(st, idx)">
+                                                <Input
+                                                    id="ticket-config-editing-name-input"
+                                                    v-model="statuses[idx].name"
+                                                    class="min-w-0 flex-1 border-0 bg-transparent px-2 py-1 text-sm font-medium shadow-none focus-visible:ring-2 focus-visible:ring-ring"
+                                                    placeholder="Status label"
+                                                    @keydown.enter.prevent="finishEditingStatusName"
+                                                    @keydown.escape.prevent="finishEditingStatusName"
+                                                />
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="icon"
+                                                    class="h-8 w-8 shrink-0"
+                                                    title="Done editing"
+                                                    @click="finishEditingStatusName"
+                                                >
+                                                    <Check class="h-3.5 w-3.5" />
+                                                </Button>
+                                            </template>
+                                            <template v-else>
+                                                <span
+                                                    class="min-w-0 flex-1 truncate px-0.5 py-1 text-sm"
+                                                    :class="
+                                                        ! st.name.trim()
+                                                            ? 'text-muted-foreground italic font-normal'
+                                                            : isProtectedStatusRow(st)
+                                                              ? 'select-none font-normal text-muted-foreground'
+                                                              : 'font-medium text-foreground'
+                                                    "
+                                                    :title="isProtectedStatusRow(st) ? 'Built-in status: name is fixed' : undefined"
+                                                >
+                                                    {{ st.name.trim() || 'Unnamed status' }}
+                                                </span>
+                                            </template>
+                                        </div>
                                         <Select
                                             :model-value="st.handler_requirement ?? 'optional'"
-                                            :disabled="isProtectedStatusRow(st)"
+                                            :disabled="isProtectedStatusRow(st) || !isEditingStatusName(st, idx)"
                                             @update:model-value="(v) => (statuses[idx].handler_requirement = v as StatusHandlerRequirement)"
                                         >
                                             <SelectTrigger
                                                 class="h-8 w-[9.75rem] shrink-0 text-xs"
-                                                :title="isProtectedStatusRow(st) ? 'Built-in statuses cannot change handler rules' : undefined"
+                                                :title="
+                                                    isProtectedStatusRow(st)
+                                                        ? 'Built-in statuses cannot change handler rules'
+                                                        : isEditingStatusName(st, idx)
+                                                          ? undefined
+                                                          : 'Click Edit to change handler rules'
+                                                "
                                             >
                                                 <SelectValue placeholder="Handlers" />
                                             </SelectTrigger>
@@ -1222,13 +1841,20 @@ function submitAppearance(): void {
                                             </SelectContent>
                                         </Select>
                                         <label
-                                            v-if="!isProtectedStatusRow(st)"
+                                            v-if="!isProtectedStatusRow(st) && isEditingStatusName(st, idx)"
                                             class="relative flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md border border-input bg-background shadow-sm transition-all hover:border-primary/50 hover:ring-2 hover:ring-primary/20"
                                             :title="st.color"
                                         >
                                             <span class="h-4 w-4 rounded-full border border-border/50 shadow-sm" :style="{ backgroundColor: st.color }" />
                                             <input v-model="st.color" type="color" class="sr-only" />
                                         </label>
+                                        <span
+                                            v-else-if="!isProtectedStatusRow(st)"
+                                            class="flex h-8 w-8 shrink-0 cursor-default items-center justify-center rounded-md border border-input bg-background opacity-90 shadow-sm"
+                                            title="Click Edit to change colour"
+                                        >
+                                            <span class="h-4 w-4 rounded-full border border-border/50 shadow-sm" :style="{ backgroundColor: st.color }" />
+                                        </span>
                                         <span
                                             v-else
                                             class="flex h-8 w-8 shrink-0 cursor-not-allowed items-center justify-center rounded-md border border-input bg-background opacity-70 shadow-sm"
@@ -1251,6 +1877,15 @@ function submitAppearance(): void {
                                                 @click="requestRemoveStatus(idx)"
                                             >
                                                 <Trash2 class="h-3.5 w-3.5" />
+                                            </button>
+                                            <button
+                                                v-if="!isProtectedStatusRow(st)"
+                                                type="button"
+                                                class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+                                                title="Edit name, icon, colour, and handlers"
+                                                @click="startEditingStatusName(st, idx)"
+                                            >
+                                                <Pencil class="h-3.5 w-3.5" />
                                             </button>
                                         </div>
                                     </div>
@@ -1346,7 +1981,7 @@ function submitAppearance(): void {
                         <div class="space-y-3 pr-8">
                             <DialogTitle class="text-xl font-semibold tracking-tight text-foreground">
                                 <template v-if="inUseModalStep === 'info'">{{ inUseModalInfoTitle }}</template>
-                                <template v-else>Delete these tickets?</template>
+                                <template v-else>Delete these incidents?</template>
                             </DialogTitle>
                             <DialogDescription
                                 v-if="inUseModalStep === 'info'"
@@ -1359,7 +1994,7 @@ function submitAppearance(): void {
                                 class="text-[15px] leading-relaxed text-foreground antialiased"
                             >
                                 This will permanently delete
-                                {{ inUseModalTicketCount === 1 ? '1 ticket' : `${inUseModalTicketCount} tickets` }}
+                                {{ inUseModalTicketCount === 1 ? '1 incident' : `${inUseModalTicketCount} incidents` }}
                                 that currently match {{ inUseConfirmScopeLabel }}, including comments and history. This cannot be undone.
                             </DialogDescription>
                         </div>
@@ -1377,7 +2012,7 @@ function submitAppearance(): void {
                         >
                             <Trash2 class="mr-2 h-4 w-4 opacity-90 dark:opacity-100" />
                             Delete
-                            {{ inUseModalTicketCount === 1 ? '1 ticket' : `${inUseModalTicketCount} tickets` }}
+                            {{ inUseModalTicketCount === 1 ? '1 incident' : `${inUseModalTicketCount} incidents` }}
                         </Button>
                         <Button
                             type="button"

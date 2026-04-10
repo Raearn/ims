@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\Ticket;
+use App\Models\TicketCategory;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -27,5 +28,22 @@ class TicketFactory extends Factory
             'user_id' => User::factory(),
             'assigned_to' => null,
         ];
+    }
+
+    public function configure(): static
+    {
+        return $this->afterMaking(function (Ticket $ticket): void {
+            if ($ticket->ticket_category_id !== null) {
+                return;
+            }
+            $name = (string) $ticket->category;
+            $id = TicketCategory::query()
+                ->where('name', $name)
+                ->whereNull('parent_id')
+                ->value('id') ?? TicketCategory::query()->where('name', $name)->value('id');
+            if ($id !== null) {
+                $ticket->ticket_category_id = $id;
+            }
+        });
     }
 }

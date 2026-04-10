@@ -15,6 +15,33 @@ class TicketConfigSettingsTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * @param  list<array{name: string, icon: string}>  $simple
+     * @return list<array<string, mixed>>
+     */
+    private function categoriesPayload(array $simple, bool $attachIdsFromDbByName = false): array
+    {
+        $byName = $attachIdsFromDbByName
+            ? TicketCategory::query()->get()->keyBy('name')
+            : collect();
+
+        $out = [];
+        foreach (array_values($simple) as $i => $r) {
+            $existing = $byName[$r['name']] ?? null;
+            $out[] = [
+                'id' => $existing?->id,
+                'client_key' => null,
+                'name' => $r['name'],
+                'icon' => $r['icon'],
+                'sort_order' => $i,
+                'parent_id' => null,
+                'parent_client_key' => null,
+            ];
+        }
+
+        return $out;
+    }
+
     // ── Categories ────────────────────────────────────────────────────────
 
     public function test_admin_can_update_categories(): void
@@ -22,10 +49,10 @@ class TicketConfigSettingsTest extends TestCase
         TicketCategory::create(['name' => 'Old', 'icon' => 'Circle', 'sort_order' => 99]);
         $admin = User::factory()->admin()->create();
 
-        $rows = array_map(
+        $rows = $this->categoriesPayload(array_map(
             fn (array $r) => ['name' => $r['name'], 'icon' => $r['icon']],
             TicketConfigDefaults::categories(),
-        );
+        ));
         $othersIdx = array_search('Others', array_column($rows, 'name'), true);
         $this->assertNotFalse($othersIdx);
         $rows[$othersIdx]['icon'] = 'Globe';
@@ -41,12 +68,41 @@ class TicketConfigSettingsTest extends TestCase
         $this->assertDatabaseMissing('ticket_categories', ['name' => 'Old']);
     }
 
+    public function test_admin_can_save_subcategory_under_network(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $network = TicketCategory::query()->where('name', 'Network')->firstOrFail();
+        $payload = $this->categoriesPayload(array_map(
+            fn (array $r) => ['name' => $r['name'], 'icon' => $r['icon']],
+            TicketConfigDefaults::categories(),
+        ), true);
+        $payload[] = [
+            'id' => null,
+            'client_key' => null,
+            'name' => 'ISP Test',
+            'icon' => 'Wifi',
+            'sort_order' => 0,
+            'parent_id' => $network->id,
+            'parent_client_key' => null,
+        ];
+
+        $this->actingAs($admin)
+            ->put('/admin/ticket-categories', ['categories' => $payload])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('ticket_categories', [
+            'name' => 'ISP Test',
+            'parent_id' => $network->id,
+        ]);
+    }
+
     public function test_non_admin_cannot_update_categories(): void
     {
         $user = User::factory()->create(['role' => 'technical']);
 
         $this->actingAs($user)
-            ->put('/admin/ticket-categories', ['categories' => [['name' => 'Hack', 'icon' => 'Circle']]])
+            ->put('/admin/ticket-categories', ['categories' => $this->categoriesPayload([['name' => 'Hack', 'icon' => 'Circle']])])
             ->assertForbidden();
 
         $this->assertDatabaseMissing('ticket_categories', ['name' => 'Hack']);
@@ -58,7 +114,7 @@ class TicketConfigSettingsTest extends TestCase
 
         $this->actingAs($admin)
             ->put('/admin/ticket-categories', [
-                'categories' => [['name' => '', 'icon' => 'Network']],
+                'categories' => $this->categoriesPayload([['name' => '', 'icon' => 'Network']]),
             ])
             ->assertSessionHasErrors('categories.0.name');
     }
@@ -175,31 +231,46 @@ class TicketConfigSettingsTest extends TestCase
             ->assertSessionHasErrors('statuses.0.handler_requirement');
     }
 
-    public function test_cannot_omit_built_in_categories(): void
+    public function test_admin_can_submit_subset_of_categories_when_defaults_seeded(): void
     {
         $admin = User::factory()->admin()->create();
-        $rows = array_map(
+        $rows = $this->categoriesPayload(array_map(
             fn (array $r) => ['name' => $r['name'], 'icon' => $r['icon']],
             array_slice(TicketConfigDefaults::categories(), 0, 4),
-        );
+        ));
 
         $this->actingAs($admin)
             ->put('/admin/ticket-categories', ['categories' => $rows])
-            ->assertSessionHasErrors('categories');
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseCount('ticket_categories', 4);
     }
 
-    public function test_cannot_change_built_in_category_icon(): void
+    public function test_admin_can_change_default_category_icon(): void
     {
         $admin = User::factory()->admin()->create();
-        $rows = array_map(
+        $rows = $this->categoriesPayload(array_map(
             fn (array $r) => ['name' => $r['name'], 'icon' => $r['icon']],
             TicketConfigDefaults::categories(),
-        );
+        ), true);
         $rows[0]['icon'] = 'Globe';
 
         $this->actingAs($admin)
             ->put('/admin/ticket-categories', ['categories' => $rows])
-            ->assertSessionHasErrors('categories.0.icon');
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('ticket_categories', ['name' => 'Network', 'icon' => 'Globe', 'sort_order' => 0]);
+    }
+
+    public function test_categories_update_requires_at_least_one_row(): void
+    {
+        $admin = User::factory()->admin()->create();
+
+        $this->actingAs($admin)
+            ->put('/admin/ticket-categories', ['categories' => []])
+            ->assertSessionHasErrors('categories');
     }
 
     public function test_cannot_change_built_in_priority_icon(): void
@@ -271,13 +342,13 @@ class TicketConfigSettingsTest extends TestCase
     public function test_admin_can_remove_others_category(): void
     {
         $admin = User::factory()->admin()->create();
-        $rows = array_map(
+        $rows = $this->categoriesPayload(array_map(
             fn (array $r) => ['name' => $r['name'], 'icon' => $r['icon']],
             array_values(array_filter(
                 TicketConfigDefaults::categories(),
                 fn (array $r) => $r['name'] !== 'Others',
             )),
-        );
+        ), true);
 
         $this->actingAs($admin)
             ->put('/admin/ticket-categories', ['categories' => $rows])
@@ -418,7 +489,7 @@ class TicketConfigSettingsTest extends TestCase
         $this->actingAs($admin)
             ->delete(route('admin.ticket-statuses.tickets.destroy', $onHold))
             ->assertRedirect()
-            ->assertSessionHas('success', 'No tickets used that status.');
+            ->assertSessionHas('success', 'No incidents used that status.');
     }
 
     public function test_cannot_remove_category_while_tickets_use_it(): void
@@ -431,10 +502,10 @@ class TicketConfigSettingsTest extends TestCase
             'assigned_to' => null,
         ]);
 
-        $rows = array_map(
+        $rows = $this->categoriesPayload(array_map(
             fn (array $r) => ['name' => $r['name'], 'icon' => $r['icon']],
             TicketConfigDefaults::categories(),
-        );
+        ), true);
 
         $this->actingAs($admin)
             ->put('/admin/ticket-categories', ['categories' => $rows])

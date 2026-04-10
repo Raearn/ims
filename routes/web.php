@@ -189,6 +189,7 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
                 'status' => $ticket->status,
                 'priority' => $ticket->priority,
                 'category' => $ticket->category,
+                'ticketCategoryId' => $ticket->ticket_category_id,
                 'tags' => $ticket->tags->pluck('name')->toArray(),
                 'handlerIds' => $ticket->handlers->pluck('id')->toArray(),
                 'handlers' => $ticket->handlers->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->values()->toArray(),
@@ -206,7 +207,12 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
                 'commentsCount' => $ticket->comments_count,
             ]),
             'users' => User::select('id', 'name')->orderBy('name')->get(),
-            'categories' => TicketCategory::orderBy('sort_order')->get(['id', 'name', 'icon']),
+            'categories' => TicketCategory::orderedTreeForSettings()->map(fn (TicketCategory $c): array => [
+                'id' => $c->id,
+                'name' => $c->name,
+                'icon' => $c->icon,
+                'parent_id' => $c->parent_id,
+            ])->values()->all(),
             'priorities' => TicketPriority::orderBy('sort_order')->get(['id', 'name', 'icon', 'color']),
             'statuses' => TicketStatus::orderBy('sort_order')->get(['id', 'name', 'icon', 'color', 'handler_requirement']),
             'allTags' => Tag::pluck('name')->toArray(),
@@ -226,6 +232,7 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
                 'status' => $ticket->status,
                 'priority' => $ticket->priority,
                 'category' => $ticket->category,
+                'ticketCategoryId' => $ticket->ticket_category_id,
                 'tags' => $ticket->tags->pluck('name')->toArray(),
                 'handlerIds' => $ticket->handlers->pluck('id')->toArray(),
                 'handlers' => $ticket->handlers->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->values()->toArray(),
@@ -242,6 +249,12 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
                 'resolvedAtFormatted' => $ticket->resolved_at?->format('M d, Y \a\t h:i A'),
                 'commentsCount' => $ticket->comments_count,
             ],
+            'categories' => TicketCategory::orderedTreeForSettings()->map(fn (TicketCategory $c): array => [
+                'id' => $c->id,
+                'name' => $c->name,
+                'icon' => $c->icon,
+                'parent_id' => $c->parent_id,
+            ])->values()->all(),
             'priorities' => TicketPriority::orderBy('sort_order')->get(['id', 'name', 'icon', 'color']),
             'statuses' => TicketStatus::orderBy('sort_order')->get(['id', 'name', 'icon', 'color', 'handler_requirement']),
         ]);
@@ -251,7 +264,7 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
         $validated = request()->validate([
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'category' => ['required', 'string', Rule::in(TicketCategory::pluck('name')->toArray())],
+            'ticket_category_id' => ['required', 'integer', Rule::exists('ticket_categories', 'id')],
             'priority' => ['required', 'string', Rule::in(TicketPriority::pluck('name')->toArray())],
             'status' => ['required', 'string', Rule::in(TicketStatus::pluck('name')->toArray())],
             'handler_ids' => [
@@ -282,6 +295,8 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
             $validated['attachment'] = request()->file('attachment')->store('attachments', 'public');
         }
 
+        $categoryName = TicketCategory::query()->whereKey($validated['ticket_category_id'])->value('name') ?? '';
+
         $ticket = Ticket::create([
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
@@ -289,7 +304,8 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
             'status' => $validated['status'],
             'solution' => $validated['solution'] ?? null,
             'priority' => $validated['priority'],
-            'category' => $validated['category'],
+            'category' => $categoryName,
+            'ticket_category_id' => $validated['ticket_category_id'],
             'user_id' => auth()->id(),
         ]);
 
@@ -719,7 +735,7 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
         $validated = request()->validate([
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'category' => ['required', 'string', Rule::in(TicketCategory::pluck('name')->toArray())],
+            'ticket_category_id' => ['required', 'integer', Rule::exists('ticket_categories', 'id')],
             'priority' => ['required', 'string', Rule::in(TicketPriority::pluck('name')->toArray())],
             'status' => ['required', 'string', Rule::in(TicketStatus::pluck('name')->toArray())],
             'handler_ids' => [
@@ -769,13 +785,16 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
 
         $oldTagNames = $normalizeTagList($ticket->tags()->pluck('name')->all());
 
+        $categoryName = TicketCategory::query()->whereKey($validated['ticket_category_id'])->value('name') ?? '';
+
         $ticket->update([
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
             'status' => $newStatus,
             'solution' => $newStatus === 'Resolved' ? ($validated['solution'] ?? null) : $ticket->solution,
             'priority' => $validated['priority'],
-            'category' => $validated['category'],
+            'category' => $categoryName,
+            'ticket_category_id' => $validated['ticket_category_id'],
             'attachment' => $validated['attachment'] ?? $ticket->attachment,
         ]);
 

@@ -288,7 +288,9 @@ class DashboardController extends Controller
         }
 
         // ── Category distribution (admin-configured categories) ─────
-        $categoriesConfigured = TicketCategory::orderBy('sort_order')->get(['name']);
+        $categoriesConfigured = TicketCategory::orderedTreeForSettings()->map(fn (TicketCategory $c): object => (object) [
+            'name' => $c->name,
+        ]);
 
         $categoryPalette = ['#3b82f6', '#a855f7', '#f97316', '#22c55e', '#ef4444', '#06b6d4', '#eab308', '#ec4899', '#6366f1', '#14b8a6', '#84cc16', '#f59e0b'];
 

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Ticket;
+use App\Models\TicketCategory;
 use App\Models\User;
 use App\Notifications\TicketAssigned;
 use App\Notifications\TicketStatusChanged;
@@ -32,10 +33,13 @@ class NotificationTest extends TestCase
         $admin = $this->admin();
         $handler = $this->technician();
 
+        $networkId = TicketCategory::query()->where('name', 'Network')->value('id');
+        $this->assertNotNull($networkId);
+
         $this->actingAs($admin)
             ->post(route('tickets.store'), [
                 'title' => 'Test Ticket',
-                'category' => 'Network',
+                'ticket_category_id' => $networkId,
                 'priority' => 'High',
                 'status' => 'In Progress',
                 'handler_ids' => [$handler->id],
@@ -50,10 +54,13 @@ class NotificationTest extends TestCase
         Notification::fake();
         $admin = $this->admin();
 
+        $networkId = TicketCategory::query()->where('name', 'Network')->value('id');
+        $this->assertNotNull($networkId);
+
         $this->actingAs($admin)
             ->post(route('tickets.store'), [
                 'title' => 'Unassigned Ticket',
-                'category' => 'Network',
+                'ticket_category_id' => $networkId,
                 'priority' => 'Low',
                 'status' => 'Open',
                 'tags' => ['NotifyTag'],

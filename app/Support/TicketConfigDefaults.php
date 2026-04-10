@@ -4,8 +4,8 @@ namespace App\Support;
 
 /**
  * Built-in ticket categories, priorities, and statuses shipped with the app.
- * Seeded defaults for categories, priorities, and statuses. Protected names cannot be removed
- * from admin settings except the "Others" category, which is optional.
+ * Seeded defaults for categories, priorities, and statuses. Categories are fully editable in admin
+ * settings (at least one category must remain). Priorities and statuses keep built-in name/icon rules.
  */
 final class TicketConfigDefaults
 {
@@ -33,7 +33,7 @@ final class TicketConfigDefaults
     }
 
     /**
-     * Category names that must remain in admin settings (cannot be removed). "Others" is not included.
+     * Default category names except optional "Others" (for seeds and migrations; not enforced as locked in settings).
      *
      * @return list<string>
      */

@@ -324,10 +324,11 @@ class AuditLogTest extends TestCase
             ->assertJsonStructure([
                 'ticket' => [
                     'numericId', 'id', 'title', 'description', 'status', 'priority',
-                    'category', 'handlerIds', 'handlers', 'reporter', 'reporterId',
+                    'category', 'ticketCategoryId', 'handlerIds', 'handlers', 'reporter', 'reporterId',
                     'attachmentUrl', 'createdAt', 'createdAtFormatted', 'createdAtRaw',
                     'solution', 'resolvedInDuration', 'resolvedAtFormatted', 'commentsCount',
                 ],
+                'categories',
                 'priorities',
             ])
             ->assertJsonPath('ticket.numericId', $ticket->id)

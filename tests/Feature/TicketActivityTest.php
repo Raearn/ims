@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Tag;
 use App\Models\Ticket;
 use App\Models\TicketActivity;
+use App\Models\TicketCategory;
 use App\Models\TicketComment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -25,10 +26,13 @@ class TicketActivityTest extends TestCase
     {
         $admin = $this->admin();
 
+        $softwareId = TicketCategory::query()->where('name', 'Software')->value('id');
+        $this->assertNotNull($softwareId);
+
         $this->actingAs($admin)->post(route('tickets.store'), [
             'title' => 'Test ticket',
             'description' => null,
-            'category' => 'Software',
+            'ticket_category_id' => $softwareId,
             'priority' => 'Medium',
             'status' => 'Open',
             'tags' => ['StoreTestTag'],
@@ -72,7 +76,7 @@ class TicketActivityTest extends TestCase
 
         $this->actingAs($admin)->put(route('tickets.update', $ticket), [
             'title' => $ticket->title,
-            'category' => $ticket->category,
+            'ticket_category_id' => $ticket->ticket_category_id,
             'priority' => 'Critical',
             'status' => 'Open',
             'handler_ids' => [],
@@ -122,7 +126,7 @@ class TicketActivityTest extends TestCase
         // Use full-edit route: switching to Open clears handlers
         $this->actingAs($admin)->put(route('tickets.update', $ticket), [
             'title' => $ticket->title,
-            'category' => $ticket->category,
+            'ticket_category_id' => $ticket->ticket_category_id,
             'priority' => $ticket->priority,
             'status' => 'Open',
             'handler_ids' => [],
@@ -146,7 +150,7 @@ class TicketActivityTest extends TestCase
         $this->actingAs($admin)->put(route('tickets.update', $ticket), [
             'title' => 'Updated title',
             'description' => $ticket->description,
-            'category' => $ticket->category,
+            'ticket_category_id' => $ticket->ticket_category_id,
             'priority' => $ticket->priority,
             'status' => 'Open',
             'handler_ids' => [],

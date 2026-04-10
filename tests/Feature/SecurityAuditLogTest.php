@@ -134,7 +134,7 @@ class SecurityAuditLogTest extends TestCase
         $this->actingAs($admin)->put(route('tickets.update', $ticket), [
             'title' => $ticket->title,
             'description' => $ticket->description,
-            'category' => $ticket->category,
+            'ticket_category_id' => $ticket->ticket_category_id,
             'priority' => $ticket->priority,
             'status' => $ticket->status,
             'handler_ids' => [],
@@ -162,7 +162,7 @@ class SecurityAuditLogTest extends TestCase
         $this->actingAs($admin)->put(route('tickets.update', $ticket), [
             'title' => $ticket->title,
             'description' => $ticket->description,
-            'category' => $ticket->category,
+            'ticket_category_id' => $ticket->ticket_category_id,
             'priority' => $ticket->priority,
             'status' => $ticket->status,
             'handler_ids' => [],

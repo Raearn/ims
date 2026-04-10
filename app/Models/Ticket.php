@@ -31,6 +31,7 @@ class Ticket extends Model
         'solution',
         'priority',
         'category',
+        'ticket_category_id',
         'user_id',
     ];
 
@@ -55,6 +56,15 @@ class Ticket extends Model
     protected static function booted(): void
     {
         static::saving(function (Ticket $ticket) {
+            if ($ticket->ticket_category_id !== null) {
+                $name = $ticket->relationLoaded('ticketCategory')
+                    ? $ticket->ticketCategory?->name
+                    : TicketCategory::query()->whereKey($ticket->ticket_category_id)->value('name');
+                if (is_string($name) && $name !== '') {
+                    $ticket->category = $name;
+                }
+            }
+
             if ($ticket->isDirty('status')) {
                 if ($ticket->status === 'Resolved') {
                     $ticket->resolved_at = now();
@@ -73,6 +83,11 @@ class Ticket extends Model
     public function reporter(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function ticketCategory(): BelongsTo
+    {
+        return $this->belongsTo(TicketCategory::class, 'ticket_category_id');
     }
 
     /**
