@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
@@ -14,7 +14,7 @@ import { VisAxis, VisLine, VisXYContainer, VisArea } from '@unovis/vue';
 import { ChartCrosshair } from '@/components/ui/chart';
 import DonutChart from '@/components/DonutChart.vue';
 import { CurveType } from '@unovis/ts';
-import { AlertCircle, AlertTriangle, Ban, CheckCircle2, Circle, Clock, ImageIcon, Loader2, ListOrdered, Pause, Play, BarChart2, PieChart, RefreshCcw, ChevronRight, ArrowUpRight, UserPlus, MoreHorizontal, Search, X, MessageSquare, Crown, ShieldCheck, Headset, UserRound, Settings, Database, FileText, Timer } from 'lucide-vue-next';
+import { AlertCircle, AlertTriangle, Ban, CheckCircle2, Circle, Clock, ImageIcon, Loader2, ListOrdered, Pause, Play, BarChart2, PieChart, RefreshCcw, ChevronDown, ChevronRight, ArrowUpRight, UserPlus, Search, X, MessageSquare, Crown, ShieldCheck, Headset, UserRound, FileText, Timer, Layers } from 'lucide-vue-next';
 import { cn } from '@/lib/utils';
 import { laravelFetch } from '@/lib/laravelFetch';
 import Sparkline from '@/components/Sparkline.vue';
@@ -81,6 +81,7 @@ interface RecentComment {
     userInitials: string;
     userRole: string;
     bodySnippet: string;
+    snippetImageUrls: string[];
     ticketNumericId: number | null;
     ticketTktId: string;
     ticketTitle: string;
@@ -127,6 +128,20 @@ interface CategoryLegendItem {
     hex: string;
 }
 
+interface CategoryChartChild {
+    name: string;
+    count: number;
+}
+
+interface CategoryChartGroup {
+    id: number | null;
+    name: string;
+    hex: string;
+    rootCount: number;
+    total: number;
+    children: CategoryChartChild[];
+}
+
 const {
     stats,
     period,
@@ -134,7 +149,7 @@ const {
     sparklineLabels,
     trendData,
     severities,
-    categories,
+    categoryChartGroups,
     priorityLegend,
     categoryLegend,
     topRecurring,
@@ -149,7 +164,7 @@ const {
     sparklineLabels: string[];
     trendData: TrendPoint[];
     severities: ChartItem[];
-    categories: ChartItem[];
+    categoryChartGroups: CategoryChartGroup[];
     priorityLegend: PriorityLegendItem[];
     categoryLegend: CategoryLegendItem[];
     topRecurring: TopRecurringTagRow[];
@@ -188,7 +203,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: route('dashboard') },
 ];
 
-const totalCategoriesCount = computed(() => categories.reduce((sum, c) => sum + c.count, 0));
+const totalCategoriesCount = computed(() => categoryChartGroups.reduce((sum, g) => sum + g.total, 0));
 const totalSeverityCount   = computed(() => severities.reduce((sum, s) => sum + s.count, 0));
 const maxRecurringCount    = computed(() => topRecurring.length ? Math.max(...topRecurring.map(i => i.count)) : 1);
 
@@ -207,9 +222,6 @@ const categoryHexByName = computed(() => {
     const m: Record<string, string> = {};
     for (const c of categoryLegend) {
         m[c.name] = c.hex;
-    }
-    for (const ch of categories) {
-        m[ch.name] = ch.hex;
     }
     return m;
 });
@@ -235,6 +247,63 @@ function categorySlicePct(count: number): number {
     return t > 0 ? (count / t) * 100 : 0;
 }
 
+/**
+ * Subcategory bar color: golden-angle steps on the hue wheel so 21+ siblings stay visually distinct
+ * (no fixed palette wrap). Deterministic: same parent hex + same index → same color.
+ */
+const GOLDEN_ANGLE_DEG = 137.50776405003785;
+
+function categoryChildHueOffset(parentHex: string): number {
+    let n = 0;
+    const clean = parentHex.replace(/^#/, '');
+    for (let i = 0; i < clean.length; i++) {
+        n = (n * 31 + clean.charCodeAt(i)) % 360;
+    }
+    return n;
+}
+
+function categoryChildBarColor(parentHex: string, childIndex: number): string {
+    const baseHue = categoryChildHueOffset(parentHex);
+    const hue = (baseHue + childIndex * GOLDEN_ANGLE_DEG) % 360;
+    const sat = 52 + (childIndex % 4) * 4;
+    const light = 42 + (childIndex % 3) * 5;
+    const accent = `hsl(${hue} ${sat}% ${light}%)`;
+    const parentPct = 28 + (childIndex % 7) * 2;
+    return `color-mix(in srgb, ${parentHex} ${parentPct}%, ${accent})`;
+}
+
+/** Subcategory panel open state (accordion). Key in set = expanded; default is collapsed (empty set). */
+const categorySubcatsExpandedKeys = ref<Set<string>>(new Set());
+
+function categoryChartGroupKey(group: CategoryChartGroup, index: number): string {
+    return group.id != null ? `cat-${group.id}` : `orphan-${index}-${group.name}`;
+}
+
+function isCategorySubcatsExpanded(key: string): boolean {
+    return categorySubcatsExpandedKeys.value.has(key);
+}
+
+function toggleCategorySubcats(key: string): void {
+    const next = new Set(categorySubcatsExpandedKeys.value);
+    if (next.has(key)) {
+        next.delete(key);
+    } else {
+        next.add(key);
+    }
+    categorySubcatsExpandedKeys.value = next;
+}
+
+watch(
+    () => categoryChartGroups.map((g, i) => categoryChartGroupKey(g, i)).join('|'),
+    () => {
+        const valid = new Set(categoryChartGroups.map((g, i) => categoryChartGroupKey(g, i)));
+        const filtered = new Set([...categorySubcatsExpandedKeys.value].filter((k) => valid.has(k)));
+        if (filtered.size !== categorySubcatsExpandedKeys.value.size) {
+            categorySubcatsExpandedKeys.value = filtered;
+        }
+    },
+);
+
 // Static color palettes per stat index so Tailwind can detect them at build time
 const statColors = [
     {
@@ -248,20 +317,46 @@ const statColors = [
         iconBg: 'bg-orange-500/[0.14] text-orange-600 shadow-inner shadow-orange-900/5 ring-1 ring-orange-500/20 dark:bg-orange-500/25 dark:text-orange-300 dark:ring-orange-400/20',
     },
     {
-        card: 'border-0 bg-gradient-to-br from-blue-50/90 via-blue-50/40 to-background dark:from-blue-950/35 dark:via-blue-950/15 dark:to-card shadow-sm ring-1 ring-blue-200/70 ring-inset dark:ring-blue-800/45 transition-all duration-300 hover:shadow-md hover:ring-blue-300/80 dark:hover:ring-blue-700/55',
-        text: 'text-blue-900 dark:text-blue-200',
-        iconBg: 'bg-blue-500/[0.14] text-blue-600 shadow-inner shadow-blue-900/5 ring-1 ring-blue-500/20 dark:bg-blue-500/25 dark:text-blue-300 dark:ring-blue-400/20',
-    },
-    {
         card: 'border-0 bg-gradient-to-br from-emerald-50/90 via-emerald-50/40 to-background dark:from-emerald-950/35 dark:via-emerald-950/15 dark:to-card shadow-sm ring-1 ring-emerald-200/70 ring-inset dark:ring-emerald-800/45 transition-all duration-300 hover:shadow-md hover:ring-emerald-300/80 dark:hover:ring-emerald-700/55',
         text: 'text-emerald-900 dark:text-emerald-200',
         iconBg: 'bg-emerald-500/[0.14] text-emerald-600 shadow-inner shadow-emerald-900/5 ring-1 ring-emerald-500/20 dark:bg-emerald-500/25 dark:text-emerald-300 dark:ring-emerald-400/20',
+    },
+    {
+        card: 'border-0 bg-gradient-to-br from-blue-50/90 via-blue-50/40 to-background dark:from-blue-950/35 dark:via-blue-950/15 dark:to-card shadow-sm ring-1 ring-blue-200/70 ring-inset dark:ring-blue-800/45 transition-all duration-300 hover:shadow-md hover:ring-blue-300/80 dark:hover:ring-blue-700/55',
+        text: 'text-blue-900 dark:text-blue-200',
+        iconBg: 'bg-blue-500/[0.14] text-blue-600 shadow-inner shadow-blue-900/5 ring-1 ring-blue-500/20 dark:bg-blue-500/25 dark:text-blue-300 dark:ring-blue-400/20',
     },
 ] as const;
 
 const statWidgetIcons = [AlertCircle, Clock, CheckCircle2, Timer] as const;
 
-const categoryChartType = ref<'bar' | 'donut'>('bar');
+/** Shared chrome for non-stat dashboard panels (the `stats` grid uses `statColors` instead). */
+const dashboardPanelCard =
+    'flex min-w-0 flex-col overflow-hidden rounded-xl border border-border/50 bg-card text-card-foreground shadow-md ring-1 ring-border/20 transition-all duration-300 hover:shadow-lg dark:ring-border/15';
+
+const dashboardPanelHeader =
+    '!flex !flex-col !gap-3 !border-b !border-border/50 !bg-gradient-to-b !from-muted/35 !via-muted/15 !to-transparent !px-5 !pb-4 !pt-5 dark:!from-muted/25 dark:!via-muted/10';
+
+const dashboardPanelHeaderRow = 'flex items-start justify-between gap-3';
+
+const dashboardPanelHeaderIconWrap =
+    'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border/40 bg-background/80 text-primary shadow-sm dark:bg-background/60';
+
+const dashboardContentWell =
+    'rounded-xl border border-border/40 bg-muted/15 p-4 shadow-inner dark:bg-muted/10';
+
+const dashboardPanelFooter =
+    'mt-auto border-t border-border/50 bg-gradient-to-b from-transparent to-muted/25 px-5 py-3.5 dark:to-muted/15';
+
+const dashboardSegmentedControl =
+    'inline-flex h-8 shrink-0 items-center gap-0.5 rounded-lg border border-border/50 bg-muted/40 p-0.5 shadow-inner';
+
+const dashboardSegmentedBtnOn =
+    'flex h-7 w-7 items-center justify-center rounded-md bg-background text-primary shadow-sm ring-1 ring-border/40 transition-all duration-200';
+
+const dashboardSegmentedBtnOff =
+    'flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-all duration-200 hover:bg-muted/80 hover:text-foreground';
+
 const severityChartType = ref<'bar' | 'donut'>('donut');
 
 const displayData = computed(() => {
@@ -308,14 +403,6 @@ const refreshComments = () => {
     if (isRefreshingComments.value) return;
     isRefreshingComments.value = true;
     router.reload({ only: ['recentComments'], onFinish: () => { isRefreshingComments.value = false; } });
-};
-
-const statusDot: Record<string, string> = {
-    Open:        'bg-rose-400',
-    'In Progress': 'bg-orange-400',
-    'On Hold':   'bg-yellow-400',
-    Resolved:    'bg-emerald-500',
-    Cancelled:   'bg-muted-foreground/40',
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -474,19 +561,45 @@ async function openSeverityModal(priority: string) {
 
 const categoryModalOpen     = ref(false);
 const categoryModalName     = ref('');
+const categoryModalIsRootScope = ref(false);
 const categoryModalTickets  = ref<SeverityTicket[]>([]);
 const categoryModalLoading  = ref(false);
 
-async function openCategoryModal(category: string) {
-    categoryModalName.value    = category;
+async function openCategoryModal(category: string): Promise<void> {
+    categoryModalIsRootScope.value = false;
+    categoryModalName.value = category;
     categoryModalTickets.value = [];
-    categoryModalOpen.value    = true;
+    categoryModalOpen.value = true;
     categoryModalLoading.value = true;
     await nextTick();
     try {
         const url = `${route('tickets.by-category', { category })}?${dashboardPeekQueryString()}`;
         const res = await laravelFetch(url);
-        if (res.ok) categoryModalTickets.value = await res.json();
+        if (res.ok) {
+            categoryModalTickets.value = await res.json();
+        }
+    } finally {
+        categoryModalLoading.value = false;
+    }
+}
+
+async function openCategoryRootModal(group: CategoryChartGroup): Promise<void> {
+    if (group.id == null) {
+        await openCategoryModal(group.name);
+        return;
+    }
+    categoryModalIsRootScope.value = true;
+    categoryModalName.value = `${group.name} (all types)`;
+    categoryModalTickets.value = [];
+    categoryModalOpen.value = true;
+    categoryModalLoading.value = true;
+    await nextTick();
+    try {
+        const url = `${route('tickets.by-category-root', group.id)}?${dashboardPeekQueryString()}`;
+        const res = await laravelFetch(url);
+        if (res.ok) {
+            categoryModalTickets.value = await res.json();
+        }
     } finally {
         categoryModalLoading.value = false;
     }
@@ -510,6 +623,50 @@ async function openTopRecurringThemeModal(themeLabel: string) {
     } finally {
         topRecurringThemeModalLoading.value = false;
     }
+}
+
+const openIncidentsListModalOpen = ref(false);
+const openIncidentsListTickets = ref<SeverityTicket[]>([]);
+const openIncidentsListLoading = ref(false);
+
+async function openOpenIncidentsListModal(): Promise<void> {
+    openIncidentsListTickets.value = [];
+    openIncidentsListModalOpen.value = true;
+    openIncidentsListLoading.value = true;
+    await nextTick();
+    try {
+        const url = `${route('tickets.by-open')}?${dashboardPeekQueryString()}`;
+        const res = await laravelFetch(url);
+        if (res.ok) {
+            openIncidentsListTickets.value = await res.json();
+        }
+    } finally {
+        openIncidentsListLoading.value = false;
+    }
+}
+
+function selectOpenIncidentFromPeek(t: SeverityTicket): void {
+    openIncidentsListModalOpen.value = false;
+    void nextTick(() => {
+        openDetailModal({
+            id: t.id,
+            numericId: t.numericId,
+            tktId: t.tktId,
+            title: t.title,
+            description: t.description,
+            status: t.status,
+            priority: t.priority,
+            category: t.category,
+            tags: t.tags ?? [],
+            reporter: t.reporter,
+            reporterId: t.reporterId ?? undefined,
+            handlerIds: t.handlerIds,
+            handlers: t.handlers,
+            attachmentUrl: t.attachmentUrl,
+            createdAtFormatted: t.createdAtFormatted,
+            time: t.time,
+        });
+    });
 }
 // ──────────────────────────────────────────────────────────────────────────
 
@@ -586,54 +743,59 @@ watch(isAssignModalOpen, (val) => {
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-4 p-4 md:gap-6 md:p-6">
-            <div class="flex items-center justify-between gap-4">
-                <div>
-                    <h2 class="text-xl font-bold tracking-tight sm:text-2xl">Dashboard</h2>
-                    <p class="text-sm text-muted-foreground">Overview of incidents and system activity.</p>
+            <div
+                class="flex flex-col gap-5 rounded-2xl border border-border/60 bg-gradient-to-b from-muted/40 via-background to-background p-4 shadow-sm ring-1 ring-border/30 dark:from-muted/15 dark:via-card/90 dark:to-card sm:p-5 md:gap-6 md:p-6"
+            >
+                <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+                    <div class="min-w-0 space-y-1">
+                        <h2 class="text-xl font-bold tracking-tight sm:text-2xl">Dashboard</h2>
+                        <p class="text-sm text-muted-foreground">Overview of incidents and system activity.</p>
+                    </div>
+                    <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+                        <Select :model-value="period" @update:model-value="(v) => router.get(route('dashboard'), { period: v }, { preserveState: true, replace: true })">
+                            <SelectTrigger class="h-9 w-full bg-background/60 backdrop-blur-sm border-border/60 shadow-sm transition-colors hover:border-primary/30 hover:bg-background/80 sm:w-[140px]">
+                                <SelectValue placeholder="Select period" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectGroup>
+                                    <SelectItem value="7d">Last 7 Days</SelectItem>
+                                    <SelectItem value="30d">Last 30 Days</SelectItem>
+                                    <SelectItem value="this_month">This Month</SelectItem>
+                                    <SelectItem value="last_month">Last Month</SelectItem>
+                                    <SelectItem value="ytd">Year to Date</SelectItem>
+                                    <SelectItem value="all">All Time</SelectItem>
+                                </SelectGroup>
+                            </SelectContent>
+                        </Select>
+                        <button
+                            type="button"
+                            aria-label="Refresh dashboard"
+                            @click="refresh"
+                            :disabled="isRefreshing"
+                            class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-background/60 text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:border-primary/30 hover:bg-background/80 hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+                            title="Refresh"
+                        >
+                            <RefreshCcw class="h-3.5 w-3.5" :class="{ 'animate-spin': isRefreshing }" />
+                        </button>
+                        <a
+                            :href="route('dashboard.export-pdf', { period })"
+                            target="_blank"
+                            rel="noopener"
+                            class="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-border/60 bg-background/60 px-3 text-sm font-medium text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:border-primary/30 hover:bg-background/80 hover:text-foreground sm:flex-initial"
+                            title="Export analytics report as PDF"
+                        >
+                            <FileText class="h-3.5 w-3.5 shrink-0" />
+                            Export PDF
+                        </a>
+                    </div>
                 </div>
-                <div class="flex items-center gap-2">
-                    <Select :model-value="period" @update:model-value="(v) => router.get(route('dashboard'), { period: v }, { preserveState: true, replace: true })">
-                        <SelectTrigger class="w-[140px] h-9 bg-background/60 backdrop-blur-sm border-border/60 transition-colors hover:border-primary/30 hover:bg-background/80">
-                            <SelectValue placeholder="Select period" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectGroup>
-                                <SelectItem value="7d">Last 7 Days</SelectItem>
-                                <SelectItem value="30d">Last 30 Days</SelectItem>
-                                <SelectItem value="this_month">This Month</SelectItem>
-                                <SelectItem value="last_month">Last Month</SelectItem>
-                                <SelectItem value="ytd">Year to Date</SelectItem>
-                                <SelectItem value="all">All Time</SelectItem>
-                            </SelectGroup>
-                        </SelectContent>
-                    </Select>
-                    <button
-                        @click="refresh"
-                        :disabled="isRefreshing"
-                        class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 bg-background/60 backdrop-blur-sm text-muted-foreground shadow-sm transition-colors hover:border-primary/30 hover:bg-background/80 hover:text-foreground disabled:opacity-40 disabled:pointer-events-none shrink-0"
-                        title="Refresh"
-                    >
-                        <RefreshCcw class="h-3.5 w-3.5" :class="{ 'animate-spin': isRefreshing }" />
-                    </button>
-                    <a
-                        :href="route('dashboard.export-pdf', { period })"
-                        target="_blank"
-                        rel="noopener"
-                        class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border/60 bg-background/60 backdrop-blur-sm px-3 text-sm font-medium text-muted-foreground shadow-sm transition-colors hover:border-primary/30 hover:bg-background/80 hover:text-foreground"
-                        title="Export analytics report as PDF"
-                    >
-                        <FileText class="h-3.5 w-3.5" />
-                        Export PDF
-                    </a>
-                </div>
-            </div>
 
-            <!-- Stats Grid -->
-            <div class="grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-2 lg:grid-cols-4">
+                <!-- Stats Grid -->
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-4">
                 <Card
                     v-for="(stat, idx) in stats"
                     :key="stat.title"
-                    :class="cn('group relative overflow-hidden', statColors[idx]?.card)"
+                    :class="cn('group relative overflow-hidden ring-1 ring-border/20 dark:ring-border/15', statColors[idx]?.card)"
                 >
                     <div
                         class="pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full opacity-[0.12] blur-2xl transition-opacity duration-300 group-hover:opacity-[0.18]"
@@ -674,33 +836,42 @@ watch(isAssignModalOpen, (val) => {
                         <p class="mt-2 text-xs leading-relaxed text-muted-foreground">{{ stat.description }}</p>
                     </CardContent>
                 </Card>
+                </div>
             </div>
 
             <!-- Row 1: Recent Activity + Incidents Over Time -->
             <div class="grid gap-4 sm:gap-6 lg:grid-cols-2">
                 <!-- Recent Activity -->
-                <Card class="shadow-sm border border-border/60 overflow-hidden flex flex-col transition-all duration-300 hover:shadow-md">
-                    <CardHeader class="pb-4">
-                        <div class="flex items-start justify-between gap-2">
-                            <div>
-                                <CardTitle class="text-lg font-semibold">Recent Open Incidents</CardTitle>
-                                <p class="mt-0.5 text-sm text-muted-foreground">Latest unresolved incidents</p>
+                <Card :class="dashboardPanelCard">
+                    <CardHeader :class="dashboardPanelHeader">
+                        <div :class="dashboardPanelHeaderRow">
+                            <div class="flex min-w-0 flex-1 items-start gap-3">
+                                <div :class="dashboardPanelHeaderIconWrap">
+                                    <AlertTriangle class="h-4 w-4" stroke-width="2" />
+                                </div>
+                                <div class="min-w-0 space-y-1">
+                                    <CardTitle class="text-lg font-semibold tracking-tight">Recent Open Incidents</CardTitle>
+                                    <CardDescription class="leading-relaxed">Latest unresolved incidents</CardDescription>
+                                </div>
                             </div>
                             <button
+                                type="button"
+                                aria-label="Refresh recent incidents"
                                 @click="refreshActivity"
                                 :disabled="isRefreshingActivity"
-                                class="flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-all hover:bg-muted hover:text-foreground disabled:opacity-40"
+                                class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background/80 text-muted-foreground shadow-sm transition-all hover:border-primary/30 hover:bg-background hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
                                 title="Refresh"
                             >
                                 <RefreshCcw :class="['h-3.5 w-3.5', isRefreshingActivity && 'animate-spin']" />
                             </button>
                         </div>
                     </CardHeader>
-                    <CardContent class="flex-1 space-y-2 px-6 pb-2">
+                    <CardContent class="flex-1 !p-0 px-5 pb-4 pt-0">
+                        <div :class="cn(dashboardContentWell, 'space-y-2')">
                         <div
                             v-for="item in recentActivity"
                             :key="item.id"
-                            class="group min-w-0 rounded-xl border border-border/40 bg-gradient-to-br from-background to-muted/20 px-4 py-3 transition-all duration-300 hover:border-primary/30 hover:to-muted/40 hover:shadow-md cursor-pointer"
+                            class="group min-w-0 cursor-pointer rounded-xl border border-border/40 bg-gradient-to-br from-background to-muted/25 px-4 py-3 shadow-sm transition-all duration-300 hover:border-border/60 hover:to-muted/45 hover:shadow-md"
                             @click="openDetailModal(item)"
                         >
                             <!-- Top row: title + priority badge / actions -->
@@ -755,49 +926,54 @@ watch(isAssignModalOpen, (val) => {
                             </div>
                         </div>
                         <div v-if="recentActivity.length === 0" class="flex flex-col items-center justify-center py-10 transition-all duration-300">
-                            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-muted/50 mb-3 shadow-inner">
+                            <div class="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted/50 shadow-inner">
                                 <CheckCircle2 class="h-6 w-6 text-muted-foreground/40" />
                             </div>
                             <p class="text-sm font-semibold text-foreground">No open incidents</p>
-                            <p class="text-xs text-muted-foreground mt-1">You're all caught up!</p>
+                            <p class="mt-1 text-xs text-muted-foreground">You're all caught up!</p>
+                        </div>
                         </div>
                     </CardContent>
-                    <div class="mt-auto border-t border-border/50 px-6 py-3">
-                        <Link
-                            :href="route('tickets')"
-                            class="group flex items-center justify-between text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    <div :class="dashboardPanelFooter">
+                        <button
+                            type="button"
+                            class="group flex w-full items-center justify-between text-left text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                            @click="openOpenIncidentsListModal"
                         >
                             <span>View all open incidents</span>
-                            <ArrowUpRight class="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-                        </Link>
+                            <ArrowUpRight class="h-3.5 w-3.5 shrink-0 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                        </button>
                     </div>
                 </Card>
 
                 <!-- Incidents Over Time -->
-                <Card class="shadow-sm flex flex-col border border-border/60 overflow-hidden min-w-0 transition-all duration-300 hover:shadow-md">
-                    <CardHeader class="gap-0 pb-3">
-                        <div class="flex items-start justify-between gap-3">
-                            <div class="min-w-0">
-                                <CardTitle class="text-lg font-semibold">Incidents Over Time</CardTitle>
-                                <p class="mt-0.5 text-sm text-muted-foreground">
+                <Card :class="dashboardPanelCard">
+                    <CardHeader :class="dashboardPanelHeader">
+                        <div class="flex min-w-0 flex-1 items-start gap-3">
+                            <div :class="dashboardPanelHeaderIconWrap">
+                                <Timer class="h-4 w-4" stroke-width="2" />
+                            </div>
+                            <div class="min-w-0 flex-1 space-y-2">
+                                <CardTitle class="text-lg font-semibold tracking-tight">Incidents Over Time</CardTitle>
+                                <p class="text-sm text-muted-foreground">
                                     <span class="font-semibold text-rose-500">{{ totalCreated }}</span> new ·
                                     <span class="font-semibold text-emerald-500">{{ totalResolved }}</span> resolved
                                 </p>
-                            </div>
-                        </div>
-                        <!-- Legend -->
-                        <div class="mt-3 flex items-center gap-4">
-                            <div class="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                <span class="inline-block h-2 w-4 rounded-full bg-rose-500 opacity-80"></span>
-                                New incidents
-                            </div>
-                            <div class="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                <span class="inline-block h-2 w-4 rounded-full bg-emerald-500 opacity-80"></span>
-                                Resolved
+                                <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                                    <div class="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                        <span class="inline-block h-2 w-4 rounded-full bg-rose-500 opacity-80"></span>
+                                        New incidents
+                                    </div>
+                                    <div class="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                        <span class="inline-block h-2 w-4 rounded-full bg-emerald-500 opacity-80"></span>
+                                        Resolved
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </CardHeader>
-                    <CardContent class="flex-1 min-w-0 pb-4">
+                    <CardContent class="flex-1 min-w-0 !p-0 px-5 pb-5 pt-0">
+                        <div :class="dashboardContentWell">
                         <svg width="0" height="0" class="block">
                             <defs>
                                 <linearGradient id="roseGradient" x1="0" y1="0" x2="0" y2="1">
@@ -830,6 +1006,7 @@ watch(isAssignModalOpen, (val) => {
                                 />
                             </VisXYContainer>
                         </div>
+                        </div>
                     </CardContent>
                 </Card>
 
@@ -839,24 +1016,30 @@ watch(isAssignModalOpen, (val) => {
             <div class="grid gap-4 sm:gap-6 lg:grid-cols-2">
                 <div class="flex min-w-0 flex-col gap-4 sm:gap-6">
                 <!-- Incidents by Severity -->
-                <Card class="shadow-sm border border-border/60 overflow-hidden min-w-0 transition-all duration-300 hover:shadow-md">
-                    <CardHeader>
-                        <div class="flex items-start justify-between gap-2">
-                            <div>
-                                <CardTitle class="text-lg font-semibold">Incidents by Severity</CardTitle>
-                                <p class="text-sm text-muted-foreground">Breakdown by priority level</p>
+                <Card :class="dashboardPanelCard">
+                    <CardHeader :class="dashboardPanelHeader">
+                        <div :class="dashboardPanelHeaderRow">
+                            <div class="flex min-w-0 flex-1 items-start gap-3">
+                                <div :class="dashboardPanelHeaderIconWrap">
+                                    <ShieldCheck class="h-4 w-4" stroke-width="2" />
+                                </div>
+                                <div class="min-w-0 space-y-1">
+                                    <CardTitle class="text-lg font-semibold tracking-tight">Incidents by Severity</CardTitle>
+                                    <CardDescription>Breakdown by priority level</CardDescription>
+                                </div>
                             </div>
-                            <div class="flex items-center gap-0.5 rounded-lg bg-muted/60 p-1 shrink-0 border border-border/40">
-                                <button @click="severityChartType = 'bar'" :class="['flex items-center justify-center rounded-md p-1.5 transition-all duration-300', severityChartType === 'bar' ? 'bg-background shadow-sm text-primary ring-1 ring-border/50' : 'text-muted-foreground hover:text-foreground hover:bg-muted']" title="Bar Chart">
+                            <div :class="dashboardSegmentedControl" role="group" aria-label="Chart type">
+                                <button type="button" @click="severityChartType = 'bar'" :class="severityChartType === 'bar' ? dashboardSegmentedBtnOn : dashboardSegmentedBtnOff" title="Bar Chart">
                                     <BarChart2 class="h-4 w-4" />
                                 </button>
-                                <button @click="severityChartType = 'donut'" :class="['flex items-center justify-center rounded-md p-1.5 transition-all duration-300', severityChartType === 'donut' ? 'bg-background shadow-sm text-primary ring-1 ring-border/50' : 'text-muted-foreground hover:text-foreground hover:bg-muted']" title="Donut Chart">
+                                <button type="button" @click="severityChartType = 'donut'" :class="severityChartType === 'donut' ? dashboardSegmentedBtnOn : dashboardSegmentedBtnOff" title="Donut Chart">
                                     <PieChart class="h-4 w-4" />
                                 </button>
                             </div>
                         </div>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent class="!p-0 px-5 pb-5 pt-0">
+                        <div :class="dashboardContentWell">
                         <div v-if="severityChartType === 'bar'" class="space-y-3 sm:space-y-5">
                             <template v-if="severities.length">
                                 <div v-for="sev in severities" :key="sev.name" class="group relative cursor-pointer" @click="openSeverityModal(sev.name)">
@@ -880,68 +1063,137 @@ watch(isAssignModalOpen, (val) => {
                         </div>
                         <DonutChart v-else-if="totalSeverityCount > 0" :data="severities" :total="totalSeverityCount" @segment-click="openSeverityModal" />
                         <p v-else class="py-10 text-center text-sm text-muted-foreground">No incidents in this period.</p>
+                        </div>
                     </CardContent>
                 </Card>
 
                 <!-- Incidents by Category -->
-                <Card class="shadow-sm border border-border/60 overflow-hidden min-w-0 transition-all duration-300 hover:shadow-md">
-                    <CardHeader>
-                        <div class="flex items-start justify-between gap-2">
-                            <div>
-                                <CardTitle class="text-lg font-semibold">Incidents by Category</CardTitle>
-                                <p class="text-sm text-muted-foreground">Distribution of reported issues</p>
+                <Card :class="dashboardPanelCard">
+                    <CardHeader :class="dashboardPanelHeader">
+                        <div class="flex min-w-0 items-start gap-3">
+                            <div :class="dashboardPanelHeaderIconWrap">
+                                <Layers class="h-4 w-4" stroke-width="2" />
                             </div>
-                            <div class="flex items-center gap-0.5 rounded-lg bg-muted/60 p-1 shrink-0 border border-border/40">
-                                <button @click="categoryChartType = 'bar'" :class="['flex items-center justify-center rounded-md p-1.5 transition-all duration-300', categoryChartType === 'bar' ? 'bg-background shadow-sm text-primary ring-1 ring-border/50' : 'text-muted-foreground hover:text-foreground hover:bg-muted']" title="Bar Chart">
-                                    <BarChart2 class="h-4 w-4" />
-                                </button>
-                                <button @click="categoryChartType = 'donut'" :class="['flex items-center justify-center rounded-md p-1.5 transition-all duration-300', categoryChartType === 'donut' ? 'bg-background shadow-sm text-primary ring-1 ring-border/50' : 'text-muted-foreground hover:text-foreground hover:bg-muted']" title="Donut Chart">
-                                    <PieChart class="h-4 w-4" />
-                                </button>
+                            <div class="min-w-0 space-y-1">
+                                <CardTitle class="text-lg font-semibold tracking-tight">Incidents by Category</CardTitle>
+                                <CardDescription class="text-xs leading-relaxed sm:text-sm">
+                                    Sub-types are hidden until you expand. Click the parent row for all types in that family; use sub-rows for a single type.
+                                </CardDescription>
                             </div>
                         </div>
                     </CardHeader>
-                    <CardContent>
-                        <div v-if="categoryChartType === 'bar'" class="space-y-3 sm:space-y-5">
-                            <template v-if="categories.length">
-                                <div v-for="cat in categories" :key="cat.name" class="group relative cursor-pointer" @click="openCategoryModal(cat.name)">
-                                    <div class="flex items-center justify-between text-sm mb-2">
-                                        <div class="flex items-center gap-2 min-w-0">
-                                            <div class="w-2 h-2 rounded-full shrink-0" :style="{ backgroundColor: cat.hex }"></div>
-                                            <span class="font-medium transition-colors group-hover:text-foreground truncate">{{ cat.name }}</span>
+                    <CardContent class="!p-0 px-5 pb-5 pt-0">
+                        <div :class="dashboardContentWell">
+                        <div v-if="categoryChartGroups.length" class="divide-y divide-border/50">
+                            <div
+                                v-for="(group, gi) in categoryChartGroups"
+                                :key="group.id ?? `orphan-${group.name}-${gi}`"
+                                class="py-4 first:pt-0 last:pb-0"
+                            >
+                                <div
+                                    class="group/root relative cursor-pointer rounded-lg py-1 -mx-1 px-1"
+                                    @click="openCategoryRootModal(group)"
+                                >
+                                    <div class="mb-2 flex items-center justify-between gap-3 text-sm">
+                                        <div class="flex min-w-0 flex-1 items-center gap-2">
+                                            <div class="h-2 w-2 shrink-0 rounded-full" :style="{ backgroundColor: group.hex }" />
+                                            <span class="truncate font-medium transition-colors group-hover/root:text-foreground">{{ group.name }}</span>
+                                            <button
+                                                v-if="group.children.length"
+                                                type="button"
+                                                class="inline-flex shrink-0 items-center gap-1 rounded-md px-1 py-0.5 text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                                                :aria-expanded="isCategorySubcatsExpanded(categoryChartGroupKey(group, gi))"
+                                                :aria-label="isCategorySubcatsExpanded(categoryChartGroupKey(group, gi)) ? 'Hide subcategories' : 'Show subcategories'"
+                                                @click.stop="toggleCategorySubcats(categoryChartGroupKey(group, gi))"
+                                            >
+                                                <span class="hidden tabular-nums text-[11px] font-medium sm:inline">{{ group.children.length }}</span>
+                                                <ChevronDown
+                                                    class="h-3.5 w-3.5 shrink-0 transition-transform duration-300 ease-out motion-reduce:transition-none"
+                                                    :class="isCategorySubcatsExpanded(categoryChartGroupKey(group, gi)) ? '' : '-rotate-90'"
+                                                />
+                                            </button>
                                         </div>
-                                        <div class="flex items-center gap-2 shrink-0 ml-2">
-                                            <span class="text-xs font-semibold text-muted-foreground group-hover:text-foreground transition-colors">{{ Math.round(categorySlicePct(cat.count)) }}%</span>
-                                            <span class="text-muted-foreground w-6 text-right">{{ cat.count }}</span>
+                                        <div class="flex shrink-0 items-center gap-3 tabular-nums">
+                                            <span class="text-xs font-semibold text-muted-foreground transition-colors group-hover/root:text-foreground">{{ Math.round(categorySlicePct(group.total)) }}%</span>
+                                            <span class="min-w-[1.25rem] text-right text-muted-foreground group-hover/root:text-foreground">{{ group.total }}</span>
                                         </div>
                                     </div>
                                     <div class="h-2 w-full overflow-hidden rounded-full bg-secondary">
-                                        <div class="h-full transition-all duration-500 ease-out group-hover:opacity-80" :style="{ width: `${categorySlicePct(cat.count)}%`, backgroundColor: cat.hex }"></div>
+                                        <div
+                                            class="h-full transition-all duration-500 ease-out group-hover/root:opacity-85"
+                                            :style="{ width: `${categorySlicePct(group.total)}%`, backgroundColor: group.hex }"
+                                        />
                                     </div>
-                                    <div class="absolute -inset-x-2 -inset-y-2.5 z-[-1] rounded-lg bg-muted/50 opacity-0 transition-opacity group-hover:opacity-100"></div>
+                                    <div class="absolute -inset-x-2 -inset-y-2 z-[-1] rounded-lg bg-muted/50 opacity-0 transition-opacity group-hover/root:opacity-100" />
                                 </div>
-                            </template>
-                            <p v-else class="py-10 text-center text-sm text-muted-foreground">No incidents in this period.</p>
+                                <div
+                                    v-if="group.children.length"
+                                    class="grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none"
+                                    :class="isCategorySubcatsExpanded(categoryChartGroupKey(group, gi)) ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'"
+                                >
+                                    <div class="min-h-0 overflow-hidden">
+                                        <div
+                                            class="mt-3 space-y-3 border-l-2 border-border/25 pl-3 sm:pl-4 ml-0.5 transition-opacity duration-300 ease-out motion-reduce:transition-none"
+                                            :class="
+                                                isCategorySubcatsExpanded(categoryChartGroupKey(group, gi))
+                                                    ? 'opacity-100'
+                                                    : 'pointer-events-none opacity-0'
+                                            "
+                                            :style="{ borderLeftColor: `${group.hex}40` }"
+                                        >
+                                            <button
+                                                v-for="(ch, ci) in group.children"
+                                                :key="`sub-${group.name}-${ch.name}`"
+                                                type="button"
+                                                class="group/sub block w-full cursor-pointer rounded-md py-0.5 text-left transition-colors hover:bg-muted/40"
+                                                @click.stop="openCategoryModal(ch.name)"
+                                            >
+                                                <div class="flex items-baseline justify-between gap-2">
+                                                    <span class="min-w-0 truncate text-xs text-muted-foreground group-hover/sub:text-foreground">{{ ch.name }}</span>
+                                                    <span class="shrink-0 tabular-nums text-[11px] text-muted-foreground">
+                                                        <span>{{ Math.round(categorySlicePct(ch.count)) }}%</span>
+                                                        <span class="ml-2 font-medium text-foreground/90">{{ ch.count }}</span>
+                                                    </span>
+                                                </div>
+                                                <div class="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+                                                    <div
+                                                        class="h-full rounded-full transition-all duration-500 ease-out group-hover/sub:opacity-90"
+                                                        :style="{
+                                                            width: `${categorySlicePct(ch.count)}%`,
+                                                            backgroundColor: categoryChildBarColor(group.hex, ci),
+                                                        }"
+                                                    />
+                                                </div>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <DonutChart v-else-if="totalCategoriesCount > 0" :data="categories" :total="totalCategoriesCount" @segment-click="openCategoryModal" />
                         <p v-else class="py-10 text-center text-sm text-muted-foreground">No incidents in this period.</p>
+                        </div>
                     </CardContent>
                 </Card>
                 </div>
 
                 <div class="flex min-w-0 flex-col gap-4 sm:gap-6">
                 <!-- Top Recurring Incidents (volume leaderboard) -->
-                <Card class="shadow-sm border border-border/60 overflow-hidden min-w-0 transition-all duration-300 hover:shadow-md">
-                    <CardHeader class="space-y-0 border-b border-border/50 bg-gradient-to-b from-muted/30 to-transparent pb-4 pt-5">
-                        <div class="flex items-start justify-between gap-3">
-                            <div class="min-w-0 space-y-1">
-                                <CardTitle class="text-lg font-semibold tracking-tight">Top Recurring Incidents</CardTitle>
-                                <p class="text-sm leading-relaxed text-muted-foreground">
-                                    Highest-volume tag themes in the selected period.
-                                </p>
+                <Card :class="dashboardPanelCard">
+                    <CardHeader :class="dashboardPanelHeader">
+                        <div :class="dashboardPanelHeaderRow">
+                            <div class="flex min-w-0 flex-1 items-start gap-3">
+                                <div :class="cn(dashboardPanelHeaderIconWrap, 'text-amber-600 dark:text-amber-400')">
+                                    <Crown class="h-4 w-4" stroke-width="2" />
+                                </div>
+                                <div class="min-w-0 space-y-1">
+                                    <CardTitle class="text-lg font-semibold tracking-tight">Top Recurring Incidents</CardTitle>
+                                    <CardDescription class="leading-relaxed">
+                                        Highest-volume tag themes in the selected period.
+                                    </CardDescription>
+                                </div>
                             </div>
                             <div
-                                class="shrink-0 rounded-xl border border-border/60 bg-background/80 px-3 py-2 text-right shadow-sm backdrop-blur-sm"
+                                class="shrink-0 rounded-xl border border-border/60 bg-background/80 px-3 py-2 text-right shadow-md shadow-black/5 backdrop-blur-sm dark:shadow-black/20"
                                 :title="periodLabel"
                             >
                                 <span class="block text-[9px] font-bold uppercase tracking-[0.14em] text-muted-foreground/70">Reporting</span>
@@ -949,14 +1201,15 @@ watch(isAssignModalOpen, (val) => {
                             </div>
                         </div>
                     </CardHeader>
-                    <CardContent class="p-0">
+                    <CardContent class="!p-0 p-4">
+                        <div :class="cn(dashboardContentWell, '!p-0 overflow-hidden')">
                         <ul v-if="topRecurring.length" class="divide-y divide-border/40">
                             <li
                                 v-for="row in topRecurring"
                                 :key="row.tag"
                                 role="button"
                                 tabindex="0"
-                                class="group flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-muted/25 active:scale-[0.998] sm:gap-4 sm:px-5 sm:py-4"
+                                class="group flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-all hover:bg-muted/35 hover:shadow-sm active:scale-[0.998] sm:gap-4 sm:px-5 sm:py-4"
                                 @click="openTopRecurringThemeModal(row.tag)"
                                 @keydown.enter.prevent="openTopRecurringThemeModal(row.tag)"
                                 @keydown.space.prevent="openTopRecurringThemeModal(row.tag)"
@@ -997,30 +1250,32 @@ watch(isAssignModalOpen, (val) => {
                                 </p>
                             </div>
                         </div>
+                        </div>
                     </CardContent>
                 </Card>
 
                 <!-- Recent Comments -->
-                <Card class="shadow-sm border border-border/60 overflow-hidden min-w-0 flex flex-col transition-all duration-300 hover:shadow-md">
-                    <CardHeader class="shrink-0">
-                        <div class="flex items-center justify-between gap-2">
-                            <div class="flex items-center gap-2.5">
-                                <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">
-                                    <MessageSquare class="h-4 w-4" />
+                <Card :class="dashboardPanelCard">
+                    <CardHeader :class="cn(dashboardPanelHeader, 'shrink-0')">
+                        <div :class="dashboardPanelHeaderRow">
+                            <div class="flex min-w-0 flex-1 items-start gap-3">
+                                <div :class="dashboardPanelHeaderIconWrap">
+                                    <MessageSquare class="h-4 w-4" stroke-width="2" />
                                 </div>
-                                <div>
-                                    <CardTitle class="text-lg font-semibold leading-none">Recent Comments</CardTitle>
-                                    <p class="text-xs text-muted-foreground mt-0.5">Latest across all tickets</p>
+                                <div class="min-w-0 space-y-1">
+                                    <CardTitle class="text-lg font-semibold leading-tight tracking-tight">Recent Comments</CardTitle>
+                                    <CardDescription class="text-xs">Latest across all tickets</CardDescription>
                                 </div>
                             </div>
-                            <div class="flex items-center gap-2 shrink-0">
-                                <span v-if="recentComments.length" class="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary tabular-nums">
+                            <div class="flex shrink-0 items-center gap-2">
+                                <span v-if="recentComments.length" class="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary tabular-nums shadow-sm">
                                     {{ recentComments.length }}
                                 </span>
                                 <button
+                                    type="button"
                                     @click="refreshComments"
                                     :disabled="isRefreshingComments"
-                                    class="flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-all hover:bg-muted hover:text-foreground disabled:opacity-40"
+                                    class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border/50 bg-background/80 text-muted-foreground shadow-sm transition-all hover:bg-background hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
                                     title="Refresh"
                                 >
                                     <RefreshCcw :class="['h-3.5 w-3.5', isRefreshingComments && 'animate-spin']" />
@@ -1028,7 +1283,8 @@ watch(isAssignModalOpen, (val) => {
                             </div>
                         </div>
                     </CardHeader>
-                    <CardContent class="flex-1 px-4 pb-4 overflow-y-auto max-h-[380px] modal-body">
+                    <CardContent class="flex min-h-0 flex-1 flex-col !p-0 px-5 pb-5 pt-0">
+                        <div :class="cn(dashboardContentWell, 'modal-body max-h-[380px] flex-1 overflow-y-auto')">
                         <!-- Empty state -->
                         <div v-if="!recentComments.length" class="flex flex-col items-center justify-center gap-3 py-10 text-center">
                             <div class="flex h-12 w-12 items-center justify-center rounded-full bg-muted/50">
@@ -1045,7 +1301,7 @@ watch(isAssignModalOpen, (val) => {
                             <div
                                 v-for="comment in recentComments"
                                 :key="comment.id"
-                                class="group relative flex gap-3 rounded-xl px-3 py-3 transition-all duration-300 cursor-pointer hover:bg-gradient-to-r hover:from-muted/40 hover:to-transparent active:scale-[0.99]"
+                                class="group relative flex cursor-pointer gap-3 rounded-xl px-3 py-3 transition-all duration-300 hover:bg-muted/35 hover:shadow-sm active:scale-[0.99]"
                                 @click="openCommentTicketDetail(comment)"
                             >
                                 <!-- Avatar -->
@@ -1075,13 +1331,38 @@ watch(isAssignModalOpen, (val) => {
                                         <span class="text-[10px] text-muted-foreground/60 leading-none">· {{ comment.createdAt }}</span>
                                     </div>
 
-                                    <!-- Body snippet -->
-                                    <p class="text-xs text-foreground/70 leading-relaxed line-clamp-2">{{ comment.bodySnippet }}</p>
+                                    <!-- Body snippet + inline image previews -->
+                                    <p
+                                        v-if="comment.bodySnippet"
+                                        class="text-xs text-foreground/70 leading-relaxed line-clamp-2"
+                                    >
+                                        {{ comment.bodySnippet }}
+                                    </p>
+                                    <div
+                                        v-if="comment.snippetImageUrls?.length"
+                                        class="mt-1.5 flex flex-wrap gap-1.5"
+                                    >
+                                        <img
+                                            v-for="(imgUrl, idx) in comment.snippetImageUrls"
+                                            :key="idx"
+                                            :src="imgUrl"
+                                            alt=""
+                                            loading="lazy"
+                                            class="h-11 w-11 rounded-md border border-border/50 object-cover shrink-0 bg-muted/30"
+                                        />
+                                    </div>
+                                    <p
+                                        v-if="!comment.bodySnippet && comment.snippetImageUrls?.length"
+                                        class="text-xs text-muted-foreground/80 italic"
+                                    >
+                                        Image
+                                    </p>
                                 </div>
 
                                 <!-- Hover chevron -->
-                                <ChevronRight class="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40 opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-0.5 group-hover:text-primary/60" />
+                                <ChevronRight class="absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/40 opacity-0 transition-all group-hover:translate-x-0.5 group-hover:text-primary/60 group-hover:opacity-100" />
                             </div>
+                        </div>
                         </div>
                     </CardContent>
                 </Card>
@@ -1091,7 +1372,10 @@ watch(isAssignModalOpen, (val) => {
 
         <!-- ── View Details Modal ──────────────────────────────────────── -->
         <Dialog v-model:open="isDetailModalOpen">
-            <DialogContent class="sm:max-w-[580px] p-0 overflow-hidden border border-border/40 shadow-2xl sm:rounded-2xl max-h-[92dvh] flex flex-col" v-if="selectedActivity">
+            <DialogContent
+                class="flex max-h-[92dvh] w-[calc(100vw-1.5rem)] flex-col overflow-hidden border border-border/40 p-0 shadow-2xl sm:max-w-5xl sm:rounded-2xl lg:max-w-6xl"
+                v-if="selectedActivity"
+            >
                 <!-- Header -->
                 <div class="bg-primary/5 px-5 pt-5 pb-4 border-b border-primary/10">
                     <DialogHeader>
@@ -1214,6 +1498,109 @@ watch(isAssignModalOpen, (val) => {
             </DialogContent>
         </Dialog>
         <!-- ──────────────────────────────────────────────────────────────── -->
+
+        <!-- ── Open incidents list (peek) ──────────────────────────────── -->
+        <Dialog v-model:open="openIncidentsListModalOpen">
+            <DialogContent class="flex max-h-[85dvh] flex-col overflow-hidden border border-border/40 p-0 shadow-2xl sm:max-w-[640px] sm:rounded-2xl">
+                <div class="shrink-0 border-b border-primary/10 bg-primary/5 px-5 pb-4 pt-5">
+                    <DialogHeader>
+                        <div class="mb-1 flex items-center gap-2">
+                            <AlertTriangle class="h-4 w-4 text-rose-500" aria-hidden="true" />
+                            <DialogTitle class="text-base font-bold">Open incidents</DialogTitle>
+                        </div>
+                        <DialogDescription class="text-xs text-muted-foreground">
+                            Status Open · created in {{ periodLabel }}
+                        </DialogDescription>
+                    </DialogHeader>
+                </div>
+
+                <div class="modal-body flex-1 overflow-y-auto">
+                    <div
+                        v-if="openIncidentsListLoading"
+                        class="flex min-h-[220px] flex-col items-center justify-center gap-6 px-5 py-10"
+                        role="status"
+                        aria-live="polite"
+                        aria-busy="true"
+                    >
+                        <div class="flex flex-col items-center gap-3 text-center">
+                            <Loader2 class="h-9 w-9 animate-spin text-primary" aria-hidden="true" />
+                            <p class="text-sm font-medium text-foreground">Loading open incidents…</p>
+                            <p class="max-w-[240px] text-xs text-muted-foreground">Fetching tickets for {{ periodLabel }}</p>
+                        </div>
+                        <div class="flex w-full max-w-md flex-col gap-2.5">
+                            <div v-for="i in 5" :key="i" class="flex gap-3 rounded-lg border border-border/40 bg-muted/20 p-3">
+                                <div class="h-5 w-14 shrink-0 animate-pulse rounded bg-muted/60" />
+                                <div class="min-w-0 flex-1 space-y-2">
+                                    <div class="h-3.5 max-w-sm w-[85%] animate-pulse rounded bg-muted/60" />
+                                    <div class="h-2.5 w-1/2 animate-pulse rounded bg-muted/40" />
+                                </div>
+                                <div class="mt-0.5 h-3 w-12 shrink-0 animate-pulse self-start rounded bg-muted/40" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-else-if="!openIncidentsListTickets.length" class="flex flex-col items-center justify-center gap-3 py-12 text-center">
+                        <CheckCircle2 class="h-8 w-8 text-muted-foreground/40" />
+                        <p class="text-sm text-muted-foreground">No open incidents in {{ periodLabel }}.</p>
+                    </div>
+
+                    <div v-else class="divide-y divide-border/40">
+                        <div
+                            v-for="t in openIncidentsListTickets"
+                            :key="t.numericId"
+                            class="group flex cursor-pointer items-start gap-3 px-5 py-3.5 transition-all hover:bg-muted/40 active:scale-[0.995]"
+                            @click="selectOpenIncidentFromPeek(t)"
+                        >
+                            <span
+                                class="mt-0.5 inline-flex shrink-0 items-center rounded-md border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold leading-none text-primary"
+                            >
+                                {{ t.tktId }}
+                            </span>
+                            <div class="min-w-0 flex-1">
+                                <p class="truncate text-sm font-medium leading-snug text-foreground transition-colors group-hover:text-primary">
+                                    {{ t.title }}
+                                </p>
+                                <div class="mt-1 flex flex-wrap items-center gap-2">
+                                    <span
+                                        :class="[
+                                            'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-bold',
+                                            !priorityHexByName[t.priority] && 'border-border bg-muted text-muted-foreground',
+                                        ]"
+                                        :style="chartToneStyle(priorityHexByName[t.priority])"
+                                    >
+                                        <component :is="getPriorityIcon(t.priority)" class="h-2.5 w-2.5" />
+                                        {{ t.priority }}
+                                    </span>
+                                    <span class="text-[11px] text-muted-foreground">{{ t.category }}</span>
+                                    <span class="text-[11px] text-muted-foreground">·</span>
+                                    <span class="truncate text-[11px] text-muted-foreground">{{ t.reporter }}</span>
+                                </div>
+                            </div>
+                            <div class="mt-0.5 flex shrink-0 items-center gap-1">
+                                <span class="text-[11px] text-muted-foreground">{{ t.time }}</span>
+                                <ChevronRight
+                                    class="h-3.5 w-3.5 text-muted-foreground/30 transition-all group-hover:translate-x-0.5 group-hover:text-primary/60 group-hover:opacity-100 opacity-0"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="shrink-0 border-t border-border/50 bg-muted/20 px-5 py-3">
+                    <div class="flex flex-wrap items-center justify-end gap-2">
+                        <Link
+                            :href="route('tickets')"
+                            class="mr-auto text-xs font-semibold text-primary underline-offset-4 hover:underline"
+                        >
+                            Open Incidents page
+                        </Link>
+                        <Button variant="outline" class="text-xs font-bold" @click="openIncidentsListModalOpen = false">
+                            Close
+                        </Button>
+                    </div>
+                </div>
+            </DialogContent>
+        </Dialog>
 
         <!-- ── Assign Handler Modal ─────────────────────────────────────── -->
         <Dialog v-model:open="isAssignModalOpen">
@@ -1504,7 +1891,8 @@ watch(isAssignModalOpen, (val) => {
                             <DialogTitle class="text-base font-bold">{{ categoryModalName }} Tickets</DialogTitle>
                         </div>
                         <DialogDescription class="text-xs text-muted-foreground">
-                            {{ categoryModalName }} category · tickets created in {{ periodLabel }}
+                            <template v-if="categoryModalIsRootScope">All types under this family · tickets created in {{ periodLabel }}</template>
+                            <template v-else>{{ categoryModalName }} category · tickets created in {{ periodLabel }}</template>
                         </DialogDescription>
                     </DialogHeader>
                 </div>
@@ -1522,7 +1910,10 @@ watch(isAssignModalOpen, (val) => {
                         <div class="flex flex-col items-center gap-3 text-center">
                             <Loader2 class="h-9 w-9 animate-spin text-primary" aria-hidden="true" />
                             <p class="text-sm font-medium text-foreground">Loading tickets…</p>
-                            <p class="text-xs text-muted-foreground max-w-[240px]">Fetching {{ categoryModalName }} for {{ periodLabel }}</p>
+                            <p class="text-xs text-muted-foreground max-w-[240px]">
+                                <template v-if="categoryModalIsRootScope">Loading tickets for {{ categoryModalName }} · {{ periodLabel }}</template>
+                                <template v-else>Fetching {{ categoryModalName }} for {{ periodLabel }}</template>
+                            </p>
                         </div>
                         <div class="w-full max-w-md flex flex-col gap-2.5">
                             <div v-for="i in 5" :key="i" class="flex gap-3 rounded-lg border border-border/40 bg-muted/20 p-3">

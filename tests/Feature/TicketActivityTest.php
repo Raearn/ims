@@ -300,4 +300,34 @@ class TicketActivityTest extends TestCase
         $priorityIdx = array_search('priority_changed', $actions);
         $this->assertLessThan($priorityIdx, $statusIdx);
     }
+
+    public function test_history_api_forbidden_without_ticket_thread_access(): void
+    {
+        $user = User::factory()->create(['role' => 'technical']);
+        $ticket = Ticket::factory()->create();
+
+        $this->actingAs($user)
+            ->getJson(route('tickets.history', $ticket))
+            ->assertForbidden();
+    }
+
+    public function test_history_api_allowed_for_technical_when_reporter(): void
+    {
+        $user = User::factory()->create(['role' => 'technical']);
+        $ticket = Ticket::factory()->create(['user_id' => $user->id]);
+
+        TicketActivity::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $user->id,
+            'action' => 'status_changed',
+            'old_value' => 'Open',
+            'new_value' => 'Resolved',
+            'created_at' => now(),
+        ]);
+
+        $this->actingAs($user)
+            ->getJson(route('tickets.history', $ticket))
+            ->assertOk()
+            ->assertJsonFragment(['action' => 'status_changed']);
+    }
 }

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\MyIncidentsController;
 use App\Models\Tag;
 use App\Models\Ticket;
 use App\Models\TicketActivity;
@@ -16,8 +17,8 @@ use App\Notifications\TicketAssigned;
 use App\Notifications\TicketCommentPosted;
 use App\Notifications\TicketCreated;
 use App\Notifications\TicketStatusChanged;
+use App\Support\IncidentInertiaPayload;
 use Carbon\Carbon;
-use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
@@ -26,410 +27,532 @@ use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 Route::get('/', function () {
-    if (auth()->check()) {
-        $user = auth()->user();
-        if ($user->isAdmin()) {
-            return redirect()->route('dashboard');
-        } elseif ($user->isSupervisor()) {
-            return redirect()->route('supervisor.dashboard');
-        }
-
-        return redirect()->route('dashboard'); // technical users or others can have a default too
+    if (! auth()->check()) {
+        return redirect()->route('login');
     }
 
-    return redirect()->route('login');
+    if (! auth()->user()->hasVerifiedEmail()) {
+        return redirect()->route('verification.notice');
+    }
+
+    $user = auth()->user();
+
+    if ($user->isTechnical()) {
+        return app(MyIncidentsController::class)->index();
+    }
+
+    return redirect()->to($user->defaultAuthenticatedRedirectUrl());
 })->name('home');
 
-Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(function () {
-    Route::get('dashboard/export-pdf', [DashboardController::class, 'exportPdf'])->name('dashboard.export-pdf');
-    Route::post('tickets/export-excel-audit', function () {
-        $validated = request()->validate([
-            'ticket_count' => ['nullable', 'integer', 'min:0', 'max:500000'],
-        ]);
-        $count = $validated['ticket_count'] ?? null;
-        TicketActivity::create([
-            'ticket_id' => null,
-            'user_id' => auth()->id(),
-            'action' => 'tickets_export_excel',
-            'old_value' => null,
-            'new_value' => $count !== null
-                ? "Exported {$count} incident(s)"
-                : 'Incidents list (Excel)',
-            'created_at' => now(),
-        ]);
+Route::middleware(['auth', 'verified', 'role:admin,supervisor'])->group(function () {
+    Route::get('/dashboard/export-pdf', [DashboardController::class, 'exportPdf'])->name('dashboard.export-pdf');
+    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+});
 
-        return response()->noContent();
-    })->name('tickets.export-excel-audit');
-    Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
-
-    Route::get('tickets/by-priority/{priority}', function (string $priority) {
-        $validated = request()->validate([
-            'period' => ['sometimes', 'string', Rule::in(['7d', '30d', 'this_month', 'last_month', 'ytd', 'all'])],
-        ]);
-        $period = $validated['period'] ?? '7d';
-        [$windowStart, $windowEnd] = DashboardController::reportingPeriodBounds($period);
-
-        $tickets = Ticket::with(['reporter', 'handlers', 'tags'])
-            ->where('priority', $priority)
-            ->where('created_at', '>=', $windowStart)
-            ->where('created_at', '<=', $windowEnd)
-            ->latest()
-            ->get()
-            ->map(fn ($t) => [
-                'id' => $t->id,
-                'numericId' => $t->id,
-                'tktId' => 'TKT-'.(1000 + $t->id),
-                'title' => $t->title,
-                'description' => $t->description,
-                'status' => $t->status,
-                'priority' => $t->priority,
-                'category' => $t->category,
-                'tags' => $t->tags->pluck('name')->toArray(),
-                'reporter' => $t->reporter?->name ?? 'Unknown',
-                'reporterId' => $t->user_id,
-                'handlerIds' => $t->handlers->pluck('id')->toArray(),
-                'handlers' => $t->handlers->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->values()->toArray(),
-                'attachmentUrl' => $t->attachment ? Storage::disk('public')->url($t->attachment) : null,
-                'createdAtFormatted' => $t->created_at->format('M d, Y \a\t h:i A'),
-                'time' => $t->created_at->diffForHumans(),
+Route::prefix('admin')->middleware(['auth', 'verified'])->group(function () {
+    Route::middleware(['role:admin,supervisor'])->group(function () {
+        Route::get('dashboard/export-pdf', function () {
+            return redirect()->route('dashboard.export-pdf', request()->query());
+        });
+        Route::get('dashboard', function () {
+            return redirect()->route('dashboard', request()->query());
+        });
+        Route::post('incidents/export-excel-audit', function () {
+            $validated = request()->validate([
+                'ticket_count' => ['nullable', 'integer', 'min:0', 'max:500000'],
             ]);
-
-        return response()->json($tickets);
-    })->name('tickets.by-priority');
-
-    Route::get('tickets/by-category/{category}', function (string $category) {
-        $validated = request()->validate([
-            'period' => ['sometimes', 'string', Rule::in(['7d', '30d', 'this_month', 'last_month', 'ytd', 'all'])],
-        ]);
-        $period = $validated['period'] ?? '7d';
-        [$windowStart, $windowEnd] = DashboardController::reportingPeriodBounds($period);
-
-        $tickets = Ticket::with(['reporter', 'handlers', 'tags'])
-            ->where('category', $category)
-            ->where('created_at', '>=', $windowStart)
-            ->where('created_at', '<=', $windowEnd)
-            ->latest()
-            ->get()
-            ->map(fn ($t) => [
-                'id' => $t->id,
-                'numericId' => $t->id,
-                'tktId' => 'TKT-'.(1000 + $t->id),
-                'title' => $t->title,
-                'description' => $t->description,
-                'status' => $t->status,
-                'priority' => $t->priority,
-                'category' => $t->category,
-                'tags' => $t->tags->pluck('name')->toArray(),
-                'reporter' => $t->reporter?->name ?? 'Unknown',
-                'reporterId' => $t->user_id,
-                'handlerIds' => $t->handlers->pluck('id')->toArray(),
-                'handlers' => $t->handlers->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->values()->toArray(),
-                'attachmentUrl' => $t->attachment ? Storage::disk('public')->url($t->attachment) : null,
-                'createdAtFormatted' => $t->created_at->format('M d, Y \a\t h:i A'),
-                'time' => $t->created_at->diffForHumans(),
-            ]);
-
-        return response()->json($tickets);
-    })->name('tickets.by-category');
-
-    Route::get('tickets/by-tag', function () {
-        $validated = request()->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'period' => ['sometimes', 'string', Rule::in(['7d', '30d', 'this_month', 'last_month', 'ytd', 'all'])],
-        ]);
-
-        $period = $validated['period'] ?? '7d';
-        [$windowStart, $windowEnd] = DashboardController::reportingPeriodBounds($period);
-
-        $tag = Tag::where('name', $validated['name'])->first();
-        if ($tag === null) {
-            return response()->json([]);
-        }
-
-        $tickets = Ticket::with(['reporter', 'handlers', 'tags'])
-            ->whereHas('tags', fn ($q) => $q->where('tags.id', $tag->id))
-            ->where('created_at', '>=', $windowStart)
-            ->where('created_at', '<=', $windowEnd)
-            ->latest()
-            ->get()
-            ->map(fn ($t) => [
-                'id' => $t->id,
-                'numericId' => $t->id,
-                'tktId' => 'TKT-'.(1000 + $t->id),
-                'title' => $t->title,
-                'description' => $t->description,
-                'status' => $t->status,
-                'priority' => $t->priority,
-                'category' => $t->category,
-                'tags' => $t->tags->pluck('name')->toArray(),
-                'reporter' => $t->reporter?->name ?? 'Unknown',
-                'reporterId' => $t->user_id,
-                'handlerIds' => $t->handlers->pluck('id')->toArray(),
-                'handlers' => $t->handlers->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->values()->toArray(),
-                'attachmentUrl' => $t->attachment ? Storage::disk('public')->url($t->attachment) : null,
-                'createdAtFormatted' => $t->created_at->format('M d, Y \a\t h:i A'),
-                'time' => $t->created_at->diffForHumans(),
-            ]);
-
-        return response()->json($tickets);
-    })->name('tickets.by-tag');
-
-    Route::get('tickets', function () {
-        $tickets = Ticket::with(['handlers', 'reporter', 'tags'])
-            ->withCount('comments')
-            ->latest()
-            ->get();
-
-        return Inertia::render('Tickets', [
-            'tickets' => $tickets->map(fn ($ticket) => [
-                'numericId' => $ticket->id,
-                'id' => 'TKT-'.(1000 + $ticket->id),
-                'title' => $ticket->title,
-                'description' => $ticket->description,
-                'status' => $ticket->status,
-                'priority' => $ticket->priority,
-                'category' => $ticket->category,
-                'ticketCategoryId' => $ticket->ticket_category_id,
-                'tags' => $ticket->tags->pluck('name')->toArray(),
-                'handlerIds' => $ticket->handlers->pluck('id')->toArray(),
-                'handlers' => $ticket->handlers->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->values()->toArray(),
-                'reporter' => $ticket->reporter?->name ?? 'Unknown',
-                'reporterId' => $ticket->user_id,
-                'attachmentUrl' => $ticket->attachment ? Storage::disk('public')->url($ticket->attachment) : null,
-                'createdAt' => $ticket->created_at->diffForHumans(),
-                'createdAtFormatted' => $ticket->created_at->format('M d, Y \a\t h:i A'),
-                'createdAtRaw' => $ticket->created_at->format('Y-m-d'),
-                'solution' => $ticket->solution,
-                'resolvedInDuration' => $ticket->resolved_at
-                    ? $ticket->resolved_at->diffForHumans($ticket->created_at, CarbonInterface::DIFF_ABSOLUTE, false, 2)
-                    : null,
-                'resolvedAtFormatted' => $ticket->resolved_at?->format('M d, Y \a\t h:i A'),
-                'commentsCount' => $ticket->comments_count,
-            ]),
-            'users' => User::select('id', 'name')->orderBy('name')->get(),
-            'categories' => TicketCategory::orderedTreeForSettings()->map(fn (TicketCategory $c): array => [
-                'id' => $c->id,
-                'name' => $c->name,
-                'icon' => $c->icon,
-                'parent_id' => $c->parent_id,
-            ])->values()->all(),
-            'priorities' => TicketPriority::orderBy('sort_order')->get(['id', 'name', 'icon', 'color']),
-            'statuses' => TicketStatus::orderBy('sort_order')->get(['id', 'name', 'icon', 'color', 'handler_requirement']),
-            'allTags' => Tag::pluck('name')->toArray(),
-        ]);
-    })->name('tickets');
-
-    Route::get('tickets/{ticket}/detail', function (Ticket $ticket) {
-        $ticket->load(['handlers', 'reporter', 'tags']);
-        $ticket->loadCount('comments');
-
-        return response()->json([
-            'ticket' => [
-                'numericId' => $ticket->id,
-                'id' => 'TKT-'.(1000 + $ticket->id),
-                'title' => $ticket->title,
-                'description' => $ticket->description,
-                'status' => $ticket->status,
-                'priority' => $ticket->priority,
-                'category' => $ticket->category,
-                'ticketCategoryId' => $ticket->ticket_category_id,
-                'tags' => $ticket->tags->pluck('name')->toArray(),
-                'handlerIds' => $ticket->handlers->pluck('id')->toArray(),
-                'handlers' => $ticket->handlers->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->values()->toArray(),
-                'reporter' => $ticket->reporter?->name ?? 'Unknown',
-                'reporterId' => $ticket->user_id,
-                'attachmentUrl' => $ticket->attachment ? Storage::disk('public')->url($ticket->attachment) : null,
-                'createdAt' => $ticket->created_at->diffForHumans(),
-                'createdAtFormatted' => $ticket->created_at->format('M d, Y \a\t h:i A'),
-                'createdAtRaw' => $ticket->created_at->format('Y-m-d'),
-                'solution' => $ticket->solution,
-                'resolvedInDuration' => $ticket->resolved_at
-                    ? $ticket->resolved_at->diffForHumans($ticket->created_at, CarbonInterface::DIFF_ABSOLUTE, false, 2)
-                    : null,
-                'resolvedAtFormatted' => $ticket->resolved_at?->format('M d, Y \a\t h:i A'),
-                'commentsCount' => $ticket->comments_count,
-            ],
-            'categories' => TicketCategory::orderedTreeForSettings()->map(fn (TicketCategory $c): array => [
-                'id' => $c->id,
-                'name' => $c->name,
-                'icon' => $c->icon,
-                'parent_id' => $c->parent_id,
-            ])->values()->all(),
-            'priorities' => TicketPriority::orderBy('sort_order')->get(['id', 'name', 'icon', 'color']),
-            'statuses' => TicketStatus::orderBy('sort_order')->get(['id', 'name', 'icon', 'color', 'handler_requirement']),
-        ]);
-    })->name('tickets.detail-json');
-
-    Route::post('tickets', function () {
-        $validated = request()->validate([
-            'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'ticket_category_id' => ['required', 'integer', Rule::exists('ticket_categories', 'id')],
-            'priority' => ['required', 'string', Rule::in(TicketPriority::pluck('name')->toArray())],
-            'status' => ['required', 'string', Rule::in(TicketStatus::pluck('name')->toArray())],
-            'handler_ids' => [
-                Rule::requiredIf(fn () => in_array(request('status'), TicketStatus::namesRequiringHandlersForForms(), true)),
-                'nullable',
-                'array',
-            ],
-            'handler_ids.*' => ['exists:users,id'],
-            'solution' => [
-                'nullable',
-                'string',
-            ],
-            'tags' => ['required', 'array', 'min:1'],
-            'tags.*' => ['string'],
-            'attachment' => 'nullable|image|max:4096',
-        ]);
-
-        if (in_array($validated['status'], TicketStatus::namesRequiringHandlersForForms(), true)) {
-            $handlerIds = $validated['handler_ids'] ?? [];
-            if (! is_array($handlerIds) || count($handlerIds) < 1) {
-                throw ValidationException::withMessages([
-                    'handler_ids' => 'At least one handler is required for this status.',
-                ]);
-            }
-        }
-
-        if (request()->hasFile('attachment')) {
-            $validated['attachment'] = request()->file('attachment')->store('attachments', 'public');
-        }
-
-        $categoryName = TicketCategory::query()->whereKey($validated['ticket_category_id'])->value('name') ?? '';
-
-        $ticket = Ticket::create([
-            'title' => $validated['title'],
-            'description' => $validated['description'] ?? null,
-            'attachment' => $validated['attachment'] ?? null,
-            'status' => $validated['status'],
-            'solution' => $validated['solution'] ?? null,
-            'priority' => $validated['priority'],
-            'category' => $categoryName,
-            'ticket_category_id' => $validated['ticket_category_id'],
-            'user_id' => auth()->id(),
-        ]);
-
-        $tagIds = [];
-        if (! empty($validated['tags'])) {
-            foreach ($validated['tags'] as $tagName) {
-                $tagIds[] = Tag::firstOrCreate(['name' => $tagName])->id;
-            }
-        }
-        $ticket->tags()->sync($tagIds);
-
-        $handlerIds = $validated['handler_ids'] ?? [];
-        $ticket->handlers()->sync($handlerIds);
-
-        if (! empty($handlerIds)) {
-            User::whereIn('id', $handlerIds)->each(
-                fn (User $handler) => $handler->notify(new TicketAssigned($ticket))
-            );
-
-            $handlerNames = User::whereIn('id', $handlerIds)->pluck('name')->implode(', ');
+            $count = $validated['ticket_count'] ?? null;
             TicketActivity::create([
-                'ticket_id' => $ticket->id,
+                'ticket_id' => null,
                 'user_id' => auth()->id(),
-                'action' => 'handler_assigned',
+                'action' => 'tickets_export_excel',
                 'old_value' => null,
-                'new_value' => $handlerNames,
+                'new_value' => $count !== null
+                    ? "Exported {$count} incident(s)"
+                    : 'Incidents list (Excel)',
                 'created_at' => now(),
             ]);
-        }
 
-        $admins = User::where('role', 'admin')
-            ->where('id', '!=', auth()->id())
-            ->get();
+            return response()->noContent();
+        })->name('tickets.export-excel-audit');
 
-        foreach ($admins as $admin) {
-            $admin->notify(new TicketCreated($ticket, auth()->user()->name));
-        }
+        Route::get('incidents/by-priority/{priority}', function (string $priority) {
+            $validated = request()->validate([
+                'period' => ['sometimes', 'string', Rule::in(['7d', '30d', 'this_month', 'last_month', 'ytd', 'all'])],
+            ]);
+            $period = $validated['period'] ?? '7d';
+            [$windowStart, $windowEnd] = DashboardController::reportingPeriodBounds($period);
 
-        return redirect()->back()->with('success', 'Ticket created successfully.');
-    })->name('tickets.store');
+            $categoryDisplayPaths = TicketCategory::displayPathLookupFromSettings();
 
-    Route::patch('tickets/bulk/status', function () {
-        $validated = request()->validate([
-            'ticket_ids' => ['required', 'array', 'min:1'],
-            'ticket_ids.*' => ['exists:tickets,id'],
-            'status' => ['required', 'string', Rule::in(TicketStatus::pluck('name')->toArray())],
-            'handler_ids' => ['nullable', 'array'],
-            'handler_ids.*' => ['exists:users,id'],
-            'solution' => [
-                'nullable',
-                'string',
-            ],
-        ]);
+            $tickets = Ticket::with(['reporter', 'handlers', 'tags'])
+                ->where('priority', $priority)
+                ->where('created_at', '>=', $windowStart)
+                ->where('created_at', '<=', $windowEnd)
+                ->latest()
+                ->get()
+                ->map(fn ($t) => [
+                    'id' => $t->id,
+                    'numericId' => $t->id,
+                    'tktId' => 'TKT-'.(1000 + $t->id),
+                    'title' => $t->title,
+                    'description' => $t->description,
+                    'status' => $t->status,
+                    'priority' => $t->priority,
+                    'category' => TicketCategory::displayLabelForTicket($t->ticket_category_id, $t->category, $categoryDisplayPaths),
+                    'tags' => $t->tags->pluck('name')->toArray(),
+                    'reporter' => $t->reporter?->name ?? 'Unknown',
+                    'reporterId' => $t->user_id,
+                    'handlerIds' => $t->handlers->pluck('id')->toArray(),
+                    'handlers' => $t->handlers->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->values()->toArray(),
+                    'attachmentUrl' => $t->attachment ? Storage::disk('public')->url($t->attachment) : null,
+                    'createdAtFormatted' => $t->created_at->format('M d, Y \a\t h:i A'),
+                    'time' => $t->created_at->diffForHumans(),
+                ]);
 
-        if (in_array($validated['status'], TicketStatus::namesRequiringHandlersForForms(), true)) {
+            return response()->json($tickets);
+        })->name('tickets.by-priority');
+
+        Route::get('incidents/open', function () {
+            $validated = request()->validate([
+                'period' => ['sometimes', 'string', Rule::in(['7d', '30d', 'this_month', 'last_month', 'ytd', 'all'])],
+            ]);
+            $period = $validated['period'] ?? '7d';
+            [$windowStart, $windowEnd] = DashboardController::reportingPeriodBounds($period);
+
+            $categoryDisplayPaths = TicketCategory::displayPathLookupFromSettings();
+
+            $tickets = Ticket::with(['reporter', 'handlers', 'tags'])
+                ->where('status', 'Open')
+                ->where('created_at', '>=', $windowStart)
+                ->where('created_at', '<=', $windowEnd)
+                ->latest('created_at')
+                ->get()
+                ->map(fn ($t) => [
+                    'id' => $t->id,
+                    'numericId' => $t->id,
+                    'tktId' => 'TKT-'.(1000 + $t->id),
+                    'title' => $t->title,
+                    'description' => $t->description,
+                    'status' => $t->status,
+                    'priority' => $t->priority,
+                    'category' => TicketCategory::displayLabelForTicket($t->ticket_category_id, $t->category, $categoryDisplayPaths),
+                    'tags' => $t->tags->pluck('name')->toArray(),
+                    'reporter' => $t->reporter?->name ?? 'Unknown',
+                    'reporterId' => $t->user_id,
+                    'handlerIds' => $t->handlers->pluck('id')->toArray(),
+                    'handlers' => $t->handlers->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->values()->toArray(),
+                    'attachmentUrl' => $t->attachment ? Storage::disk('public')->url($t->attachment) : null,
+                    'createdAtFormatted' => $t->created_at->format('M d, Y \a\t h:i A'),
+                    'time' => $t->created_at->diffForHumans(),
+                ]);
+
+            return response()->json($tickets);
+        })->name('tickets.by-open');
+
+        Route::get('incidents/by-category/{category}', function (string $category) {
+            $validated = request()->validate([
+                'period' => ['sometimes', 'string', Rule::in(['7d', '30d', 'this_month', 'last_month', 'ytd', 'all'])],
+            ]);
+            $period = $validated['period'] ?? '7d';
+            [$windowStart, $windowEnd] = DashboardController::reportingPeriodBounds($period);
+
+            $categoryDisplayPaths = TicketCategory::displayPathLookupFromSettings();
+
+            $tickets = Ticket::with(['reporter', 'handlers', 'tags'])
+                ->where('category', $category)
+                ->where('created_at', '>=', $windowStart)
+                ->where('created_at', '<=', $windowEnd)
+                ->latest()
+                ->get()
+                ->map(fn ($t) => [
+                    'id' => $t->id,
+                    'numericId' => $t->id,
+                    'tktId' => 'TKT-'.(1000 + $t->id),
+                    'title' => $t->title,
+                    'description' => $t->description,
+                    'status' => $t->status,
+                    'priority' => $t->priority,
+                    'category' => TicketCategory::displayLabelForTicket($t->ticket_category_id, $t->category, $categoryDisplayPaths),
+                    'tags' => $t->tags->pluck('name')->toArray(),
+                    'reporter' => $t->reporter?->name ?? 'Unknown',
+                    'reporterId' => $t->user_id,
+                    'handlerIds' => $t->handlers->pluck('id')->toArray(),
+                    'handlers' => $t->handlers->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->values()->toArray(),
+                    'attachmentUrl' => $t->attachment ? Storage::disk('public')->url($t->attachment) : null,
+                    'createdAtFormatted' => $t->created_at->format('M d, Y \a\t h:i A'),
+                    'time' => $t->created_at->diffForHumans(),
+                ]);
+
+            return response()->json($tickets);
+        })->name('tickets.by-category');
+
+        Route::get('incidents/by-category-root/{ticketCategory}', function (TicketCategory $ticketCategory) {
+            abort_unless($ticketCategory->isRoot(), 404);
+            $validated = request()->validate([
+                'period' => ['sometimes', 'string', Rule::in(['7d', '30d', 'this_month', 'last_month', 'ytd', 'all'])],
+            ]);
+            $period = $validated['period'] ?? '7d';
+            [$windowStart, $windowEnd] = DashboardController::reportingPeriodBounds($period);
+
+            $ticketCategory->loadMissing('children');
+            $ids = $ticketCategory->children->pluck('id')->push($ticketCategory->id)->unique()->values()->all();
+            $names = $ticketCategory->children->pluck('name')->push($ticketCategory->name)->unique()->values()->all();
+
+            $categoryDisplayPaths = TicketCategory::displayPathLookupFromSettings();
+
+            $tickets = Ticket::with(['reporter', 'handlers', 'tags'])
+                ->where(function ($q) use ($ids, $names) {
+                    $q->whereIn('ticket_category_id', $ids)
+                        ->orWhere(function ($q2) use ($names) {
+                            $q2->whereNull('ticket_category_id')
+                                ->whereIn('category', $names);
+                        });
+                })
+                ->where('created_at', '>=', $windowStart)
+                ->where('created_at', '<=', $windowEnd)
+                ->latest()
+                ->get()
+                ->map(fn ($t) => [
+                    'id' => $t->id,
+                    'numericId' => $t->id,
+                    'tktId' => 'TKT-'.(1000 + $t->id),
+                    'title' => $t->title,
+                    'description' => $t->description,
+                    'status' => $t->status,
+                    'priority' => $t->priority,
+                    'category' => TicketCategory::displayLabelForTicket($t->ticket_category_id, $t->category, $categoryDisplayPaths),
+                    'tags' => $t->tags->pluck('name')->toArray(),
+                    'reporter' => $t->reporter?->name ?? 'Unknown',
+                    'reporterId' => $t->user_id,
+                    'handlerIds' => $t->handlers->pluck('id')->toArray(),
+                    'handlers' => $t->handlers->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->values()->toArray(),
+                    'attachmentUrl' => $t->attachment ? Storage::disk('public')->url($t->attachment) : null,
+                    'createdAtFormatted' => $t->created_at->format('M d, Y \a\t h:i A'),
+                    'time' => $t->created_at->diffForHumans(),
+                ]);
+
+            return response()->json($tickets);
+        })->name('tickets.by-category-root');
+
+        Route::get('incidents/by-tag', function () {
+            $validated = request()->validate([
+                'name' => ['required', 'string', 'max:255'],
+                'period' => ['sometimes', 'string', Rule::in(['7d', '30d', 'this_month', 'last_month', 'ytd', 'all'])],
+            ]);
+
+            $period = $validated['period'] ?? '7d';
+            [$windowStart, $windowEnd] = DashboardController::reportingPeriodBounds($period);
+
+            $tag = Tag::where('name', $validated['name'])->first();
+            if ($tag === null) {
+                return response()->json([]);
+            }
+
+            $categoryDisplayPaths = TicketCategory::displayPathLookupFromSettings();
+
+            $tickets = Ticket::with(['reporter', 'handlers', 'tags'])
+                ->whereHas('tags', fn ($q) => $q->where('tags.id', $tag->id))
+                ->where('created_at', '>=', $windowStart)
+                ->where('created_at', '<=', $windowEnd)
+                ->latest()
+                ->get()
+                ->map(fn ($t) => [
+                    'id' => $t->id,
+                    'numericId' => $t->id,
+                    'tktId' => 'TKT-'.(1000 + $t->id),
+                    'title' => $t->title,
+                    'description' => $t->description,
+                    'status' => $t->status,
+                    'priority' => $t->priority,
+                    'category' => TicketCategory::displayLabelForTicket($t->ticket_category_id, $t->category, $categoryDisplayPaths),
+                    'tags' => $t->tags->pluck('name')->toArray(),
+                    'reporter' => $t->reporter?->name ?? 'Unknown',
+                    'reporterId' => $t->user_id,
+                    'handlerIds' => $t->handlers->pluck('id')->toArray(),
+                    'handlers' => $t->handlers->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->values()->toArray(),
+                    'attachmentUrl' => $t->attachment ? Storage::disk('public')->url($t->attachment) : null,
+                    'createdAtFormatted' => $t->created_at->format('M d, Y \a\t h:i A'),
+                    'time' => $t->created_at->diffForHumans(),
+                ]);
+
+            return response()->json($tickets);
+        })->name('tickets.by-tag');
+
+        Route::get('incidents', function () {
+            $categoryDisplayPaths = TicketCategory::displayPathLookupFromSettings();
+
+            $tickets = Ticket::with(['handlers', 'reporter', 'tags'])
+                ->withCount('comments')
+                ->latest()
+                ->get();
+
+            return Inertia::render('Tickets', [
+                'tickets' => $tickets->map(fn (Ticket $ticket) => IncidentInertiaPayload::listRow($ticket, $categoryDisplayPaths)),
+                'users' => User::select('id', 'name')->orderBy('name')->get(),
+                'categories' => TicketCategory::orderedTreeForSettings()->map(fn (TicketCategory $c): array => [
+                    'id' => $c->id,
+                    'name' => $c->name,
+                    'icon' => $c->icon,
+                    'parent_id' => $c->parent_id,
+                ])->values()->all(),
+                'priorities' => TicketPriority::orderBy('sort_order')->get(['id', 'name', 'icon', 'color']),
+                'statuses' => TicketStatus::orderBy('sort_order')->get(['id', 'name', 'icon', 'color', 'handler_requirement']),
+                'allTags' => Tag::pluck('name')->toArray(),
+            ]);
+        })->name('tickets');
+
+        Route::get('incidents/{ticket}/detail', function (Ticket $ticket) {
+            return response()->json(IncidentInertiaPayload::detailPayload($ticket));
+        })->name('tickets.detail-json');
+
+        Route::post('incidents', function () {
+            $validated = request()->validate([
+                'title' => 'required|string|max:255',
+                'description' => 'nullable|string',
+                'ticket_category_id' => ['required', 'integer', Rule::exists('ticket_categories', 'id')],
+                'priority' => ['required', 'string', Rule::in(TicketPriority::pluck('name')->toArray())],
+                'status' => ['required', 'string', Rule::in(TicketStatus::pluck('name')->toArray())],
+                'handler_ids' => [
+                    Rule::requiredIf(fn () => in_array(request('status'), TicketStatus::namesRequiringHandlersForForms(), true)),
+                    'nullable',
+                    'array',
+                ],
+                'handler_ids.*' => ['exists:users,id'],
+                'solution' => [
+                    'nullable',
+                    'string',
+                ],
+                'tags' => ['required', 'array', 'min:1'],
+                'tags.*' => ['string'],
+                'attachment' => 'nullable|image|max:4096',
+            ]);
+
+            if (in_array($validated['status'], TicketStatus::namesRequiringHandlersForForms(), true)) {
+                $handlerIds = $validated['handler_ids'] ?? [];
+                if (! is_array($handlerIds) || count($handlerIds) < 1) {
+                    throw ValidationException::withMessages([
+                        'handler_ids' => 'At least one handler is required for this status.',
+                    ]);
+                }
+            }
+
+            if (request()->hasFile('attachment')) {
+                $validated['attachment'] = request()->file('attachment')->store('attachments', 'public');
+            }
+
+            $categoryName = TicketCategory::query()->whereKey($validated['ticket_category_id'])->value('name') ?? '';
+
+            $ticket = Ticket::create([
+                'title' => $validated['title'],
+                'description' => $validated['description'] ?? null,
+                'attachment' => $validated['attachment'] ?? null,
+                'status' => $validated['status'],
+                'solution' => $validated['solution'] ?? null,
+                'priority' => $validated['priority'],
+                'category' => $categoryName,
+                'ticket_category_id' => $validated['ticket_category_id'],
+                'user_id' => auth()->id(),
+            ]);
+
+            $tagIds = [];
+            if (! empty($validated['tags'])) {
+                foreach ($validated['tags'] as $tagName) {
+                    $tagIds[] = Tag::firstOrCreate(['name' => $tagName])->id;
+                }
+            }
+            $ticket->tags()->sync($tagIds);
+
             $handlerIds = $validated['handler_ids'] ?? [];
-            if (! is_array($handlerIds) || count($handlerIds) < 1) {
-                throw ValidationException::withMessages([
-                    'handler_ids' => 'At least one handler is required for this status.',
-                ]);
-            }
-        }
+            $ticket->handlers()->sync($handlerIds);
 
-        $newStatus = $validated['status'];
-        $tickets = Ticket::with(['reporter', 'handlers'])->whereIn('id', $validated['ticket_ids'])->get();
+            if (! empty($handlerIds)) {
+                $ticket->subscribeUsersToTicketComments($handlerIds);
 
-        // Capture old statuses before bulk update
-        $oldStatuses = $tickets->pluck('status', 'id');
+                User::whereIn('id', $handlerIds)->each(
+                    fn (User $handler) => $handler->notify(new TicketAssigned($ticket))
+                );
 
-        $bulkPayload = [
-            'status' => $newStatus,
-        ];
-        if ($newStatus === 'Resolved') {
-            $bulkPayload['resolved_at'] = now();
-            $bulkPayload['solution'] = $validated['solution'] ?? null;
-        } elseif (Ticket::statusClearsResolvedAt($newStatus)) {
-            $bulkPayload['resolved_at'] = null;
-            $bulkPayload['solution'] = null;
-        }
-
-        Ticket::whereIn('id', $validated['ticket_ids'])->update($bulkPayload);
-
-        // Log status changes manually (mass update bypasses the model observer)
-        $solution = $newStatus === 'Resolved' ? ($validated['solution'] ?? null) : null;
-        $now = now();
-        foreach ($tickets as $ticket) {
-            $oldStatus = $oldStatuses->get($ticket->id);
-            if ($oldStatus !== $newStatus) {
+                $handlerNames = User::whereIn('id', $handlerIds)->pluck('name')->implode(', ');
                 TicketActivity::create([
                     'ticket_id' => $ticket->id,
                     'user_id' => auth()->id(),
-                    'action' => 'status_changed',
-                    'old_value' => $oldStatus,
-                    'new_value' => $newStatus,
-                    'created_at' => $now,
-                ]);
-            }
-            if ($solution) {
-                TicketActivity::create([
-                    'ticket_id' => $ticket->id,
-                    'user_id' => auth()->id(),
-                    'action' => 'solution_updated',
+                    'action' => 'handler_assigned',
                     'old_value' => null,
-                    'new_value' => $solution,
-                    'created_at' => $now,
+                    'new_value' => $handlerNames,
+                    'created_at' => now(),
                 ]);
             }
-        }
 
-        // Sync handlers on every affected ticket:
-        // - No-handler statuses (e.g. queue) → clear handlers
-        // - Other statuses → sync provided handler_ids (may be empty when optional)
-        $handlerIds = in_array($newStatus, TicketStatus::namesWithNoHandlersInUi(), true)
-            ? []
-            : ($validated['handler_ids'] ?? null);
-        if (! is_null($handlerIds)) {
+            $admins = User::where('role', 'admin')
+                ->where('id', '!=', auth()->id())
+                ->get();
+
+            foreach ($admins as $admin) {
+                $admin->notify(new TicketCreated($ticket, auth()->user()->name));
+            }
+
+            return redirect()->back()->with('success', 'Ticket created successfully.');
+        })->name('tickets.store');
+
+        Route::patch('incidents/bulk/status', function () {
+            $validated = request()->validate([
+                'ticket_ids' => ['required', 'array', 'min:1'],
+                'ticket_ids.*' => ['exists:tickets,id'],
+                'status' => ['required', 'string', Rule::in(TicketStatus::pluck('name')->toArray())],
+                'handler_ids' => ['nullable', 'array'],
+                'handler_ids.*' => ['exists:users,id'],
+                'solution' => [
+                    'nullable',
+                    'string',
+                ],
+            ]);
+
+            if (in_array($validated['status'], TicketStatus::namesRequiringHandlersForForms(), true)) {
+                $handlerIds = $validated['handler_ids'] ?? [];
+                if (! is_array($handlerIds) || count($handlerIds) < 1) {
+                    throw ValidationException::withMessages([
+                        'handler_ids' => 'At least one handler is required for this status.',
+                    ]);
+                }
+            }
+
+            $newStatus = $validated['status'];
+            $tickets = Ticket::with(['reporter', 'handlers'])->whereIn('id', $validated['ticket_ids'])->get();
+
+            // Capture old statuses before bulk update
+            $oldStatuses = $tickets->pluck('status', 'id');
+
+            $bulkPayload = [
+                'status' => $newStatus,
+            ];
+            if ($newStatus === 'Resolved') {
+                $bulkPayload['resolved_at'] = now();
+                $bulkPayload['solution'] = $validated['solution'] ?? null;
+            } elseif (Ticket::statusClearsResolvedAt($newStatus)) {
+                $bulkPayload['resolved_at'] = null;
+                $bulkPayload['solution'] = null;
+            }
+
+            Ticket::whereIn('id', $validated['ticket_ids'])->update($bulkPayload);
+
+            // Log status changes manually (mass update bypasses the model observer)
+            $solution = $newStatus === 'Resolved' ? ($validated['solution'] ?? null) : null;
+            $now = now();
             foreach ($tickets as $ticket) {
-                $existingIds = $ticket->handlers->pluck('id')->toArray();
-                $ticket->handlers()->sync($handlerIds);
+                $oldStatus = $oldStatuses->get($ticket->id);
+                if ($oldStatus !== $newStatus) {
+                    TicketActivity::create([
+                        'ticket_id' => $ticket->id,
+                        'user_id' => auth()->id(),
+                        'action' => 'status_changed',
+                        'old_value' => $oldStatus,
+                        'new_value' => $newStatus,
+                        'created_at' => $now,
+                    ]);
+                }
+                if ($solution) {
+                    TicketActivity::create([
+                        'ticket_id' => $ticket->id,
+                        'user_id' => auth()->id(),
+                        'action' => 'solution_updated',
+                        'old_value' => null,
+                        'new_value' => $solution,
+                        'created_at' => $now,
+                    ]);
+                }
+            }
 
-                $addedIds = array_diff($handlerIds, $existingIds);
-                $removedIds = array_diff($existingIds, $handlerIds);
+            // Sync handlers on every affected ticket:
+            // - No-handler statuses (e.g. queue) → clear handlers
+            // - Other statuses → sync provided handler_ids (may be empty when optional)
+            $handlerIds = in_array($newStatus, TicketStatus::namesWithNoHandlersInUi(), true)
+                ? []
+                : ($validated['handler_ids'] ?? null);
+            if (! is_null($handlerIds)) {
+                foreach ($tickets as $ticket) {
+                    $existingIds = $ticket->handlers->pluck('id')->toArray();
+                    $ticket->handlers()->sync($handlerIds);
+
+                    $addedIds = array_diff($handlerIds, $existingIds);
+                    $removedIds = array_diff($existingIds, $handlerIds);
+
+                    if (! empty($addedIds)) {
+                        $ticket->subscribeUsersToTicketComments($addedIds);
+
+                        TicketActivity::create([
+                            'ticket_id' => $ticket->id,
+                            'user_id' => auth()->id(),
+                            'action' => 'handler_assigned',
+                            'old_value' => null,
+                            'new_value' => User::whereIn('id', $addedIds)->pluck('name')->implode(', '),
+                            'created_at' => $now,
+                        ]);
+                    }
+
+                    if (! empty($removedIds)) {
+                        TicketActivity::create([
+                            'ticket_id' => $ticket->id,
+                            'user_id' => auth()->id(),
+                            'action' => 'handler_removed',
+                            'old_value' => User::whereIn('id', $removedIds)->pluck('name')->implode(', '),
+                            'new_value' => null,
+                            'created_at' => $now,
+                        ]);
+                    }
+                }
+            }
+
+            // Fire notifications
+            foreach ($tickets as $ticket) {
+                $oldStatus = $oldStatuses->get($ticket->id);
+                if ($oldStatus !== $newStatus) {
+                    $ticket->refresh();
+                    $notifiables = User::where('role', 'admin')->get();
+                    if ($ticket->reporter) {
+                        $notifiables->push($ticket->reporter);
+                    }
+                    $notifiables->unique('id')->each(function ($notifiable) use ($ticket, $oldStatus, $newStatus) {
+                        $notifiable->notify(new TicketStatusChanged($ticket, $oldStatus, $newStatus));
+                    });
+                }
+            }
+
+            if (! empty($handlerIds)) {
+                User::whereIn('id', $handlerIds)->each(function (User $handler) use ($tickets) {
+                    foreach ($tickets as $ticket) {
+                        $handler->notify(new TicketAssigned($ticket));
+                    }
+                });
+            }
+
+            return redirect()->back()->with('success', count($validated['ticket_ids']).' ticket(s) updated.');
+        })->name('tickets.bulk.status');
+
+        Route::patch('incidents/bulk/handlers', function () {
+            $validated = request()->validate([
+                'ticket_ids' => ['required', 'array', 'min:1'],
+                'ticket_ids.*' => ['exists:tickets,id'],
+                'handler_ids' => ['required', 'array', 'min:1'],
+                'handler_ids.*' => ['exists:users,id'],
+            ]);
+
+            $tickets = Ticket::with('handlers')->whereIn('id', $validated['ticket_ids'])->get();
+            $now = now();
+
+            $tickets->each(function (Ticket $ticket) use ($validated, $now) {
+                $existingHandlerIds = $ticket->handlers->pluck('id')->toArray();
+                $ticket->handlers()->sync($validated['handler_ids']);
+
+                $addedIds = array_diff($validated['handler_ids'], $existingHandlerIds);
+                $removedIds = array_diff($existingHandlerIds, $validated['handler_ids']);
 
                 if (! empty($addedIds)) {
+                    $ticket->subscribeUsersToTicketComments($addedIds);
+
+                    User::whereIn('id', $addedIds)->each(
+                        fn (User $handler) => $handler->notify(new TicketAssigned($ticket))
+                    );
                     TicketActivity::create([
                         'ticket_id' => $ticket->id,
                         'user_id' => auth()->id(),
@@ -450,12 +573,120 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
                         'created_at' => $now,
                     ]);
                 }
-            }
-        }
+            });
 
-        // Fire notifications
-        foreach ($tickets as $ticket) {
-            $oldStatus = $oldStatuses->get($ticket->id);
+            return redirect()->back()->with('success', count($validated['ticket_ids']).' ticket(s) updated.');
+        })->name('tickets.bulk.handlers');
+
+        Route::delete('incidents/bulk', function () {
+            $validated = request()->validate([
+                'ticket_ids' => ['required', 'array', 'min:1'],
+                'ticket_ids.*' => ['exists:tickets,id'],
+            ]);
+
+            // Capture titles before cascade wipes the rows
+            $tickets = Ticket::whereIn('id', $validated['ticket_ids'])->get(['id', 'title']);
+
+            $tickets->each(fn (Ticket $t) => TicketActivity::create([
+                'ticket_id' => null,
+                'user_id' => auth()->id(),
+                'action' => 'ticket_deleted',
+                'old_value' => 'TKT-'.(1000 + $t->id).': '.$t->title,
+                'new_value' => null,
+                'created_at' => now(),
+            ]));
+
+            Ticket::whereIn('id', $validated['ticket_ids'])->delete();
+
+            return redirect()->back()->with('success', count($validated['ticket_ids']).' ticket(s) deleted.');
+        })->name('tickets.bulk.destroy');
+
+        Route::delete('incidents/{ticket}', function (Ticket $ticket) {
+            if ($ticket->attachment) {
+                Storage::disk('public')->delete($ticket->attachment);
+            }
+
+            // Log before cascade-delete removes the row
+            TicketActivity::create([
+                'ticket_id' => null,
+                'user_id' => auth()->id(),
+                'action' => 'ticket_deleted',
+                'old_value' => 'TKT-'.(1000 + $ticket->id).': '.$ticket->title,
+                'new_value' => null,
+                'created_at' => now(),
+            ]);
+
+            $ticket->handlers()->detach();
+            $ticket->delete();
+
+            return redirect()->back()->with('success', 'Ticket deleted successfully.');
+        })->name('tickets.destroy');
+
+        Route::patch('incidents/{ticket}/status', function (Ticket $ticket) {
+            $validated = request()->validate([
+                'status' => ['required', 'string', Rule::in(TicketStatus::pluck('name')->toArray())],
+                'handler_ids' => ['nullable', 'array'],
+                'handler_ids.*' => ['exists:users,id'],
+                'solution' => [
+                    'nullable',
+                    'string',
+                ],
+            ]);
+
+            $oldStatus = $ticket->status;
+            $newStatus = $validated['status'];
+
+            $ticket->update([
+                'status' => $newStatus,
+                'solution' => $newStatus === 'Resolved' ? ($validated['solution'] ?? null) : $ticket->solution,
+            ]);
+
+            $existingHandlerIds = $ticket->handlers()->pluck('users.id')->toArray();
+
+            if (in_array($newStatus, TicketStatus::namesWithNoHandlersInUi(), true)) {
+                $ticket->handlers()->sync([]);
+                $removedIds = $existingHandlerIds;
+                if (! empty($removedIds)) {
+                    TicketActivity::create([
+                        'ticket_id' => $ticket->id,
+                        'user_id' => auth()->id(),
+                        'action' => 'handler_removed',
+                        'old_value' => User::whereIn('id', $removedIds)->pluck('name')->implode(', '),
+                        'new_value' => null,
+                        'created_at' => now(),
+                    ]);
+                }
+            } elseif (! empty($validated['handler_ids'])) {
+                $ticket->handlers()->sync($validated['handler_ids']);
+
+                $addedIds = array_diff($validated['handler_ids'], $existingHandlerIds);
+                $removedIds = array_diff($existingHandlerIds, $validated['handler_ids']);
+
+                if (! empty($addedIds)) {
+                    $ticket->subscribeUsersToTicketComments($addedIds);
+
+                    TicketActivity::create([
+                        'ticket_id' => $ticket->id,
+                        'user_id' => auth()->id(),
+                        'action' => 'handler_assigned',
+                        'old_value' => null,
+                        'new_value' => User::whereIn('id', $addedIds)->pluck('name')->implode(', '),
+                        'created_at' => now(),
+                    ]);
+                }
+
+                if (! empty($removedIds)) {
+                    TicketActivity::create([
+                        'ticket_id' => $ticket->id,
+                        'user_id' => auth()->id(),
+                        'action' => 'handler_removed',
+                        'old_value' => User::whereIn('id', $removedIds)->pluck('name')->implode(', '),
+                        'new_value' => null,
+                        'created_at' => now(),
+                    ]);
+                }
+            }
+
             if ($oldStatus !== $newStatus) {
                 $ticket->refresh();
                 $notifiables = User::where('role', 'admin')->get();
@@ -466,149 +697,59 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
                     $notifiable->notify(new TicketStatusChanged($ticket, $oldStatus, $newStatus));
                 });
             }
-        }
 
-        if (! empty($handlerIds)) {
-            User::whereIn('id', $handlerIds)->each(function (User $handler) use ($tickets) {
-                foreach ($tickets as $ticket) {
-                    $handler->notify(new TicketAssigned($ticket));
-                }
-            });
-        }
+            return redirect()->back()->with('success', 'Ticket status updated.');
+        })->name('tickets.status.update');
 
-        return redirect()->back()->with('success', count($validated['ticket_ids']).' ticket(s) updated.');
-    })->name('tickets.bulk.status');
+        Route::patch('incidents/{ticket}/handlers', function (Ticket $ticket) {
+            $validated = request()->validate([
+                'handler_ids' => ['required', 'array', 'min:1'],
+                'handler_ids.*' => ['exists:users,id'],
+                'status' => ['nullable', 'string', Rule::in(TicketStatus::pluck('name')->toArray())],
+                'solution' => [
+                    'nullable',
+                    'string',
+                ],
+            ]);
 
-    Route::patch('tickets/bulk/handlers', function () {
-        $validated = request()->validate([
-            'ticket_ids' => ['required', 'array', 'min:1'],
-            'ticket_ids.*' => ['exists:tickets,id'],
-            'handler_ids' => ['required', 'array', 'min:1'],
-            'handler_ids.*' => ['exists:users,id'],
-        ]);
+            if (in_array($ticket->status, TicketStatus::namesWithNoHandlersInUi(), true) && empty($validated['status'])) {
+                abort(422, 'A new status is required when assigning handlers from a status that does not use handlers.');
+            }
 
-        $tickets = Ticket::with('handlers')->whereIn('id', $validated['ticket_ids'])->get();
-        $now = now();
+            $oldStatus = $ticket->status;
+            $newStatus = $validated['status'] ?? null;
 
-        $tickets->each(function (Ticket $ticket) use ($validated, $now) {
-            $existingHandlerIds = $ticket->handlers->pluck('id')->toArray();
-            $ticket->handlers()->sync($validated['handler_ids']);
+            if (! empty($newStatus)) {
+                $ticket->update([
+                    'status' => $newStatus,
+                    'solution' => $newStatus === 'Resolved' ? ($validated['solution'] ?? null) : $ticket->solution,
+                ]);
+            }
 
-            $addedIds = array_diff($validated['handler_ids'], $existingHandlerIds);
-            $removedIds = array_diff($existingHandlerIds, $validated['handler_ids']);
+            $ticket->refresh();
+            $finalStatus = $ticket->status;
 
-            if (! empty($addedIds)) {
-                User::whereIn('id', $addedIds)->each(
+            $existingHandlerIds = $ticket->handlers()->pluck('users.id')->toArray();
+
+            $targetHandlerIds = in_array($finalStatus, TicketStatus::namesWithNoHandlersInUi(), true)
+                ? []
+                : $validated['handler_ids'];
+
+            $ticket->handlers()->sync($targetHandlerIds);
+
+            // Notify only newly added handlers
+            $newHandlerIds = array_diff($targetHandlerIds, $existingHandlerIds);
+            if (! empty($newHandlerIds)) {
+                $ticket->subscribeUsersToTicketComments($newHandlerIds);
+
+                User::whereIn('id', $newHandlerIds)->each(
                     fn (User $handler) => $handler->notify(new TicketAssigned($ticket))
                 );
-                TicketActivity::create([
-                    'ticket_id' => $ticket->id,
-                    'user_id' => auth()->id(),
-                    'action' => 'handler_assigned',
-                    'old_value' => null,
-                    'new_value' => User::whereIn('id', $addedIds)->pluck('name')->implode(', '),
-                    'created_at' => $now,
-                ]);
             }
 
-            if (! empty($removedIds)) {
-                TicketActivity::create([
-                    'ticket_id' => $ticket->id,
-                    'user_id' => auth()->id(),
-                    'action' => 'handler_removed',
-                    'old_value' => User::whereIn('id', $removedIds)->pluck('name')->implode(', '),
-                    'new_value' => null,
-                    'created_at' => $now,
-                ]);
-            }
-        });
-
-        return redirect()->back()->with('success', count($validated['ticket_ids']).' ticket(s) updated.');
-    })->name('tickets.bulk.handlers');
-
-    Route::delete('tickets/bulk', function () {
-        $validated = request()->validate([
-            'ticket_ids' => ['required', 'array', 'min:1'],
-            'ticket_ids.*' => ['exists:tickets,id'],
-        ]);
-
-        // Capture titles before cascade wipes the rows
-        $tickets = Ticket::whereIn('id', $validated['ticket_ids'])->get(['id', 'title']);
-
-        $tickets->each(fn (Ticket $t) => TicketActivity::create([
-            'ticket_id' => null,
-            'user_id' => auth()->id(),
-            'action' => 'ticket_deleted',
-            'old_value' => 'TKT-'.(1000 + $t->id).': '.$t->title,
-            'new_value' => null,
-            'created_at' => now(),
-        ]));
-
-        Ticket::whereIn('id', $validated['ticket_ids'])->delete();
-
-        return redirect()->back()->with('success', count($validated['ticket_ids']).' ticket(s) deleted.');
-    })->name('tickets.bulk.destroy');
-
-    Route::delete('tickets/{ticket}', function (Ticket $ticket) {
-        if ($ticket->attachment) {
-            Storage::disk('public')->delete($ticket->attachment);
-        }
-
-        // Log before cascade-delete removes the row
-        TicketActivity::create([
-            'ticket_id' => null,
-            'user_id' => auth()->id(),
-            'action' => 'ticket_deleted',
-            'old_value' => 'TKT-'.(1000 + $ticket->id).': '.$ticket->title,
-            'new_value' => null,
-            'created_at' => now(),
-        ]);
-
-        $ticket->handlers()->detach();
-        $ticket->delete();
-
-        return redirect()->back()->with('success', 'Ticket deleted successfully.');
-    })->name('tickets.destroy');
-
-    Route::patch('tickets/{ticket}/status', function (Ticket $ticket) {
-        $validated = request()->validate([
-            'status' => ['required', 'string', Rule::in(TicketStatus::pluck('name')->toArray())],
-            'handler_ids' => ['nullable', 'array'],
-            'handler_ids.*' => ['exists:users,id'],
-            'solution' => [
-                'nullable',
-                'string',
-            ],
-        ]);
-
-        $oldStatus = $ticket->status;
-        $newStatus = $validated['status'];
-
-        $ticket->update([
-            'status' => $newStatus,
-            'solution' => $newStatus === 'Resolved' ? ($validated['solution'] ?? null) : $ticket->solution,
-        ]);
-
-        $existingHandlerIds = $ticket->handlers()->pluck('users.id')->toArray();
-
-        if (in_array($newStatus, TicketStatus::namesWithNoHandlersInUi(), true)) {
-            $ticket->handlers()->sync([]);
-            $removedIds = $existingHandlerIds;
-            if (! empty($removedIds)) {
-                TicketActivity::create([
-                    'ticket_id' => $ticket->id,
-                    'user_id' => auth()->id(),
-                    'action' => 'handler_removed',
-                    'old_value' => User::whereIn('id', $removedIds)->pluck('name')->implode(', '),
-                    'new_value' => null,
-                    'created_at' => now(),
-                ]);
-            }
-        } elseif (! empty($validated['handler_ids'])) {
-            $ticket->handlers()->sync($validated['handler_ids']);
-
-            $addedIds = array_diff($validated['handler_ids'], $existingHandlerIds);
-            $removedIds = array_diff($existingHandlerIds, $validated['handler_ids']);
+            // Log handler assignment changes
+            $addedIds = array_diff($targetHandlerIds, $existingHandlerIds);
+            $removedIds = array_diff($existingHandlerIds, $targetHandlerIds);
 
             if (! empty($addedIds)) {
                 TicketActivity::create([
@@ -631,389 +772,325 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
                     'created_at' => now(),
                 ]);
             }
-        }
 
-        if ($oldStatus !== $newStatus) {
-            $ticket->refresh();
-            $notifiables = User::where('role', 'admin')->get();
-            if ($ticket->reporter) {
-                $notifiables->push($ticket->reporter);
+            if ($newStatus && $oldStatus !== $newStatus) {
+                $ticket->refresh();
+                $notifiables = User::where('role', 'admin')->get();
+                if ($ticket->reporter) {
+                    $notifiables->push($ticket->reporter);
+                }
+                $notifiables->unique('id')->each(function ($notifiable) use ($ticket, $oldStatus, $newStatus) {
+                    $notifiable->notify(new TicketStatusChanged($ticket, $oldStatus, $newStatus));
+                });
             }
-            $notifiables->unique('id')->each(function ($notifiable) use ($ticket, $oldStatus, $newStatus) {
-                $notifiable->notify(new TicketStatusChanged($ticket, $oldStatus, $newStatus));
-            });
-        }
 
-        return redirect()->back()->with('success', 'Ticket status updated.');
-    })->name('tickets.status.update');
+            return redirect()->back()->with('success', 'Handlers updated successfully.');
+        })->name('tickets.handlers.update');
 
-    Route::patch('tickets/{ticket}/handlers', function (Ticket $ticket) {
-        $validated = request()->validate([
-            'handler_ids' => ['required', 'array', 'min:1'],
-            'handler_ids.*' => ['exists:users,id'],
-            'status' => ['nullable', 'string', Rule::in(TicketStatus::pluck('name')->toArray())],
-            'solution' => [
-                'nullable',
-                'string',
-            ],
-        ]);
+        Route::put('incidents/{ticket}', function (Ticket $ticket) {
+            $validated = request()->validate([
+                'title' => 'required|string|max:255',
+                'description' => 'nullable|string',
+                'ticket_category_id' => ['required', 'integer', Rule::exists('ticket_categories', 'id')],
+                'priority' => ['required', 'string', Rule::in(TicketPriority::pluck('name')->toArray())],
+                'status' => ['required', 'string', Rule::in(TicketStatus::pluck('name')->toArray())],
+                'handler_ids' => [
+                    Rule::requiredIf(fn () => in_array(request('status'), TicketStatus::namesRequiringHandlersForForms(), true)),
+                    'nullable',
+                    'array',
+                ],
+                'handler_ids.*' => ['exists:users,id'],
+                'solution' => [
+                    'nullable',
+                    'string',
+                ],
+                'tags' => ['required', 'array', 'min:1'],
+                'tags.*' => ['string'],
+                'attachment' => 'nullable|image|max:4096',
+            ]);
 
-        if (in_array($ticket->status, TicketStatus::namesWithNoHandlersInUi(), true) && empty($validated['status'])) {
-            abort(422, 'A new status is required when assigning handlers from a status that does not use handlers.');
-        }
+            if (in_array($validated['status'], TicketStatus::namesRequiringHandlersForForms(), true)) {
+                $handlerIds = $validated['handler_ids'] ?? [];
+                if (! is_array($handlerIds) || count($handlerIds) < 1) {
+                    throw ValidationException::withMessages([
+                        'handler_ids' => 'At least one handler is required for this status.',
+                    ]);
+                }
+            }
 
-        $oldStatus = $ticket->status;
-        $newStatus = $validated['status'] ?? null;
+            if (request()->hasFile('attachment')) {
+                if ($ticket->attachment) {
+                    Storage::disk('public')->delete($ticket->attachment);
+                }
+                $validated['attachment'] = request()->file('attachment')->store('attachments', 'public');
+            }
 
-        if (! empty($newStatus)) {
+            $oldStatus = $ticket->status;
+            $newStatus = $validated['status'];
+            $existingHandlerIds = $ticket->handlers()->pluck('users.id')->toArray();
+
+            $normalizeTagList = static function (array $names): array {
+                return collect($names)
+                    ->map(fn (mixed $n) => is_string($n) ? trim($n) : (string) $n)
+                    ->filter()
+                    ->unique()
+                    ->sort()
+                    ->values()
+                    ->all();
+            };
+
+            $oldTagNames = $normalizeTagList($ticket->tags()->pluck('name')->all());
+
+            $categoryName = TicketCategory::query()->whereKey($validated['ticket_category_id'])->value('name') ?? '';
+
             $ticket->update([
+                'title' => $validated['title'],
+                'description' => $validated['description'] ?? null,
                 'status' => $newStatus,
                 'solution' => $newStatus === 'Resolved' ? ($validated['solution'] ?? null) : $ticket->solution,
+                'priority' => $validated['priority'],
+                'category' => $categoryName,
+                'ticket_category_id' => $validated['ticket_category_id'],
+                'attachment' => $validated['attachment'] ?? $ticket->attachment,
             ]);
-        }
 
-        $ticket->refresh();
-        $finalStatus = $ticket->status;
-
-        $existingHandlerIds = $ticket->handlers()->pluck('users.id')->toArray();
-
-        $targetHandlerIds = in_array($finalStatus, TicketStatus::namesWithNoHandlersInUi(), true)
-            ? []
-            : $validated['handler_ids'];
-
-        $ticket->handlers()->sync($targetHandlerIds);
-
-        // Notify only newly added handlers
-        $newHandlerIds = array_diff($targetHandlerIds, $existingHandlerIds);
-        if (! empty($newHandlerIds)) {
-            User::whereIn('id', $newHandlerIds)->each(
-                fn (User $handler) => $handler->notify(new TicketAssigned($ticket))
-            );
-        }
-
-        // Log handler assignment changes
-        $addedIds = array_diff($targetHandlerIds, $existingHandlerIds);
-        $removedIds = array_diff($existingHandlerIds, $targetHandlerIds);
-
-        if (! empty($addedIds)) {
-            TicketActivity::create([
-                'ticket_id' => $ticket->id,
-                'user_id' => auth()->id(),
-                'action' => 'handler_assigned',
-                'old_value' => null,
-                'new_value' => User::whereIn('id', $addedIds)->pluck('name')->implode(', '),
-                'created_at' => now(),
-            ]);
-        }
-
-        if (! empty($removedIds)) {
-            TicketActivity::create([
-                'ticket_id' => $ticket->id,
-                'user_id' => auth()->id(),
-                'action' => 'handler_removed',
-                'old_value' => User::whereIn('id', $removedIds)->pluck('name')->implode(', '),
-                'new_value' => null,
-                'created_at' => now(),
-            ]);
-        }
-
-        if ($newStatus && $oldStatus !== $newStatus) {
-            $ticket->refresh();
-            $notifiables = User::where('role', 'admin')->get();
-            if ($ticket->reporter) {
-                $notifiables->push($ticket->reporter);
+            $tagIds = [];
+            if (! empty($validated['tags'])) {
+                foreach ($validated['tags'] as $tagName) {
+                    $tagIds[] = Tag::firstOrCreate(['name' => $tagName])->id;
+                }
             }
-            $notifiables->unique('id')->each(function ($notifiable) use ($ticket, $oldStatus, $newStatus) {
-                $notifiable->notify(new TicketStatusChanged($ticket, $oldStatus, $newStatus));
-            });
-        }
+            $ticket->tags()->sync($tagIds);
 
-        return redirect()->back()->with('success', 'Handlers updated successfully.');
-    })->name('tickets.handlers.update');
-
-    Route::put('tickets/{ticket}', function (Ticket $ticket) {
-        $validated = request()->validate([
-            'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'ticket_category_id' => ['required', 'integer', Rule::exists('ticket_categories', 'id')],
-            'priority' => ['required', 'string', Rule::in(TicketPriority::pluck('name')->toArray())],
-            'status' => ['required', 'string', Rule::in(TicketStatus::pluck('name')->toArray())],
-            'handler_ids' => [
-                Rule::requiredIf(fn () => in_array(request('status'), TicketStatus::namesRequiringHandlersForForms(), true)),
-                'nullable',
-                'array',
-            ],
-            'handler_ids.*' => ['exists:users,id'],
-            'solution' => [
-                'nullable',
-                'string',
-            ],
-            'tags' => ['required', 'array', 'min:1'],
-            'tags.*' => ['string'],
-            'attachment' => 'nullable|image|max:4096',
-        ]);
-
-        if (in_array($validated['status'], TicketStatus::namesRequiringHandlersForForms(), true)) {
-            $handlerIds = $validated['handler_ids'] ?? [];
-            if (! is_array($handlerIds) || count($handlerIds) < 1) {
-                throw ValidationException::withMessages([
-                    'handler_ids' => 'At least one handler is required for this status.',
+            $newTagNames = $normalizeTagList($ticket->tags()->pluck('name')->all());
+            if ($oldTagNames !== $newTagNames) {
+                TicketActivity::create([
+                    'ticket_id' => $ticket->id,
+                    'user_id' => auth()->id(),
+                    'action' => 'ticket_edited',
+                    'old_value' => $oldTagNames === [] ? '—' : implode(', ', $oldTagNames),
+                    'new_value' => $newTagNames === [] ? '—' : implode(', ', $newTagNames),
+                    'created_at' => now(),
                 ]);
             }
-        }
 
-        if (request()->hasFile('attachment')) {
-            if ($ticket->attachment) {
-                Storage::disk('public')->delete($ticket->attachment);
+            $newHandlerIds = $validated['handler_ids'] ?? [];
+            if (in_array($newStatus, TicketStatus::namesWithNoHandlersInUi(), true)) {
+                $newHandlerIds = [];
             }
-            $validated['attachment'] = request()->file('attachment')->store('attachments', 'public');
-        }
 
-        $oldStatus = $ticket->status;
-        $newStatus = $validated['status'];
-        $existingHandlerIds = $ticket->handlers()->pluck('users.id')->toArray();
+            $ticket->handlers()->sync($newHandlerIds);
 
-        $normalizeTagList = static function (array $names): array {
-            return collect($names)
-                ->map(fn (mixed $n) => is_string($n) ? trim($n) : (string) $n)
-                ->filter()
-                ->unique()
-                ->sort()
-                ->values()
-                ->all();
-        };
+            // Notify newly added handlers
+            $addedHandlerIds = array_diff($newHandlerIds, $existingHandlerIds);
+            if (! empty($addedHandlerIds)) {
+                $ticket->subscribeUsersToTicketComments($addedHandlerIds);
 
-        $oldTagNames = $normalizeTagList($ticket->tags()->pluck('name')->all());
-
-        $categoryName = TicketCategory::query()->whereKey($validated['ticket_category_id'])->value('name') ?? '';
-
-        $ticket->update([
-            'title' => $validated['title'],
-            'description' => $validated['description'] ?? null,
-            'status' => $newStatus,
-            'solution' => $newStatus === 'Resolved' ? ($validated['solution'] ?? null) : $ticket->solution,
-            'priority' => $validated['priority'],
-            'category' => $categoryName,
-            'ticket_category_id' => $validated['ticket_category_id'],
-            'attachment' => $validated['attachment'] ?? $ticket->attachment,
-        ]);
-
-        $tagIds = [];
-        if (! empty($validated['tags'])) {
-            foreach ($validated['tags'] as $tagName) {
-                $tagIds[] = Tag::firstOrCreate(['name' => $tagName])->id;
+                User::whereIn('id', $addedHandlerIds)->each(
+                    fn (User $handler) => $handler->notify(new TicketAssigned($ticket))
+                );
             }
-        }
-        $ticket->tags()->sync($tagIds);
 
-        $newTagNames = $normalizeTagList($ticket->tags()->pluck('name')->all());
-        if ($oldTagNames !== $newTagNames) {
-            TicketActivity::create([
-                'ticket_id' => $ticket->id,
-                'user_id' => auth()->id(),
-                'action' => 'ticket_edited',
-                'old_value' => $oldTagNames === [] ? '—' : implode(', ', $oldTagNames),
-                'new_value' => $newTagNames === [] ? '—' : implode(', ', $newTagNames),
-                'created_at' => now(),
+            // Log handler assignment changes
+            $removedHandlerIds = array_diff($existingHandlerIds, $newHandlerIds);
+
+            if (! empty($addedHandlerIds)) {
+                TicketActivity::create([
+                    'ticket_id' => $ticket->id,
+                    'user_id' => auth()->id(),
+                    'action' => 'handler_assigned',
+                    'old_value' => null,
+                    'new_value' => User::whereIn('id', $addedHandlerIds)->pluck('name')->implode(', '),
+                    'created_at' => now(),
+                ]);
+            }
+
+            if (! empty($removedHandlerIds)) {
+                TicketActivity::create([
+                    'ticket_id' => $ticket->id,
+                    'user_id' => auth()->id(),
+                    'action' => 'handler_removed',
+                    'old_value' => User::whereIn('id', $removedHandlerIds)->pluck('name')->implode(', '),
+                    'new_value' => null,
+                    'created_at' => now(),
+                ]);
+            }
+
+            // Notify reporter and admins of status change
+            if ($oldStatus !== $newStatus) {
+                $ticket->refresh();
+                $notifiables = User::where('role', 'admin')->get();
+                if ($ticket->reporter) {
+                    $notifiables->push($ticket->reporter);
+                }
+                $notifiables->unique('id')->each(function ($notifiable) use ($ticket, $oldStatus, $newStatus) {
+                    $notifiable->notify(new TicketStatusChanged($ticket, $oldStatus, $newStatus));
+                });
+            }
+
+            return redirect()->back()->with('success', 'Ticket updated successfully.');
+        })->name('tickets.update');
+    });
+
+    // ── Users management ──────────────────────────────────────────────────────
+    Route::middleware(['role:admin'])->group(function () {
+        Route::get('users', function () {
+            $categoryDisplayPaths = TicketCategory::displayPathLookupFromSettings();
+
+            $mapTicket = fn ($t) => [
+                'id' => $t->id,
+                'tktId' => 'TKT-'.(1000 + $t->id),
+                'title' => $t->title,
+                'status' => $t->status,
+                'priority' => $t->priority,
+                'category' => TicketCategory::displayLabelForTicket($t->ticket_category_id, $t->category, $categoryDisplayPaths),
+                'createdAt' => $t->created_at->diffForHumans(),
+            ];
+
+            $users = User::withCount(['reportedTickets', 'handledTickets'])
+                ->with(['reportedTickets', 'handledTickets'])
+                ->orderBy('name')
+                ->get()
+                ->map(fn ($user) => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'role' => $user->role,
+                    'createdAt' => $user->created_at->format('M d, Y'),
+                    'ticketsReported' => $user->reported_tickets_count,
+                    'ticketsHandled' => $user->handled_tickets_count,
+                    'reportedTickets' => $user->reportedTickets->map($mapTicket)->values()->toArray(),
+                    'handledTickets' => $user->handledTickets->map($mapTicket)->values()->toArray(),
+                ]);
+
+            return Inertia::render('Users', [
+                'users' => $users,
+                'currentUserId' => auth()->id(),
             ]);
-        }
+        })->name('users');
 
-        $newHandlerIds = $validated['handler_ids'] ?? [];
-        if (in_array($newStatus, TicketStatus::namesWithNoHandlersInUi(), true)) {
-            $newHandlerIds = [];
-        }
+        Route::post('users', function () {
+            $validated = request()->validate([
+                'name' => 'required|string|max:255',
+                'email' => 'required|email|max:255|unique:users,email',
+                'password' => 'required|string|min:8|confirmed',
+                'role' => 'required|string|in:admin,supervisor,technical',
+            ]);
 
-        $ticket->handlers()->sync($newHandlerIds);
+            $user = User::create($validated);
 
-        // Notify newly added handlers
-        $addedHandlerIds = array_diff($newHandlerIds, $existingHandlerIds);
-        if (! empty($addedHandlerIds)) {
-            User::whereIn('id', $addedHandlerIds)->each(
-                fn (User $handler) => $handler->notify(new TicketAssigned($ticket))
-            );
-        }
-
-        // Log handler assignment changes
-        $removedHandlerIds = array_diff($existingHandlerIds, $newHandlerIds);
-
-        if (! empty($addedHandlerIds)) {
             TicketActivity::create([
-                'ticket_id' => $ticket->id,
+                'ticket_id' => null,
                 'user_id' => auth()->id(),
-                'action' => 'handler_assigned',
+                'action' => 'user_created',
                 'old_value' => null,
-                'new_value' => User::whereIn('id', $addedHandlerIds)->pluck('name')->implode(', '),
+                'new_value' => "{$user->name} ({$user->role})",
                 'created_at' => now(),
             ]);
-        }
 
-        if (! empty($removedHandlerIds)) {
+            return redirect()->back()->with('success', 'User created successfully.');
+        })->name('users.store');
+
+        Route::patch('users/{user}', function (User $user) {
+            $validated = request()->validate([
+                'name' => 'required|string|max:255',
+                'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
+                'password' => 'nullable|string|min:8|confirmed',
+                'role' => 'required|string|in:admin,supervisor,technical',
+            ]);
+
+            $beforeName = $user->name;
+            $beforeEmail = $user->email;
+            $beforeRole = $user->role;
+
+            $changes = [];
+            if ($user->name !== $validated['name']) {
+                $changes[] = "name: {$user->name} → {$validated['name']}";
+            }
+            if ($user->email !== $validated['email']) {
+                $changes[] = "email: {$user->email} → {$validated['email']}";
+            }
+
+            $roleChanged = false;
+            if ($user->id !== auth()->id() && $beforeRole !== $validated['role']) {
+                $roleChanged = true;
+            }
+
+            $user->name = $validated['name'];
+            $user->email = $validated['email'];
+
+            // Prevent admins from changing their own role
+            if ($user->id !== auth()->id()) {
+                $user->role = $validated['role'];
+            }
+
+            if (! empty($validated['password'])) {
+                $changes[] = 'password changed';
+                $user->password = $validated['password'];
+            }
+
+            $user->save();
+
+            if ($roleChanged) {
+                TicketActivity::create([
+                    'ticket_id' => null,
+                    'user_id' => auth()->id(),
+                    'action' => 'user_role_changed',
+                    'old_value' => "{$beforeName} ({$beforeEmail}) — {$beforeRole}",
+                    'new_value' => "{$validated['name']} ({$validated['email']}) — {$validated['role']}",
+                    'created_at' => now(),
+                ]);
+            }
+
+            if ($changes !== []) {
+                TicketActivity::create([
+                    'ticket_id' => null,
+                    'user_id' => auth()->id(),
+                    'action' => 'user_updated',
+                    'old_value' => $beforeName,
+                    'new_value' => implode('; ', $changes),
+                    'created_at' => now(),
+                ]);
+            }
+
+            return redirect()->back()->with('success', 'User updated successfully.');
+        })->name('users.update');
+        Route::delete('users/{user}', function (User $user) {
+            if ($user->id === auth()->id()) {
+                abort(403, 'You cannot delete your own account.');
+            }
+
             TicketActivity::create([
-                'ticket_id' => $ticket->id,
+                'ticket_id' => null,
                 'user_id' => auth()->id(),
-                'action' => 'handler_removed',
-                'old_value' => User::whereIn('id', $removedHandlerIds)->pluck('name')->implode(', '),
+                'action' => 'user_deleted',
+                'old_value' => "{$user->name} ({$user->role})",
                 'new_value' => null,
                 'created_at' => now(),
             ]);
-        }
 
-        // Notify reporter and admins of status change
-        if ($oldStatus !== $newStatus) {
-            $ticket->refresh();
-            $notifiables = User::where('role', 'admin')->get();
-            if ($ticket->reporter) {
-                $notifiables->push($ticket->reporter);
-            }
-            $notifiables->unique('id')->each(function ($notifiable) use ($ticket, $oldStatus, $newStatus) {
-                $notifiable->notify(new TicketStatusChanged($ticket, $oldStatus, $newStatus));
-            });
-        }
+            $user->delete();
 
-        return redirect()->back()->with('success', 'Ticket updated successfully.');
-    })->name('tickets.update');
+            return redirect()->back()->with('success', 'User deleted successfully.');
+        })->name('users.destroy');
+    });
+});
 
-    // ── Users management ──────────────────────────────────────────────────────
-    Route::get('users', function () {
-        $mapTicket = fn ($t) => [
-            'id' => $t->id,
-            'tktId' => 'TKT-'.(1000 + $t->id),
-            'title' => $t->title,
-            'status' => $t->status,
-            'priority' => $t->priority,
-            'category' => $t->category,
-            'createdAt' => $t->created_at->diffForHumans(),
-        ];
+Route::middleware(['auth', 'verified', 'technical.only'])->prefix('my-incidents')->group(function () {
+    Route::get('/', function () {
+        return redirect()->route('home', request()->query());
+    })->name('my.incidents');
 
-        $users = User::withCount(['reportedTickets', 'handledTickets'])
-            ->with(['reportedTickets', 'handledTickets'])
-            ->orderBy('name')
-            ->get()
-            ->map(fn ($user) => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'role' => $user->role,
-                'createdAt' => $user->created_at->format('M d, Y'),
-                'ticketsReported' => $user->reported_tickets_count,
-                'ticketsHandled' => $user->handled_tickets_count,
-                'reportedTickets' => $user->reportedTickets->map($mapTicket)->values()->toArray(),
-                'handledTickets' => $user->handledTickets->map($mapTicket)->values()->toArray(),
-            ]);
+    Route::get('{ticket}/detail', function (Ticket $ticket) {
+        abort_unless(auth()->user()->canAccessTicketThread($ticket), 403);
 
-        return Inertia::render('Users', [
-            'users' => $users,
-            'currentUserId' => auth()->id(),
-        ]);
-    })->name('users');
-
-    Route::post('users', function () {
-        $validated = request()->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|max:255|unique:users,email',
-            'password' => 'required|string|min:8|confirmed',
-            'role' => 'required|string|in:admin,supervisor,technical',
-        ]);
-
-        $user = User::create($validated);
-
-        TicketActivity::create([
-            'ticket_id' => null,
-            'user_id' => auth()->id(),
-            'action' => 'user_created',
-            'old_value' => null,
-            'new_value' => "{$user->name} ({$user->role})",
-            'created_at' => now(),
-        ]);
-
-        return redirect()->back()->with('success', 'User created successfully.');
-    })->name('users.store');
-
-    Route::patch('users/{user}', function (User $user) {
-        $validated = request()->validate([
-            'name' => 'required|string|max:255',
-            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
-            'password' => 'nullable|string|min:8|confirmed',
-            'role' => 'required|string|in:admin,supervisor,technical',
-        ]);
-
-        $beforeName = $user->name;
-        $beforeEmail = $user->email;
-        $beforeRole = $user->role;
-
-        $changes = [];
-        if ($user->name !== $validated['name']) {
-            $changes[] = "name: {$user->name} → {$validated['name']}";
-        }
-        if ($user->email !== $validated['email']) {
-            $changes[] = "email: {$user->email} → {$validated['email']}";
-        }
-
-        $roleChanged = false;
-        if ($user->id !== auth()->id() && $beforeRole !== $validated['role']) {
-            $roleChanged = true;
-        }
-
-        $user->name = $validated['name'];
-        $user->email = $validated['email'];
-
-        // Prevent admins from changing their own role
-        if ($user->id !== auth()->id()) {
-            $user->role = $validated['role'];
-        }
-
-        if (! empty($validated['password'])) {
-            $changes[] = 'password changed';
-            $user->password = $validated['password'];
-        }
-
-        $user->save();
-
-        if ($roleChanged) {
-            TicketActivity::create([
-                'ticket_id' => null,
-                'user_id' => auth()->id(),
-                'action' => 'user_role_changed',
-                'old_value' => "{$beforeName} ({$beforeEmail}) — {$beforeRole}",
-                'new_value' => "{$validated['name']} ({$validated['email']}) — {$validated['role']}",
-                'created_at' => now(),
-            ]);
-        }
-
-        if ($changes !== []) {
-            TicketActivity::create([
-                'ticket_id' => null,
-                'user_id' => auth()->id(),
-                'action' => 'user_updated',
-                'old_value' => $beforeName,
-                'new_value' => implode('; ', $changes),
-                'created_at' => now(),
-            ]);
-        }
-
-        return redirect()->back()->with('success', 'User updated successfully.');
-    })->name('users.update');
-    Route::delete('users/{user}', function (User $user) {
-        if ($user->id === auth()->id()) {
-            abort(403, 'You cannot delete your own account.');
-        }
-
-        TicketActivity::create([
-            'ticket_id' => null,
-            'user_id' => auth()->id(),
-            'action' => 'user_deleted',
-            'old_value' => "{$user->name} ({$user->role})",
-            'new_value' => null,
-            'created_at' => now(),
-        ]);
-
-        $user->delete();
-
-        return redirect()->back()->with('success', 'User deleted successfully.');
-    })->name('users.destroy');
+        return response()->json(IncidentInertiaPayload::detailPayload($ticket));
+    })->name('my.incidents.detail-json');
 });
 
 Route::get('tickets/{ticket}/history', function (Ticket $ticket) {
+    abort_unless(auth()->user()->canAccessTicketThread($ticket), 403);
+
     $activities = $ticket->activities()
         ->with('user:id,name')
         ->latest('created_at')
@@ -1034,7 +1111,7 @@ Route::get('tickets/{ticket}/history', function (Ticket $ticket) {
 // ──────────────────────────────────────────────────────────────────────────
 
 Route::get('supervisor/dashboard', function () {
-    return Inertia::render('SupervisorDashboard');
+    return redirect()->route('dashboard');
 })->middleware(['auth', 'verified', 'role:supervisor'])->name('supervisor.dashboard');
 
 // ── Notifications ──────────────────────────────────────────────────────────
@@ -1075,6 +1152,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // List comments for a ticket (also returns subscription state)
     Route::get('tickets/{ticket}/comments', function (Ticket $ticket) {
+        abort_unless(auth()->user()->canAccessTicketThread($ticket), 403);
+
         $userId = auth()->id();
 
         $subscribed = $ticket->subscribers()->where('user_id', $userId)->exists();
@@ -1128,6 +1207,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Create a comment — auto-subscribes the commenter, then notifies all other subscribers
     Route::post('tickets/{ticket}/comments', function (Ticket $ticket) {
+        abort_unless(auth()->user()->canAccessTicketThread($ticket), 403);
+
         $validated = request()->validate([
             'body' => ['required', 'string', 'max:10000'],
             'parent_id' => ['nullable', 'integer', 'exists:ticket_comments,id'],
@@ -1183,6 +1264,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Toggle subscription to comment notifications for a ticket
     Route::post('tickets/{ticket}/subscribe', function (Ticket $ticket) {
+        abort_unless(auth()->user()->canAccessTicketThread($ticket), 403);
+
         $userId = auth()->id();
 
         $exists = $ticket->subscribers()->where('user_id', $userId)->exists();
@@ -1199,8 +1282,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Delete a comment (own comment, or admin)
     Route::delete('ticket-comments/{comment}', function (TicketComment $comment) {
         $user = auth()->user();
+        $comment->loadMissing('ticket');
+        abort_unless($user->canAccessTicketThread($comment->ticket), 403);
 
-        if ($comment->user_id !== $user->id && ! $user->isAdmin()) {
+        if ($comment->user_id !== $user->id && ! $user->canModerateComments()) {
             abort(403, 'You can only delete your own comments.');
         }
 
@@ -1211,6 +1296,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Toggle an emoji reaction on a comment
     Route::post('ticket-comments/{comment}/reactions', function (TicketComment $comment) use ($allowedEmojis) {
+        $comment->loadMissing('ticket');
+        abort_unless(auth()->user()->canAccessTicketThread($comment->ticket), 403);
+
         $validated = request()->validate([
             'emoji' => ['required', 'string', Rule::in($allowedEmojis)],
         ]);
@@ -1257,6 +1345,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Toggle upvote / downvote on a comment (mutually exclusive)
     Route::post('ticket-comments/{comment}/vote', function (TicketComment $comment) {
+        $comment->loadMissing('ticket');
+        abort_unless(auth()->user()->canAccessTicketThread($comment->ticket), 403);
+
         $type = request()->validate(['type' => ['required', Rule::in(['up', 'down'])]])['type'];
         $userId = auth()->id();
 
@@ -1299,9 +1390,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Toggle pin on a comment (admin or ticket reporter only)
     Route::post('ticket-comments/{comment}/pin', function (TicketComment $comment) {
         $user = auth()->user();
+        $comment->loadMissing('ticket');
         $ticket = $comment->ticket;
+        abort_unless($user->canAccessTicketThread($ticket), 403);
 
-        if (! ($user->isAdmin() || $ticket->user_id === $user->id)) {
+        if (! ($user->canModerateComments() || $ticket->user_id === $user->id)) {
             abort(403);
         }
 
@@ -1312,9 +1405,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Upload an image for use inside a comment body
     Route::post('comments/images', function () {
-        request()->validate([
+        $validated = request()->validate([
             'image' => ['required', 'file', 'max:2048', 'mimes:jpg,jpeg,png,gif,webp'],
+            'ticket_id' => ['required', 'integer', 'exists:tickets,id'],
         ]);
+
+        $ticket = Ticket::query()->findOrFail($validated['ticket_id']);
+        abort_unless(auth()->user()->canAccessTicketThread($ticket), 403);
 
         $path = request()->file('image')->store('comment-images', 'public');
 

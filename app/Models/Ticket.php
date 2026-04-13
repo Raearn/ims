@@ -115,6 +115,22 @@ class Ticket extends Model
     }
 
     /**
+     * Subscribe users to comment notifications (e.g. when assigned as handlers).
+     *
+     * @param  array<int|string>  $userIds
+     */
+    public function subscribeUsersToTicketComments(array $userIds): void
+    {
+        $ids = array_values(array_unique(array_map(static fn ($id): int => (int) $id, $userIds)));
+        $ids = array_values(array_filter($ids, static fn (int $id): bool => $id > 0));
+        if ($ids === []) {
+            return;
+        }
+
+        $this->subscribers()->syncWithoutDetaching($ids);
+    }
+
+    /**
      * Get the activity log entries for this ticket.
      */
     public function activities(): HasMany

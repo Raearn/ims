@@ -31,7 +31,9 @@ const emit = defineEmits<{
 
 <template>
     <Dialog :open="modelValue" @update:open="emit('update:modelValue', $event)">
-        <DialogContent class="flex max-h-[92dvh] flex-col overflow-hidden border-none p-0 shadow-2xl sm:max-w-[580px]">
+        <DialogContent
+            class="flex max-h-[92dvh] w-[calc(100vw-1.5rem)] flex-col overflow-hidden border-none p-0 shadow-2xl sm:max-w-5xl lg:max-w-6xl"
+        >
             <TicketDetailBody
                 :ticket="ticket"
                 :priorities="priorities"

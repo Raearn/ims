@@ -28,8 +28,12 @@ class TicketHandlerAssignmentTest extends TestCase
         );
 
         $response->assertRedirect();
-        $this->assertCount(2, $ticket->fresh()->handlers);
-        $handlers->each(fn ($h) => $this->assertTrue($ticket->fresh()->handlers->contains($h)));
+        $ticket->refresh();
+        $this->assertCount(2, $ticket->handlers);
+        $handlers->each(function ($h) use ($ticket) {
+            $this->assertTrue($ticket->handlers->contains($h));
+            $this->assertTrue($ticket->subscribers->contains($h));
+        });
     }
 
     public function test_assigning_handlers_replaces_existing_ones(): void

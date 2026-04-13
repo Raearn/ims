@@ -15,12 +15,22 @@ import {
 } from '@/components/ui/sidebar';
 import { type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { AlertTriangle, Folder, LayoutGrid, ScrollText, Users, Activity, Settings } from 'lucide-vue-next';
+import { AlertTriangle, Folder, LayoutGrid, ScrollText, Users, Activity, Settings, UserRound } from 'lucide-vue-next';
 import { computed } from 'vue';
 import AppLogo from './AppLogo.vue';
 
 const page = usePage<SharedData>();
 const user = computed(() => page.props.auth.user);
+
+/** Match backend roles even if DB/legacy rows differ in casing or whitespace. */
+const userRole = computed(() => String(user.value?.role ?? '').trim().toLowerCase());
+
+const isAdminOrSupervisor = computed(
+    () => userRole.value === 'admin' || userRole.value === 'supervisor',
+);
+
+const isAdminOnly = computed(() => userRole.value === 'admin');
+
 const openTicketsCount = computed(() => page.props.openTicketsCount ?? null);
 
 const roleBadgeClasses = computed(() => {
@@ -29,12 +39,19 @@ const roleBadgeClasses = computed(() => {
         supervisor: 'border-amber-500/20 bg-amber-500/10 text-amber-500',
         technical:  'border-blue-500/20 bg-blue-500/10 text-blue-500',
     };
-    return map[user.value?.role ?? ''] ?? 'border-border/50 bg-muted text-muted-foreground';
+    return map[userRole.value] ?? 'border-border/50 bg-muted text-muted-foreground';
 });
 
-const dashboardRoute = computed(() =>
-    user.value?.role === 'supervisor' ? route('supervisor.dashboard') : route('dashboard'),
-);
+const homeRoute = computed(() => {
+    if (isAdminOrSupervisor.value) {
+        return route('dashboard');
+    }
+    if (userRole.value === 'technical') {
+        return route('home');
+    }
+
+    return route('profile.edit');
+});
 </script>
 
 <template>
@@ -45,7 +62,7 @@ const dashboardRoute = computed(() =>
             <SidebarMenu>
                 <SidebarMenuItem>
                     <SidebarMenuButton size="lg" as-child>
-                        <Link :href="dashboardRoute">
+                        <Link :href="homeRoute">
                             <AppLogo />
                         </Link>
                     </SidebarMenuButton>
@@ -56,8 +73,8 @@ const dashboardRoute = computed(() =>
         <!-- ── Content ────────────────────────────────────────────────── -->
         <SidebarContent class="gap-0 px-2 py-3 group-data-[collapsible=icon]:px-0">
 
-            <!-- ┌─ ADMIN ─────────────────────────────────────────────── -->
-            <template v-if="user?.role === 'admin'">
+            <!-- ┌─ ADMIN + SUPERVISOR (dashboard & incidents) ─────────── -->
+            <template v-if="isAdminOrSupervisor">
 
                 <!-- Overview -->
                 <SidebarGroup class="px-2 pb-1 group-data-[collapsible=icon]:px-0">
@@ -67,8 +84,8 @@ const dashboardRoute = computed(() =>
                     <SidebarGroupContent>
                         <SidebarMenu class="space-y-0.5">
                             <SidebarMenuItem>
-                                <SidebarMenuButton as-child :is-active="route().current('dashboard')">
-                                    <Link :href="route('dashboard')">
+                                <SidebarMenuButton as-child tooltip="Dashboard" :is-active="route().current('dashboard')">
+                                    <Link :href="route('dashboard')" aria-label="Dashboard">
                                         <LayoutGrid />
                                         <span>Dashboard</span>
                                     </Link>
@@ -88,8 +105,8 @@ const dashboardRoute = computed(() =>
                     <SidebarGroupContent>
                         <SidebarMenu class="space-y-0.5">
                             <SidebarMenuItem>
-                                <SidebarMenuButton as-child :is-active="route().current('tickets')">
-                                    <Link :href="route('tickets')">
+                                <SidebarMenuButton as-child tooltip="Incidents" :is-active="route().current('tickets')">
+                                    <Link :href="route('tickets')" aria-label="Incidents">
                                         <Folder />
                                         <span class="flex-1">Incidents</span>
                                         <span
@@ -106,6 +123,7 @@ const dashboardRoute = computed(() =>
                     </SidebarGroupContent>
                 </SidebarGroup>
 
+                <template v-if="isAdminOnly">
                 <SidebarSeparator class="mx-2 my-0.5 group-data-[collapsible=icon]:hidden" />
 
                 <!-- Administration -->
@@ -150,29 +168,8 @@ const dashboardRoute = computed(() =>
                         </SidebarMenu>
                     </SidebarGroupContent>
                 </SidebarGroup>
+                </template>
 
-            </template>
-            <!-- └────────────────────────────────────────────────────── -->
-
-            <!-- ┌─ SUPERVISOR ────────────────────────────────────────── -->
-            <template v-else-if="user?.role === 'supervisor'">
-                <SidebarGroup class="px-2 pb-1 group-data-[collapsible=icon]:px-0">
-                    <SidebarGroupLabel class="mb-1 px-1 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/50 group-data-[collapsible=icon]:hidden">
-                        Overview
-                    </SidebarGroupLabel>
-                    <SidebarGroupContent>
-                        <SidebarMenu class="space-y-0.5">
-                            <SidebarMenuItem>
-                                <SidebarMenuButton as-child :is-active="route().current('supervisor.dashboard')">
-                                    <Link :href="route('supervisor.dashboard')">
-                                        <LayoutGrid />
-                                        <span>Dashboard</span>
-                                    </Link>
-                                </SidebarMenuButton>
-                            </SidebarMenuItem>
-                        </SidebarMenu>
-                    </SidebarGroupContent>
-                </SidebarGroup>
             </template>
             <!-- └────────────────────────────────────────────────────── -->
 
@@ -180,15 +177,42 @@ const dashboardRoute = computed(() =>
             <template v-else>
                 <SidebarGroup class="px-2 pb-1 group-data-[collapsible=icon]:px-0">
                     <SidebarGroupLabel class="mb-1 px-1 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/50 group-data-[collapsible=icon]:hidden">
-                        Overview
+                        Helpdesk
                     </SidebarGroupLabel>
                     <SidebarGroupContent>
                         <SidebarMenu class="space-y-0.5">
                             <SidebarMenuItem>
-                                <SidebarMenuButton as-child :is-active="route().current('dashboard')">
-                                    <Link :href="route('dashboard')">
-                                        <LayoutGrid />
-                                        <span>Dashboard</span>
+                                <SidebarMenuButton as-child tooltip="Incidents" :is-active="route().current('home')">
+                                    <Link :href="route('home')" aria-label="Incidents">
+                                        <Folder />
+                                        <span class="flex-1">Incidents</span>
+                                        <span
+                                            v-if="openTicketsCount && openTicketsCount > 0"
+                                            class="ml-auto inline-flex items-center gap-1 rounded-full border border-rose-500/20 bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-bold leading-none text-rose-500 tabular-nums group-data-[collapsible=icon]:hidden"
+                                        >
+                                            <AlertTriangle class="h-2.5 w-2.5 shrink-0" />
+                                            {{ openTicketsCount > 99 ? '99+' : openTicketsCount }}
+                                        </span>
+                                    </Link>
+                                </SidebarMenuButton>
+                            </SidebarMenuItem>
+                        </SidebarMenu>
+                    </SidebarGroupContent>
+                </SidebarGroup>
+
+                <SidebarSeparator class="mx-2 my-0.5 group-data-[collapsible=icon]:hidden" />
+
+                <SidebarGroup class="px-2 pb-1 group-data-[collapsible=icon]:px-0">
+                    <SidebarGroupLabel class="mb-1 px-1 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/50 group-data-[collapsible=icon]:hidden">
+                        Account
+                    </SidebarGroupLabel>
+                    <SidebarGroupContent>
+                        <SidebarMenu class="space-y-0.5">
+                            <SidebarMenuItem>
+                                <SidebarMenuButton as-child tooltip="Profile" :is-active="route().current('profile.edit')">
+                                    <Link :href="route('profile.edit')" aria-label="Profile">
+                                        <UserRound />
+                                        <span>Profile</span>
                                     </Link>
                                 </SidebarMenuButton>
                             </SidebarMenuItem>

@@ -24,11 +24,6 @@ class CheckRole
             return $next($request);
         }
 
-        // If user is supervisor and accessing admin dashboard, redirect to supervisor dashboard
-        if ($request->user()->isSupervisor() && in_array('admin', $roles)) {
-            return redirect()->route('supervisor.dashboard');
-        }
-
         // Default: If unauthorized for this route, redirect based on their primary role dashboard
         if ($request->user()->isAdmin()) {
             return redirect()->route('dashboard');
@@ -38,7 +33,14 @@ class CheckRole
             return redirect()->route('supervisor.dashboard');
         }
 
-        // Fallback for technical or other roles
+        if ($request->user()->isTechnical()) {
+            if ($request->expectsJson()) {
+                abort(403);
+            }
+
+            return redirect()->route('home');
+        }
+
         abort(403, 'Unauthorized access.');
     }
 }

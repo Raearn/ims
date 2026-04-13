@@ -122,6 +122,8 @@ class DashboardController extends Controller
 
         [$currentPeriodStart, $now] = self::reportingPeriodBounds($period);
 
+        $categoryDisplayPaths = TicketCategory::displayPathLookupFromSettings();
+
         $periodLabel = match ($period) {
             '30d' => 'Last 30 Days',
             'this_month' => 'This Month',
@@ -209,7 +211,7 @@ class DashboardController extends Controller
                 'description' => 'Resolved in '.$periodLabel,
                 'sparkline' => $dailyCounts('resolved_at', $resolvedForStatWidgets),
                 'sparklineValueSuffix' => '',
-                'stroke' => '#3b82f6',
+                'stroke' => '#10b981',
             ],
             [
                 'title' => 'Avg. Resolution Time',
@@ -217,7 +219,7 @@ class DashboardController extends Controller
                 'description' => 'Mean hours (resolved tickets) · '.$periodLabel,
                 'sparkline' => $avgTimeSparkline,
                 'sparklineValueSuffix' => 'h',
-                'stroke' => '#10b981',
+                'stroke' => '#3b82f6',
             ],
         ];
 
@@ -287,11 +289,7 @@ class DashboardController extends Controller
             ];
         }
 
-        // ── Category distribution (admin-configured categories) ─────
-        $categoriesConfigured = TicketCategory::orderedTreeForSettings()->map(fn (TicketCategory $c): object => (object) [
-            'name' => $c->name,
-        ]);
-
+        // ── Category distribution (grouped by top-level category + subcategories) ─────
         $categoryPalette = ['#3b82f6', '#a855f7', '#f97316', '#22c55e', '#ef4444', '#06b6d4', '#eab308', '#ec4899', '#6366f1', '#14b8a6', '#84cc16', '#f59e0b'];
 
         $categoryRaw = Ticket::selectRaw('category, COUNT(*) as c')
@@ -300,41 +298,81 @@ class DashboardController extends Controller
             ->groupBy('category')
             ->pluck('c', 'category');
 
-        $categoryLegend = $categoriesConfigured->values()
-            ->map(fn ($cat, $i) => [
-                'name' => $cat->name,
-                'hex' => $categoryPalette[$i % count($categoryPalette)],
-            ])->values()->all();
+        $roots = TicketCategory::query()
+            ->whereNull('parent_id')
+            ->orderBy('sort_order')
+            ->with(['children' => fn ($q) => $q->orderBy('sort_order')])
+            ->get();
 
-        $configuredCategoryNames = $categoriesConfigured->pluck('name')->all();
+        $configuredCategoryNames = [];
+        foreach ($roots as $root) {
+            $configuredCategoryNames[] = $root->name;
+            foreach ($root->children as $child) {
+                $configuredCategoryNames[] = $child->name;
+            }
+        }
 
-        $categories = $categoriesConfigured->values()
-            ->map(function ($cat, $i) use ($categoryRaw, $categoryPalette) {
-                $count = (int) $categoryRaw->get($cat->name, 0);
-                if ($count === 0) {
-                    return null;
+        $categoryChartGroups = [];
+        $categoryLegend = [];
+        $rootPaletteIndex = 0;
+
+        foreach ($roots as $root) {
+            $rootHex = $categoryPalette[$rootPaletteIndex % count($categoryPalette)];
+            $rootPaletteIndex++;
+
+            $rootCount = (int) $categoryRaw->get($root->name, 0);
+            $children = [];
+            foreach ($root->children as $child) {
+                $childCount = (int) $categoryRaw->get($child->name, 0);
+                if ($childCount > 0) {
+                    $children[] = [
+                        'name' => $child->name,
+                        'count' => $childCount,
+                    ];
                 }
+            }
 
-                return [
-                    'name' => $cat->name,
-                    'count' => $count,
-                    'color' => 'bg-gray-500',
-                    'hex' => $categoryPalette[$i % count($categoryPalette)],
+            $total = $rootCount + array_sum(array_column($children, 'count'));
+            if ($total === 0) {
+                continue;
+            }
+
+            $categoryLegend[] = [
+                'name' => $root->name,
+                'hex' => $rootHex,
+            ];
+            foreach ($children as $childRow) {
+                $categoryLegend[] = [
+                    'name' => $childRow['name'],
+                    'hex' => $rootHex,
                 ];
-            })
-            ->filter()
-            ->values()
-            ->all();
+            }
+
+            $categoryChartGroups[] = [
+                'id' => $root->id,
+                'name' => $root->name,
+                'hex' => $rootHex,
+                'rootCount' => $rootCount,
+                'total' => $total,
+                'children' => $children,
+            ];
+        }
 
         $orphanCategories = $categoryRaw->filter(
             fn ($count, $name) => ! in_array($name, $configuredCategoryNames, true) && (int) $count > 0
         );
 
         foreach ($orphanCategories as $name => $count) {
-            $categories[] = [
+            $categoryChartGroups[] = [
+                'id' => null,
                 'name' => $name,
-                'count' => (int) $count,
-                'color' => 'bg-gray-500',
+                'hex' => '#6b7280',
+                'rootCount' => (int) $count,
+                'total' => (int) $count,
+                'children' => [],
+            ];
+            $categoryLegend[] = [
+                'name' => $name,
                 'hex' => '#6b7280',
             ];
         }
@@ -377,7 +415,11 @@ class DashboardController extends Controller
                 'reporter' => $ticket->reporter?->name ?? 'Unknown',
                 'reporterId' => $ticket->user_id,
                 'priority' => $ticket->priority,
-                'category' => $ticket->category,
+                'category' => TicketCategory::displayLabelForTicket(
+                    $ticket->ticket_category_id,
+                    $ticket->category,
+                    $categoryDisplayPaths,
+                ),
                 'tags' => $ticket->tags->pluck('name')->toArray(),
                 'handlerIds' => $ticket->handlers->pluck('id')->toArray(),
                 'handlers' => $ticket->handlers->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->values()->toArray(),
@@ -388,7 +430,7 @@ class DashboardController extends Controller
             ->latest()
             ->take(5)
             ->get()
-            ->map(function ($comment) {
+            ->map(function ($comment) use ($categoryDisplayPaths) {
                 $name = $comment->user->name ?? 'Unknown';
                 $initials = collect(explode(' ', $name))
                     ->map(fn ($w) => strtoupper(substr($w, 0, 1)))
@@ -403,13 +445,20 @@ class DashboardController extends Controller
                     'userInitials' => $initials,
                     'userRole' => $comment->user->role ?? 'user',
                     'bodySnippet' => mb_strimwidth($plain, 0, 120, '…'),
+                    'snippetImageUrls' => $this->extractCommentSnippetImageUrls((string) $comment->body),
                     'ticketNumericId' => $ticket->id ?? null,
                     'ticketTktId' => 'TKT-'.(1000 + ($ticket->id ?? 0)),
                     'ticketTitle' => $ticket->title ?? '',
                     'ticketDescription' => $ticket->description ?? null,
                     'ticketStatus' => $ticket->status ?? '',
                     'ticketPriority' => $ticket->priority ?? '',
-                    'ticketCategory' => $ticket->category ?? '',
+                    'ticketCategory' => $ticket
+                        ? TicketCategory::displayLabelForTicket(
+                            $ticket->ticket_category_id,
+                            $ticket->category ?? '',
+                            $categoryDisplayPaths,
+                        )
+                        : '',
                     'ticketTags' => $ticket?->tags?->pluck('name')->toArray() ?? [],
                     'ticketReporter' => $ticket->reporter?->name ?? 'Unknown',
                     'ticketReporterId' => $ticket->user_id ?? null,
@@ -428,7 +477,7 @@ class DashboardController extends Controller
             'sparklineLabels' => $sparklineLabels,
             'trendData' => $trendData,
             'severities' => $severities,
-            'categories' => $categories,
+            'categoryChartGroups' => $categoryChartGroups,
             'priorityLegend' => $priorityLegend,
             'categoryLegend' => $categoryLegend,
             'topRecurring' => $topRecurring,
@@ -436,6 +485,48 @@ class DashboardController extends Controller
             'recentComments' => $recentComments,
             '_window' => ['start' => $currentPeriodStart, 'end' => $now],
         ];
+    }
+
+    /**
+     * Pull safe display URLs from img src attributes in stored comment HTML (TipTap).
+     *
+     * @return list<string>
+     */
+    private function extractCommentSnippetImageUrls(string $html, int $limit = 4): array
+    {
+        if ($html === '' || ! preg_match_all('/<img[^>]+src\s*=\s*["\']([^"\']+)["\']/i', $html, $matches)) {
+            return [];
+        }
+
+        $urls = [];
+        foreach ($matches[1] as $rawSrc) {
+            $src = trim(html_entity_decode($rawSrc, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+            if ($src === '') {
+                continue;
+            }
+            if (preg_match('#^(javascript:|data:)#i', $src)) {
+                continue;
+            }
+            if (str_starts_with($src, '//')) {
+                $src = 'https:'.$src;
+            }
+            if (str_starts_with($src, '/')) {
+                $resolved = url($src);
+            } elseif (preg_match('#^https?://#i', $src)) {
+                $resolved = $src;
+            } else {
+                continue;
+            }
+            if (in_array($resolved, $urls, true)) {
+                continue;
+            }
+            $urls[] = $resolved;
+            if (count($urls) >= $limit) {
+                break;
+            }
+        }
+
+        return $urls;
     }
 
     private function normalizeChartHex(?string $hex, string $fallback = '#6b7280'): string

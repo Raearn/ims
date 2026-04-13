@@ -63,4 +63,72 @@ class TicketCategory extends Model
 
         return $out;
     }
+
+    /**
+     * Map each category id to a breadcrumb label ("Root - Child - Leaf") for list/detail display.
+     *
+     * @param  Collection<int, TicketCategory>  $categories
+     * @return array<int, string>
+     */
+    public static function displayPathLookup(Collection $categories): array
+    {
+        $byId = $categories->keyBy('id');
+        $out = [];
+
+        foreach ($byId as $id => $row) {
+            $chain = [];
+            $seen = [];
+            $walk = (int) $id;
+
+            while (true) {
+                if (isset($seen[$walk])) {
+                    break;
+                }
+                $seen[$walk] = true;
+
+                $node = $byId->get($walk);
+                if ($node === null) {
+                    $chain = [];
+                    break;
+                }
+
+                array_unshift($chain, $node->name);
+
+                if ($node->parent_id === null) {
+                    break;
+                }
+
+                $walk = (int) $node->parent_id;
+            }
+
+            if ($chain !== []) {
+                $out[(int) $id] = implode(' - ', $chain);
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function displayPathLookupFromSettings(): array
+    {
+        return self::displayPathLookup(self::orderedTreeForSettings());
+    }
+
+    /**
+     * @param  array<int, string>  $pathByCategoryId  From {@see displayPathLookup()}
+     */
+    public static function displayLabelForTicket(?int $ticketCategoryId, string $denormalizedFallback, array $pathByCategoryId): string
+    {
+        if ($ticketCategoryId !== null) {
+            $path = $pathByCategoryId[$ticketCategoryId] ?? null;
+            if (is_string($path) && $path !== '') {
+                return $path;
+            }
+        }
+
+        return $denormalizedFallback;
+    }
 }

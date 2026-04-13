@@ -11,7 +11,7 @@ import {
 import { compressImage } from '@/lib/utils';
 import { laravelFetch } from '@/lib/laravelFetch';
 
-const props = defineProps<{ modelValue: string; placeholder?: string }>();
+const props = defineProps<{ modelValue: string; placeholder?: string; ticketId?: number }>();
 const emit = defineEmits<{ 'update:modelValue': [value: string]; 'focus': [] }>();
 
 const imageInputRef = ref<HTMLInputElement | null>(null);
@@ -50,6 +50,10 @@ async function handleImageUpload(event: Event) {
     const file = input.files?.[0];
     if (!file || !editor.value) return;
 
+    if (props.ticketId == null) {
+        return;
+    }
+
     isUploading.value = true;
     try {
         const compressed = await compressImage(file);
@@ -62,6 +66,7 @@ async function handleImageUpload(event: Event) {
 
         const form = new FormData();
         form.append('image', compressed);
+        form.append('ticket_id', String(props.ticketId));
 
         const response = await laravelFetch(route('comments.images.store'), {
             method: 'POST',
@@ -127,7 +132,8 @@ async function handleImageUpload(event: Event) {
 
             <div class="w-px h-4 bg-border/60 mx-1" />
 
-            <!-- Image upload -->
+            <!-- Image upload (requires ticket context for authorization) -->
+            <template v-if="ticketId != null">
             <button type="button" @click="imageInputRef?.click()" :disabled="isUploading"
                 class="toolbar-btn" title="Insert Image">
                 <span v-if="isUploading" class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -157,6 +163,7 @@ async function handleImageUpload(event: Event) {
                 class="hidden"
                 @change="handleImageUpload"
             />
+            </template>
         </div>
 
         <!-- Editor content -->
@@ -198,6 +205,6 @@ async function handleImageUpload(event: Event) {
 }
 
 :deep(.tiptap img) {
-    @apply max-w-full rounded-md my-2 border border-border/40;
+    @apply my-2 block max-h-52 w-auto max-w-[min(100%,20rem)] rounded-md border border-border/40 object-contain;
 }
 </style>

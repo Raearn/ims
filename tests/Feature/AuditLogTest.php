@@ -337,14 +337,16 @@ class AuditLogTest extends TestCase
         $this->assertIsArray($response->json('priorities'));
     }
 
-    public function test_supervisor_cannot_fetch_ticket_detail_json(): void
+    public function test_supervisor_can_fetch_ticket_detail_json(): void
     {
         $supervisor = User::factory()->create(['role' => 'supervisor']);
-        $ticket = Ticket::factory()->create();
+        $ticket = Ticket::factory()->create(['title' => 'Supervisor modal ticket']);
 
         $this->actingAs($supervisor)
             ->getJson(route('tickets.detail-json', $ticket))
-            ->assertRedirect();
+            ->assertOk()
+            ->assertJsonPath('ticket.numericId', $ticket->id)
+            ->assertJsonPath('ticket.title', 'Supervisor modal ticket');
     }
 
     public function test_technical_user_cannot_fetch_ticket_detail_json(): void

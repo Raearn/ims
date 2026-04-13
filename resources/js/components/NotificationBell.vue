@@ -55,8 +55,14 @@ async function handleNotificationClick(notification: Notification) {
     
     open.value = false;
 
-    if (notification.data.ticket_id && page.props.auth?.user?.role === 'admin') {
+    if (!notification.data.ticket_id) {
+        return;
+    }
+    const role = String(page.props.auth?.user?.role ?? '').trim().toLowerCase();
+    if (role === 'admin' || role === 'supervisor') {
         router.get(route('tickets'), { ticket_id: notification.data.ticket_id });
+    } else if (role === 'technical') {
+        router.get(route('home'), { ticket_id: notification.data.ticket_id });
     }
 }
 

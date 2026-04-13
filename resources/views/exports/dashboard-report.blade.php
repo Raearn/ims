@@ -132,6 +132,7 @@
     .kpi-card.rose    { border-color: #fecdd3; background: #fff1f2; }
     .kpi-card.orange  { border-color: #fed7aa; background: #fff7ed; }
     .kpi-card.blue    { border-color: #bfdbfe; background: #eff6ff; }
+    .kpi-card.emerald { border-color: #a7f3d0; background: #ecfdf5; }
 
     .kpi-label {
         font-size: 7pt;
@@ -144,6 +145,7 @@
     .kpi-label.rose   { color: #be123c; }
     .kpi-label.orange { color: #c2410c; }
     .kpi-label.blue   { color: #1d4ed8; }
+    .kpi-label.emerald { color: #047857; }
 
     .kpi-value {
         font-size: 22pt;
@@ -155,6 +157,7 @@
     .kpi-value.rose   { color: #e11d48; }
     .kpi-value.orange { color: #ea580c; }
     .kpi-value.blue   { color: #2563eb; }
+    .kpi-value.emerald { color: #059669; }
 
     .kpi-trend {
         font-size: 7.5pt;
@@ -175,15 +178,15 @@
 
     /* ── Avg resolution footnote ────────────────────────────────── */
     .avg-row {
-        background: #f0fdf4;
-        border: 1px solid #bbf7d0;
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
         border-radius: 5px;
         padding: 5px 10px;
         margin-bottom: 4mm;
         font-size: 8pt;
-        color: #166534;
+        color: #1e40af;
     }
-    .avg-row strong { font-weight: 700; font-size: 10pt; }
+    .avg-row strong { font-weight: 700; font-size: 10pt; color: #1d4ed8; }
 
     /* ── Data tables ────────────────────────────────────────────── */
     .data-table {
@@ -363,9 +366,9 @@
         </td>
 
         {{-- Resolved Incidents --}}
-        <td class="kpi-card blue" style="padding-left:5px;">
-            <div class="kpi-label blue">Resolved Incidents</div>
-            <div class="kpi-value blue">{{ $resolvedStat ? $resolvedStat['value'] : 0 }}</div>
+        <td class="kpi-card emerald" style="padding-left:5px;">
+            <div class="kpi-label emerald">Resolved Incidents</div>
+            <div class="kpi-value emerald">{{ $resolvedStat ? $resolvedStat['value'] : 0 }}</div>
             @if($resolvedStat)
                 <span class="kpi-trend {{ $trendClass($resolvedStat) }}">{{ $trendDisplay($resolvedStat) }}</span>
                 <div class="kpi-comparison">{{ $resolvedStat['description'] }}</div>

@@ -86,7 +86,13 @@ class TicketBulkActionsTest extends TestCase
             ])
             ->assertRedirect();
 
-        $tickets->each(fn ($t) => $this->assertCount(2, $t->fresh()->handlers));
+        $tickets->each(function ($t) use ($handlers) {
+            $fresh = $t->fresh();
+            $this->assertCount(2, $fresh->handlers);
+            $handlers->each(fn ($h) => $this->assertTrue(
+                $fresh->subscribers()->whereKey($h->id)->exists()
+            ));
+        });
     }
 
     public function test_guest_cannot_bulk_update_status(): void

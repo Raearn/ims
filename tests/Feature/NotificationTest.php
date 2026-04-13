@@ -49,6 +49,28 @@ class NotificationTest extends TestCase
         Notification::assertSentTo($handler, TicketAssigned::class);
     }
 
+    public function test_creating_ticket_with_handlers_subscribes_handlers_to_comment_thread(): void
+    {
+        $admin = $this->admin();
+        $handler = $this->technician();
+
+        $networkId = TicketCategory::query()->where('name', 'Network')->value('id');
+        $this->assertNotNull($networkId);
+
+        $this->actingAs($admin)
+            ->post(route('tickets.store'), [
+                'title' => 'Subscribed On Create',
+                'ticket_category_id' => $networkId,
+                'priority' => 'High',
+                'status' => 'In Progress',
+                'handler_ids' => [$handler->id],
+                'tags' => ['SubscribeTag'],
+            ]);
+
+        $ticket = Ticket::where('title', 'Subscribed On Create')->firstOrFail();
+        $this->assertTrue($ticket->subscribers()->whereKey($handler->id)->exists());
+    }
+
     public function test_ticket_assigned_notification_not_sent_when_no_handlers(): void
     {
         Notification::fake();
@@ -101,6 +123,26 @@ class NotificationTest extends TestCase
 
         Notification::assertSentTo($newHandler, TicketAssigned::class);
         Notification::assertNotSentTo($existingHandler, TicketAssigned::class);
+
+        $ticket->refresh();
+        $this->assertTrue($ticket->subscribers()->whereKey($newHandler->id)->exists());
+    }
+
+    public function test_status_update_subscribes_newly_assigned_handlers_to_comment_thread(): void
+    {
+        $admin = $this->admin();
+        $handler = $this->technician();
+        $ticket = Ticket::factory()->create(['status' => 'Open']);
+
+        $this->actingAs($admin)
+            ->patch(route('tickets.status.update', $ticket), [
+                'status' => 'In Progress',
+                'handler_ids' => [$handler->id],
+            ])
+            ->assertRedirect();
+
+        $ticket->refresh();
+        $this->assertTrue($ticket->subscribers()->whereKey($handler->id)->exists());
     }
 
     // ── TicketStatusChanged ──────────────────────────────────────────────────

@@ -39,6 +39,8 @@ class HandleInertiaRequests extends Middleware
     {
         [$message, $author] = str(Inspiring::quotes()->random())->explode('-');
 
+        $user = $request->user();
+
         return array_merge(parent::share($request), [
             ...parent::share($request),
             'flash' => [
@@ -48,11 +50,13 @@ class HandleInertiaRequests extends Middleware
             'name' => config('app.name'),
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'auth' => [
-                'user' => $request->user(),
+                'user' => $user,
             ],
-            'openTicketsCount' => $request->user()?->role === 'admin'
+            'openTicketsCount' => $user && ($user->isAdmin() || $user->isSupervisor())
                 ? Ticket::query()->where('status', 'Open')->count()
-                : null,
+                : ($user && $user->isTechnical()
+                    ? $user->visibleHelpdeskTicketsQuery()->where('status', 'Open')->count()
+                    : null),
             'unreadNotificationsCount' => $request->user()?->unreadNotifications()->count() ?? 0,
         ]);
     }

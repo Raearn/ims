@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Tag;
 use App\Models\Ticket;
 use App\Models\TicketActivity;
+use App\Models\TicketComment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -18,6 +19,18 @@ class DashboardTest extends TestCase
     {
         $response = $this->get(route('dashboard'));
         $response->assertRedirect('/login');
+    }
+
+    public function test_legacy_admin_dashboard_paths_redirect_to_dashboard_routes(): void
+    {
+        $user = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($user);
+
+        $this->get('/admin/dashboard?period=30d')
+            ->assertRedirect(route('dashboard', ['period' => '30d']));
+
+        $this->get('/admin/dashboard/export-pdf?period=ytd')
+            ->assertRedirect(route('dashboard.export-pdf', ['period' => 'ytd']));
     }
 
     public function test_admins_can_visit_the_dashboard()
@@ -42,25 +55,34 @@ class DashboardTest extends TestCase
                 ->has('stats.0.sparklineValueSuffix')
                 ->has('priorityLegend')
                 ->has('categoryLegend')
+                ->has('categoryChartGroups')
             );
     }
 
-    public function test_supervisors_are_redirected_to_their_dashboard_when_accessing_admin_dashboard()
+    public function test_supervisors_can_visit_the_dashboard()
     {
+        if (config('database.default') !== 'mysql' && config('database.default') !== 'mariadb') {
+            $this->markTestSkipped('This test requires MySQL for TIMESTAMPDIFF function.');
+        }
+
         $user = User::factory()->create(['role' => 'supervisor']);
         $this->actingAs($user);
 
         $response = $this->get(route('dashboard'));
-        $response->assertRedirect(route('supervisor.dashboard'));
+        $response->assertStatus(200)
+            ->assertInertia(fn ($page) => $page
+                ->has('trendData')
+                ->has('sparklineLabels')
+            );
     }
 
-    public function test_supervisors_can_visit_supervisor_dashboard()
+    public function test_supervisor_dashboard_route_redirects_to_main_dashboard()
     {
         $user = User::factory()->create(['role' => 'supervisor']);
         $this->actingAs($user);
 
-        $response = $this->get(route('supervisor.dashboard'));
-        $response->assertStatus(200);
+        $this->get(route('supervisor.dashboard'))
+            ->assertRedirect(route('dashboard'));
     }
 
     public function test_technical_users_cannot_visit_admin_dashboard()
@@ -69,9 +91,26 @@ class DashboardTest extends TestCase
         $this->actingAs($user);
 
         $response = $this->get(route('dashboard'));
-        // CheckRole middleware currently redirects based on role
-        // For technical, it hits the abort(403)
-        $response->assertStatus(403);
+        $response->assertRedirect(route('home'));
+    }
+
+    public function test_authenticated_technical_home_route_renders_incidents(): void
+    {
+        $user = User::factory()->create(['role' => 'technical']);
+        $this->actingAs($user);
+
+        $this->get(route('home'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->component('MyIncidents'));
+    }
+
+    public function test_authenticated_admin_home_route_redirects_to_dashboard(): void
+    {
+        $user = User::factory()->admin()->create();
+        $this->actingAs($user);
+
+        $this->get(route('home'))
+            ->assertRedirect(route('dashboard', absolute: false));
     }
 
     public function test_dashboard_top_recurring_lists_tags_by_ticket_volume_in_period(): void
@@ -166,13 +205,28 @@ class DashboardTest extends TestCase
         ];
     }
 
-    public function test_non_admin_cannot_access_pdf_export(): void
+    public function test_technical_user_cannot_access_pdf_export(): void
     {
         $user = User::factory()->create(['role' => 'technical']);
         $this->actingAs($user);
 
         $this->get(route('dashboard.export-pdf'))
-            ->assertStatus(403);
+            ->assertRedirect(route('home'));
+    }
+
+    public function test_supervisor_can_export_pdf_for_7d_period(): void
+    {
+        if (config('database.default') !== 'mysql' && config('database.default') !== 'mariadb') {
+            $this->markTestSkipped('This test requires MySQL for TIMESTAMPDIFF function.');
+        }
+
+        $user = User::factory()->create(['role' => 'supervisor']);
+        $this->actingAs($user);
+
+        $response = $this->get(route('dashboard.export-pdf', ['period' => '7d']));
+
+        $response->assertStatus(200);
+        $this->assertStringContainsString('application/pdf', $response->headers->get('Content-Type'));
     }
 
     public function test_pdf_export_defaults_to_7d_period_when_no_period_given(): void
@@ -196,5 +250,28 @@ class DashboardTest extends TestCase
             'new_value' => 'Reporting period: 7d',
         ]);
         $this->assertSame(1, TicketActivity::query()->where('action', 'dashboard_export_pdf')->count());
+    }
+
+    public function test_dashboard_recent_comments_include_snippet_image_urls_from_comment_html(): void
+    {
+        if (config('database.default') !== 'mysql' && config('database.default') !== 'mariadb') {
+            $this->markTestSkipped('This test requires MySQL for TIMESTAMPDIFF function.');
+        }
+
+        $admin = User::factory()->create(['role' => 'admin']);
+        TicketComment::factory()->create([
+            'body' => '<p>See screenshot</p><img src="/storage/comments/preview.png" alt="screen" />',
+        ]);
+
+        $expectedUrl = url('/storage/comments/preview.png');
+
+        $this->actingAs($admin)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('recentComments', fn ($comments) => collect($comments)->contains(
+                    fn (array $c) => ($c['snippetImageUrls'] ?? []) === [$expectedUrl]
+                ))
+            );
     }
 }

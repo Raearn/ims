@@ -218,16 +218,22 @@ async function voteComment(commentId: number, type: 'up' | 'down') {
     }
 }
 
+function canModerateComments(): boolean {
+    const user = authUser.value;
+    if (!user) return false;
+    return user.role === 'admin' || user.role === 'supervisor';
+}
+
 function canDelete(comment: Comment): boolean {
     const user = authUser.value;
     if (!user) return false;
-    return comment.userId === user.id || user.role === 'admin';
+    return comment.userId === user.id || canModerateComments();
 }
 
 const canPin = computed(() => {
     const user = authUser.value;
     if (!user) return false;
-    return user.role === 'admin' || user.id === props.reporterId;
+    return canModerateComments() || user.id === props.reporterId;
 });
 
 async function pinComment(commentId: number) {
@@ -442,6 +448,7 @@ watch(() => props.ticketId, loadComments);
             <div class="flex-1 flex flex-col gap-2">
                 <CommentEditor
                     v-model="newBody"
+                    :ticket-id="props.ticketId"
                     placeholder="Write a comment…"
                     @focus="editorFocused = true"
                 />
@@ -591,7 +598,7 @@ watch(() => props.ticketId, loadComments);
                         <div
                             class="prose prose-sm dark:prose-invert max-w-none text-sm text-foreground/85 leading-relaxed
                                 [&_p]:my-0.5 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0
-                                [&_img]:max-w-full [&_img]:rounded-lg [&_img]:border [&_img]:border-border/40 [&_img]:mt-2 [&_img]:cursor-pointer"
+                                [&_img]:mt-2 [&_img]:block [&_img]:max-h-52 [&_img]:w-auto [&_img]:max-w-[min(100%,20rem)] [&_img]:cursor-pointer [&_img]:rounded-lg [&_img]:border [&_img]:border-border/40 [&_img]:object-contain"
                             @click="onBodyClick"
                             v-html="comment.body"
                         />
@@ -768,7 +775,7 @@ watch(() => props.ticketId, loadComments);
                             <div
                                 class="prose prose-sm dark:prose-invert max-w-none text-sm text-foreground/85 leading-relaxed
                                     [&_p]:my-0.5 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0
-                                    [&_img]:max-w-full [&_img]:rounded-lg [&_img]:border [&_img]:border-border/40 [&_img]:mt-2 [&_img]:cursor-pointer"
+                                    [&_img]:mt-2 [&_img]:block [&_img]:max-h-52 [&_img]:w-auto [&_img]:max-w-[min(100%,20rem)] [&_img]:cursor-pointer [&_img]:rounded-lg [&_img]:border [&_img]:border-border/40 [&_img]:object-contain"
                                 @click="onBodyClick"
                                 v-html="reply.body"
                             />
@@ -881,7 +888,7 @@ watch(() => props.ticketId, loadComments);
                                 <CornerDownRight class="h-3 w-3 shrink-0 text-primary/60" />
                                 <span>Replying to <span class="font-semibold text-foreground">{{ comment.userName }}</span></span>
                             </div>
-                            <CommentEditor v-model="replyBody" placeholder="Write a reply…" @focus="() => {}" />
+                            <CommentEditor v-model="replyBody" :ticket-id="props.ticketId" placeholder="Write a reply…" @focus="() => {}" />
                             <div class="flex items-center justify-end gap-2">
                                 <button type="button" @click="cancelReply" class="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded">Cancel</button>
                                 <button
