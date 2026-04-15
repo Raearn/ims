@@ -6,7 +6,7 @@ import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/co
 import { ensureLucideIconsLoaded, resolveLucideIcon } from '@/composables/useLucideIconRegistry';
 import { laravelFetch } from '@/lib/laravelFetch';
 import type { TicketDetail } from '@/types/ticketDetail';
-import { router } from '@inertiajs/vue3';
+import { router, usePage } from '@inertiajs/vue3';
 import {
     CheckCircle2,
     ChevronRight,
@@ -332,6 +332,7 @@ function openInTickets(): void {
                         <Info class="h-3.5 w-3.5" /> Overview
                     </button>
                     <button
+                        v-if="usePage().props.auth.user.role !== 'technical'"
                         type="button"
                         @click="detailTab = 'history'"
                         :class="[

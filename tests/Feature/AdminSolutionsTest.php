@@ -38,22 +38,24 @@ class AdminSolutionsTest extends TestCase
             );
     }
 
-    public function test_supervisor_cannot_access_solutions_page(): void
+    public function test_supervisor_can_access_solutions_page(): void
     {
         $supervisor = User::factory()->create(['role' => 'supervisor']);
 
         $this->actingAs($supervisor)
             ->get(route('admin.solutions'))
-            ->assertRedirect(route('supervisor.dashboard'));
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->component('Solutions'));
     }
 
-    public function test_technical_cannot_access_solutions_page(): void
+    public function test_technical_can_access_solutions_page(): void
     {
         $technical = User::factory()->create(['role' => 'technical']);
 
         $this->actingAs($technical)
             ->get(route('admin.solutions'))
-            ->assertRedirect(route('home'));
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->component('Solutions'));
     }
 
     public function test_solutions_only_includes_tickets_with_solutions(): void

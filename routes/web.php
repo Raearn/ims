@@ -1426,6 +1426,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
 });
 
 // ── Audit Log, Diagnostics, Settings (admin URL prefix) ─────────────────────
+Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin,supervisor,technical'])->group(function () {
+    // ── Solutions ──────────────────────────────────────────────────────────────
+    Route::get('solutions', [App\Http\Controllers\Admin\SolutionsController::class, 'index'])->name('admin.solutions');
+});
+
 Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(function () {
     Route::get('audit-log', function () {
         $query = TicketActivity::with(['user:id,name,role', 'ticket:id,title'])
@@ -1485,9 +1490,6 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
             'statuses' => TicketStatus::orderBy('sort_order')->get(['id', 'name', 'icon', 'color', 'handler_requirement']),
         ]);
     })->name('audit-log');
-
-    // ── Solutions ──────────────────────────────────────────────────────────────
-    Route::get('solutions', [App\Http\Controllers\Admin\SolutionsController::class, 'index'])->name('admin.solutions');
 
     // ── Diagnostics ────────────────────────────────────────────────────────────
     Route::get('diagnostics', function () {

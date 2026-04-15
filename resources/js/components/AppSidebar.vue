@@ -122,6 +122,14 @@ const homeRoute = computed(() => {
                                     </Link>
                                 </SidebarMenuButton>
                             </SidebarMenuItem>
+                                <SidebarMenuItem>
+                                <SidebarMenuButton as-child tooltip="Solutions" :is-active="route().current('admin.solutions')">
+                                    <Link :href="route('admin.solutions')" aria-label="Solutions">
+                                        <Lightbulb />
+                                        <span>Solutions</span>
+                                    </Link>
+                                </SidebarMenuButton>
+                            </SidebarMenuItem>
                         </SidebarMenu>
                     </SidebarGroupContent>
                 </SidebarGroup>
@@ -151,14 +159,6 @@ const homeRoute = computed(() => {
                                         <Link :href="route('audit-log')">
                                             <ScrollText />
                                             <span>Audit Log</span>
-                                        </Link>
-                                    </SidebarMenuButton>
-                                </SidebarMenuItem>
-                                <SidebarMenuItem>
-                                    <SidebarMenuButton as-child :is-active="route().current('admin.solutions')">
-                                        <Link :href="route('admin.solutions')">
-                                            <Lightbulb />
-                                            <span>Solutions</span>
                                         </Link>
                                     </SidebarMenuButton>
                                 </SidebarMenuItem>
@@ -207,6 +207,14 @@ const homeRoute = computed(() => {
                                             <AlertTriangle class="h-2.5 w-2.5 shrink-0" />
                                             {{ openTicketsCount > 99 ? '99+' : openTicketsCount }}
                                         </span>
+                                    </Link>
+                                </SidebarMenuButton>
+                            </SidebarMenuItem>
+                            <SidebarMenuItem>
+                                <SidebarMenuButton as-child tooltip="Solutions" :is-active="route().current('admin.solutions')">
+                                    <Link :href="route('admin.solutions')" aria-label="Solutions">
+                                        <Lightbulb />
+                                        <span>Solutions</span>
                                     </Link>
                                 </SidebarMenuButton>
                             </SidebarMenuItem>
