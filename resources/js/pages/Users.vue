@@ -8,8 +8,31 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { AlertCircle, AlertTriangle, ArrowUpCircle, Ban, CheckCircle2, ChevronDown, ChevronUp, ChevronsUpDown, Circle, Clock, Crown, Headset, Pause, Pencil, Play, Plus, Search, ShieldCheck, Trash2, UserRound, Users, X } from 'lucide-vue-next';
-import { computed, ref, watch, onMounted } from 'vue';
+import {
+    AlertCircle,
+    AlertTriangle,
+    ArrowUpCircle,
+    Ban,
+    CheckCircle2,
+    ChevronDown,
+    ChevronUp,
+    ChevronsUpDown,
+    Circle,
+    Clock,
+    Crown,
+    Headset,
+    Pause,
+    Pencil,
+    Play,
+    Plus,
+    Search,
+    ShieldCheck,
+    Trash2,
+    UserRound,
+    Users,
+    X,
+} from 'lucide-vue-next';
+import { computed, onMounted, ref, watch } from 'vue';
 
 interface TicketSummary {
     id: number;
@@ -44,13 +67,13 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 // ── Stats ──────────────────────────────────────────────────────────────────
-const totalCount      = computed(() => props.users.length);
-const adminCount      = computed(() => props.users.filter(u => u.role === 'admin').length);
-const supervisorCount = computed(() => props.users.filter(u => u.role === 'supervisor').length);
-const technicalCount  = computed(() => props.users.filter(u => u.role === 'technical').length);
+const totalCount = computed(() => props.users.length);
+const adminCount = computed(() => props.users.filter((u) => u.role === 'admin').length);
+const supervisorCount = computed(() => props.users.filter((u) => u.role === 'supervisor').length);
+const technicalCount = computed(() => props.users.filter((u) => u.role === 'technical').length);
 
 // ── Filter / search / sort ─────────────────────────────────────────────────
-const search     = ref('');
+const search = ref('');
 const activeRole = ref<'all' | 'admin' | 'supervisor' | 'technical'>('all');
 
 type SortKey = 'name' | 'email' | 'role' | 'ticketsReported' | 'ticketsHandled' | 'createdAt';
@@ -62,21 +85,28 @@ const roleOrder: Record<string, number> = { admin: 1, supervisor: 2, technical: 
 const filteredUsers = computed(() => {
     let list = props.users;
     if (activeRole.value !== 'all') {
-        list = list.filter(u => u.role === activeRole.value);
+        list = list.filter((u) => u.role === activeRole.value);
     }
     if (search.value.trim()) {
         const q = search.value.toLowerCase();
-        list = list.filter(u =>
-            u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q),
-        );
+        list = list.filter((u) => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
     }
-    if (!sortKey.value) { return list; }
+    if (!sortKey.value) {
+        return list;
+    }
     return [...list].sort((a, b) => {
         let aVal: any = a[sortKey.value!];
         let bVal: any = b[sortKey.value!];
-        if (sortKey.value === 'role') { aVal = roleOrder[aVal] ?? 99; bVal = roleOrder[bVal] ?? 99; }
-        if (aVal < bVal) { return sortDir.value === 'asc' ? -1 : 1; }
-        if (aVal > bVal) { return sortDir.value === 'asc' ? 1 : -1; }
+        if (sortKey.value === 'role') {
+            aVal = roleOrder[aVal] ?? 99;
+            bVal = roleOrder[bVal] ?? 99;
+        }
+        if (aVal < bVal) {
+            return sortDir.value === 'asc' ? -1 : 1;
+        }
+        if (aVal > bVal) {
+            return sortDir.value === 'asc' ? 1 : -1;
+        }
         return 0;
     });
 });
@@ -92,88 +122,124 @@ const toggleSort = (key: SortKey) => {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const getInitials = (name: string) =>
-    name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase();
+    name
+        .split(' ')
+        .map((n: string) => n[0])
+        .join('')
+        .substring(0, 2)
+        .toUpperCase();
 
 const getRoleBadgeClass = (role: string) => {
     switch (role) {
-        case 'admin':      return 'bg-rose-500/15 text-rose-500 border-rose-500/30';
-        case 'supervisor': return 'bg-amber-500/15 text-amber-500 border-amber-500/30';
-        case 'technical':  return 'bg-blue-500/15 text-blue-500 border-blue-500/30';
-        default:           return 'bg-muted text-muted-foreground border-border';
+        case 'admin':
+            return 'bg-rose-500/15 text-rose-500 border-rose-500/30';
+        case 'supervisor':
+            return 'bg-amber-500/15 text-amber-500 border-amber-500/30';
+        case 'technical':
+            return 'bg-blue-500/15 text-blue-500 border-blue-500/30';
+        default:
+            return 'bg-muted text-muted-foreground border-border';
     }
 };
 
 const getRoleIcon = (role: string) => {
     switch (role) {
-        case 'admin':      return Crown;
-        case 'supervisor': return ShieldCheck;
-        case 'technical':  return Headset;
-        default:           return UserRound;
+        case 'admin':
+            return Crown;
+        case 'supervisor':
+            return ShieldCheck;
+        case 'technical':
+            return Headset;
+        default:
+            return UserRound;
     }
 };
 
 const ROLES = [
-    { value: 'admin',      label: 'Admin',      badgeClass: 'bg-rose-500/15 text-rose-500 border border-rose-500/30' },
-    { value: 'supervisor', label: 'Supervisor',  badgeClass: 'bg-amber-500/15 text-amber-500 border border-amber-500/30' },
-    { value: 'technical',  label: 'Technical',   badgeClass: 'bg-blue-500/15 text-blue-500 border border-blue-500/30' },
+    { value: 'admin', label: 'Admin', badgeClass: 'bg-rose-500/15 text-rose-500 border border-rose-500/30' },
+    { value: 'supervisor', label: 'Supervisor', badgeClass: 'bg-amber-500/15 text-amber-500 border border-amber-500/30' },
+    { value: 'technical', label: 'Technical', badgeClass: 'bg-blue-500/15 text-blue-500 border border-blue-500/30' },
 ];
 
 const getStatusColor = (status: string) => {
     switch (status) {
-        case 'Open':        return 'bg-rose-500/15 text-rose-500 border-rose-500/30';
-        case 'In Progress': return 'bg-blue-500/15 text-blue-500 border-blue-500/30';
-        case 'On Hold':     return 'bg-amber-500/15 text-amber-500 border-amber-500/30';
-        case 'Resolved':    return 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30';
+        case 'Open':
+            return 'bg-rose-500/15 text-rose-500 border-rose-500/30';
+        case 'In Progress':
+            return 'bg-blue-500/15 text-blue-500 border-blue-500/30';
+        case 'On Hold':
+            return 'bg-amber-500/15 text-amber-500 border-amber-500/30';
+        case 'Resolved':
+            return 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30';
         case 'Closed': // legacy
-        case 'Cancelled':   return 'bg-slate-500/15 text-slate-500 border-slate-500/30';
-        default:            return 'bg-secondary text-secondary-foreground';
+        case 'Cancelled':
+            return 'bg-slate-500/15 text-slate-500 border-slate-500/30';
+        default:
+            return 'bg-secondary text-secondary-foreground';
     }
 };
 
 const getStatusIcon = (status: string) => {
     switch (status) {
-        case 'Open':        return AlertTriangle;
-        case 'In Progress': return Play;
-        case 'On Hold':     return Pause;
-        case 'Resolved':    return CheckCircle2;
+        case 'Open':
+            return AlertTriangle;
+        case 'In Progress':
+            return Play;
+        case 'On Hold':
+            return Pause;
+        case 'Resolved':
+            return CheckCircle2;
         case 'Closed': // legacy
-        case 'Cancelled':   return Ban;
-        default:            return Circle;
+        case 'Cancelled':
+            return Ban;
+        default:
+            return Circle;
     }
 };
 
 const getPriorityBadge = (priority: string) => {
     switch (priority) {
-        case 'Critical': return 'bg-rose-500/15 text-rose-500 border border-rose-500/25';
-        case 'High':     return 'bg-orange-500/15 text-orange-500 border border-orange-500/25';
-        case 'Medium':   return 'bg-blue-500/15 text-blue-500 border border-blue-500/25';
-        case 'Low':      return 'bg-slate-500/10 text-slate-500 border border-slate-500/20';
-        default:         return 'bg-muted text-muted-foreground border border-border';
+        case 'Critical':
+            return 'bg-rose-500/15 text-rose-500 border border-rose-500/25';
+        case 'High':
+            return 'bg-orange-500/15 text-orange-500 border border-orange-500/25';
+        case 'Medium':
+            return 'bg-blue-500/15 text-blue-500 border border-blue-500/25';
+        case 'Low':
+            return 'bg-slate-500/10 text-slate-500 border border-slate-500/20';
+        default:
+            return 'bg-muted text-muted-foreground border border-border';
     }
 };
 
 const getPriorityIcon = (priority: string) => {
     switch (priority) {
-        case 'Critical': return AlertCircle;
-        case 'High':     return AlertTriangle;
-        case 'Medium':   return ArrowUpCircle;
-        default:         return Circle;
+        case 'Critical':
+            return AlertCircle;
+        case 'High':
+            return AlertTriangle;
+        case 'Medium':
+            return ArrowUpCircle;
+        default:
+            return Circle;
     }
 };
 
 // ── User detail modal ──────────────────────────────────────────────────────
 const isDetailModalOpen = ref(false);
-const detailUser        = ref<UserItem | null>(null);
-const detailTab         = ref<'reported' | 'handled'>('reported');
+const detailUser = ref<UserItem | null>(null);
+const detailTab = ref<'reported' | 'handled'>('reported');
 
 const openDetailModal = (user: UserItem) => {
-    detailUser.value        = user;
-    detailTab.value         = 'reported';
+    detailUser.value = user;
+    detailTab.value = 'reported';
     isDetailModalOpen.value = true;
 };
 
 watch(isDetailModalOpen, (val) => {
-    if (!val) { detailUser.value = null; }
+    if (!val) {
+        detailUser.value = null;
+    }
 });
 
 // ── Create modal ───────────────────────────────────────────────────────────
@@ -213,12 +279,14 @@ const submitCreate = () => {
 };
 
 watch(isCreateModalOpen, (val) => {
-    if (!val) { createForm.reset(); }
+    if (!val) {
+        createForm.reset();
+    }
 });
 
 // ── Edit modal ─────────────────────────────────────────────────────────────
 const isEditModalOpen = ref(false);
-const editingUser     = ref<UserItem | null>(null);
+const editingUser = ref<UserItem | null>(null);
 
 const editForm = useForm({
     name: '',
@@ -229,22 +297,24 @@ const editForm = useForm({
 });
 
 const openEditModal = (user: UserItem) => {
-    editingUser.value              = user;
-    editForm.name                  = user.name;
-    editForm.email                 = user.email;
-    editForm.role                  = user.role;
-    editForm.password              = '';
+    editingUser.value = user;
+    editForm.name = user.name;
+    editForm.email = user.email;
+    editForm.role = user.role;
+    editForm.password = '';
     editForm.password_confirmation = '';
-    isEditModalOpen.value          = true;
+    isEditModalOpen.value = true;
 };
 
 const submitEdit = () => {
-    if (!editingUser.value) { return; }
+    if (!editingUser.value) {
+        return;
+    }
     editForm.patch(route('users.update', { user: editingUser.value.id }), {
         preserveScroll: true,
         onSuccess: () => {
             isEditModalOpen.value = false;
-            editingUser.value     = null;
+            editingUser.value = null;
         },
     });
 };
@@ -258,29 +328,35 @@ watch(isEditModalOpen, (val) => {
 
 // ── Delete modal ───────────────────────────────────────────────────────────
 const isDeleteModalOpen = ref(false);
-const deletingUser      = ref<UserItem | null>(null);
-const isDeleting        = ref(false);
+const deletingUser = ref<UserItem | null>(null);
+const isDeleting = ref(false);
 
 const openDeleteModal = (user: UserItem) => {
-    deletingUser.value      = user;
+    deletingUser.value = user;
     isDeleteModalOpen.value = true;
 };
 
 const submitDelete = () => {
-    if (!deletingUser.value) { return; }
+    if (!deletingUser.value) {
+        return;
+    }
     isDeleting.value = true;
     router.delete(route('users.destroy', { user: deletingUser.value.id }), {
         preserveScroll: true,
         onSuccess: () => {
             isDeleteModalOpen.value = false;
-            deletingUser.value      = null;
+            deletingUser.value = null;
         },
-        onFinish: () => { isDeleting.value = false; },
+        onFinish: () => {
+            isDeleting.value = false;
+        },
     });
 };
 
 watch(isDeleteModalOpen, (val) => {
-    if (!val) { deletingUser.value = null; }
+    if (!val) {
+        deletingUser.value = null;
+    }
 });
 </script>
 
@@ -289,7 +365,6 @@ watch(isDeleteModalOpen, (val) => {
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-4 p-4 md:gap-6 md:p-6">
-
             <!-- Page header -->
             <div class="flex items-center justify-between gap-4">
                 <div>
@@ -307,7 +382,7 @@ watch(isDeleteModalOpen, (val) => {
 
             <!-- Stat cards -->
             <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <Card class="shadow-none border border-border/50">
+                <Card class="border border-border/50 shadow-none">
                     <CardContent class="px-5 pb-4 pt-5">
                         <div class="flex items-center justify-between">
                             <div>
@@ -320,7 +395,7 @@ watch(isDeleteModalOpen, (val) => {
                         </div>
                     </CardContent>
                 </Card>
-                <Card class="shadow-none border border-border/50">
+                <Card class="border border-border/50 shadow-none">
                     <CardContent class="px-5 pb-4 pt-5">
                         <div class="flex items-center justify-between">
                             <div>
@@ -333,7 +408,7 @@ watch(isDeleteModalOpen, (val) => {
                         </div>
                     </CardContent>
                 </Card>
-                <Card class="shadow-none border border-border/50">
+                <Card class="border border-border/50 shadow-none">
                     <CardContent class="px-5 pb-4 pt-5">
                         <div class="flex items-center justify-between">
                             <div>
@@ -346,7 +421,7 @@ watch(isDeleteModalOpen, (val) => {
                         </div>
                     </CardContent>
                 </Card>
-                <Card class="shadow-none border border-border/50">
+                <Card class="border border-border/50 shadow-none">
                     <CardContent class="px-5 pb-4 pt-5">
                         <div class="flex items-center justify-between">
                             <div>
@@ -362,7 +437,7 @@ watch(isDeleteModalOpen, (val) => {
             </div>
 
             <!-- Table card -->
-            <Card class="flex flex-col overflow-hidden shadow-none border border-border/50">
+            <Card class="flex flex-col overflow-hidden border border-border/50 shadow-none">
                 <!-- Toolbar -->
                 <div class="flex flex-col gap-3 border-b border-border/50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <!-- Search -->
@@ -391,11 +466,11 @@ watch(isDeleteModalOpen, (val) => {
                             @click="activeRole = tab.value as typeof activeRole"
                             :class="[
                                 'rounded-md px-3 py-1 text-xs font-semibold transition-all',
-                                activeRole === tab.value
-                                    ? 'bg-background text-foreground shadow-sm'
-                                    : 'text-muted-foreground hover:text-foreground',
+                                activeRole === tab.value ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
                             ]"
-                        >{{ tab.label }}</button>
+                        >
+                            {{ tab.label }}
+                        </button>
                     </div>
                 </div>
 
@@ -405,7 +480,10 @@ watch(isDeleteModalOpen, (val) => {
                         <thead>
                             <tr class="border-b border-border/50 bg-muted/20 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                                 <th class="px-5 py-3.5 text-left">
-                                    <button @click="toggleSort('name')" class="inline-flex items-center gap-1 transition-colors hover:text-foreground">
+                                    <button
+                                        @click="toggleSort('name')"
+                                        class="inline-flex items-center gap-1 transition-colors hover:text-foreground"
+                                    >
                                         User
                                         <ChevronUp v-if="sortKey === 'name' && sortDir === 'asc'" class="h-3 w-3 text-primary" />
                                         <ChevronDown v-else-if="sortKey === 'name' && sortDir === 'desc'" class="h-3 w-3 text-primary" />
@@ -413,7 +491,10 @@ watch(isDeleteModalOpen, (val) => {
                                     </button>
                                 </th>
                                 <th class="hidden px-4 py-3.5 text-left sm:table-cell">
-                                    <button @click="toggleSort('email')" class="inline-flex items-center gap-1 transition-colors hover:text-foreground">
+                                    <button
+                                        @click="toggleSort('email')"
+                                        class="inline-flex items-center gap-1 transition-colors hover:text-foreground"
+                                    >
                                         Email
                                         <ChevronUp v-if="sortKey === 'email' && sortDir === 'asc'" class="h-3 w-3 text-primary" />
                                         <ChevronDown v-else-if="sortKey === 'email' && sortDir === 'desc'" class="h-3 w-3 text-primary" />
@@ -421,7 +502,10 @@ watch(isDeleteModalOpen, (val) => {
                                     </button>
                                 </th>
                                 <th class="px-4 py-3.5 text-left">
-                                    <button @click="toggleSort('role')" class="inline-flex items-center gap-1 transition-colors hover:text-foreground">
+                                    <button
+                                        @click="toggleSort('role')"
+                                        class="inline-flex items-center gap-1 transition-colors hover:text-foreground"
+                                    >
                                         Role
                                         <ChevronUp v-if="sortKey === 'role' && sortDir === 'asc'" class="h-3 w-3 text-primary" />
                                         <ChevronDown v-else-if="sortKey === 'role' && sortDir === 'desc'" class="h-3 w-3 text-primary" />
@@ -429,7 +513,10 @@ watch(isDeleteModalOpen, (val) => {
                                     </button>
                                 </th>
                                 <th class="hidden px-4 py-3.5 text-left lg:table-cell">
-                                    <button @click="toggleSort('ticketsReported')" class="inline-flex items-center gap-1 transition-colors hover:text-foreground">
+                                    <button
+                                        @click="toggleSort('ticketsReported')"
+                                        class="inline-flex items-center gap-1 transition-colors hover:text-foreground"
+                                    >
                                         Reported
                                         <ChevronUp v-if="sortKey === 'ticketsReported' && sortDir === 'asc'" class="h-3 w-3 text-primary" />
                                         <ChevronDown v-else-if="sortKey === 'ticketsReported' && sortDir === 'desc'" class="h-3 w-3 text-primary" />
@@ -437,7 +524,10 @@ watch(isDeleteModalOpen, (val) => {
                                     </button>
                                 </th>
                                 <th class="hidden px-4 py-3.5 text-left lg:table-cell">
-                                    <button @click="toggleSort('ticketsHandled')" class="inline-flex items-center gap-1 transition-colors hover:text-foreground">
+                                    <button
+                                        @click="toggleSort('ticketsHandled')"
+                                        class="inline-flex items-center gap-1 transition-colors hover:text-foreground"
+                                    >
                                         Handled
                                         <ChevronUp v-if="sortKey === 'ticketsHandled' && sortDir === 'asc'" class="h-3 w-3 text-primary" />
                                         <ChevronDown v-else-if="sortKey === 'ticketsHandled' && sortDir === 'desc'" class="h-3 w-3 text-primary" />
@@ -445,7 +535,10 @@ watch(isDeleteModalOpen, (val) => {
                                     </button>
                                 </th>
                                 <th class="hidden px-4 py-3.5 text-left md:table-cell">
-                                    <button @click="toggleSort('createdAt')" class="inline-flex items-center gap-1 transition-colors hover:text-foreground">
+                                    <button
+                                        @click="toggleSort('createdAt')"
+                                        class="inline-flex items-center gap-1 transition-colors hover:text-foreground"
+                                    >
                                         Member Since
                                         <ChevronUp v-if="sortKey === 'createdAt' && sortDir === 'asc'" class="h-3 w-3 text-primary" />
                                         <ChevronDown v-else-if="sortKey === 'createdAt' && sortDir === 'desc'" class="h-3 w-3 text-primary" />
@@ -474,7 +567,9 @@ watch(isDeleteModalOpen, (val) => {
                                                     ? 'border-primary/40 bg-primary/20 text-primary'
                                                     : 'border-border/50 bg-muted text-foreground',
                                             ]"
-                                        >{{ getInitials(user.name) }}</div>
+                                        >
+                                            {{ getInitials(user.name) }}
+                                        </div>
                                         <div class="min-w-0">
                                             <p class="truncate font-semibold text-foreground">{{ user.name }}</p>
                                             <p v-if="user.id === currentUserId" class="text-[10px] font-medium text-primary">You</p>
@@ -485,7 +580,10 @@ watch(isDeleteModalOpen, (val) => {
                                 <td class="hidden px-4 py-3.5 text-muted-foreground sm:table-cell">{{ user.email }}</td>
                                 <!-- Role -->
                                 <td class="px-4 py-3.5">
-                                    <Badge variant="outline" :class="['inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold', getRoleBadgeClass(user.role)]">
+                                    <Badge
+                                        variant="outline"
+                                        :class="['inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold', getRoleBadgeClass(user.role)]"
+                                    >
                                         <component :is="getRoleIcon(user.role)" class="h-3 w-3 shrink-0" />
                                         {{ user.role.charAt(0).toUpperCase() + user.role.slice(1) }}
                                     </Badge>
@@ -513,7 +611,7 @@ watch(isDeleteModalOpen, (val) => {
                                         <button
                                             @click="openDeleteModal(user)"
                                             :disabled="user.id === currentUserId"
-                                            class="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/0 transition-all duration-150 hover:bg-rose-500/10 group-hover:text-rose-500 disabled:pointer-events-none disabled:opacity-30"
+                                            class="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/0 transition-all duration-150 hover:bg-rose-500/10 disabled:pointer-events-none disabled:opacity-30 group-hover:text-rose-500"
                                             title="Delete User"
                                         >
                                             <Trash2 class="h-3.5 w-3.5" />
@@ -543,8 +641,8 @@ watch(isDeleteModalOpen, (val) => {
                 <!-- Table footer -->
                 <div class="flex items-center justify-between border-t border-border/50 px-5 py-3">
                     <p class="text-xs text-muted-foreground">
-                        Showing <span class="font-semibold text-foreground">{{ filteredUsers.length }}</span>
-                        of <span class="font-semibold text-foreground">{{ totalCount }}</span> users
+                        Showing <span class="font-semibold text-foreground">{{ filteredUsers.length }}</span> of
+                        <span class="font-semibold text-foreground">{{ totalCount }}</span> users
                     </p>
                 </div>
             </Card>
@@ -566,17 +664,23 @@ watch(isDeleteModalOpen, (val) => {
                 </div>
                 <div class="modal-body flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
                     <div class="grid gap-1.5">
-                        <Label class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Name <span class="text-destructive">*</span></Label>
+                        <Label class="text-xs font-bold uppercase tracking-wider text-muted-foreground"
+                            >Name <span class="text-destructive">*</span></Label
+                        >
                         <Input v-model="createForm.name" placeholder="Full name" />
                         <p v-if="createForm.errors.name" class="text-xs text-destructive">{{ createForm.errors.name }}</p>
                     </div>
                     <div class="grid gap-1.5">
-                        <Label class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Email <span class="text-destructive">*</span></Label>
+                        <Label class="text-xs font-bold uppercase tracking-wider text-muted-foreground"
+                            >Email <span class="text-destructive">*</span></Label
+                        >
                         <Input v-model="createForm.email" type="email" placeholder="user@example.com" />
                         <p v-if="createForm.errors.email" class="text-xs text-destructive">{{ createForm.errors.email }}</p>
                     </div>
                     <div class="grid gap-2">
-                        <Label class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Role <span class="text-destructive">*</span></Label>
+                        <Label class="text-xs font-bold uppercase tracking-wider text-muted-foreground"
+                            >Role <span class="text-destructive">*</span></Label
+                        >
                         <div class="flex flex-wrap gap-2">
                             <button
                                 v-for="r in ROLES"
@@ -586,7 +690,7 @@ watch(isDeleteModalOpen, (val) => {
                                 :class="[
                                     'inline-flex items-center gap-1.5 rounded-lg border-2 px-3 py-1.5 text-[11px] font-bold transition-all',
                                     createForm.role === r.value
-                                        ? [r.badgeClass, 'border-current shadow-sm scale-[1.03]']
+                                        ? [r.badgeClass, 'scale-[1.03] border-current shadow-sm']
                                         : 'border-muted text-muted-foreground hover:border-primary/30 hover:bg-muted/50',
                                 ]"
                             >
@@ -597,12 +701,16 @@ watch(isDeleteModalOpen, (val) => {
                         <p v-if="createForm.errors.role" class="text-xs text-destructive">{{ createForm.errors.role }}</p>
                     </div>
                     <div class="grid gap-1.5">
-                        <Label class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Password <span class="text-destructive">*</span></Label>
+                        <Label class="text-xs font-bold uppercase tracking-wider text-muted-foreground"
+                            >Password <span class="text-destructive">*</span></Label
+                        >
                         <Input v-model="createForm.password" type="password" placeholder="Min. 8 characters" />
                         <p v-if="createForm.errors.password" class="text-xs text-destructive">{{ createForm.errors.password }}</p>
                     </div>
                     <div class="grid gap-1.5">
-                        <Label class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Confirm Password <span class="text-destructive">*</span></Label>
+                        <Label class="text-xs font-bold uppercase tracking-wider text-muted-foreground"
+                            >Confirm Password <span class="text-destructive">*</span></Label
+                        >
                         <Input v-model="createForm.password_confirmation" type="password" placeholder="Repeat password" />
                     </div>
                 </div>
@@ -614,9 +722,7 @@ watch(isDeleteModalOpen, (val) => {
                         @click="submitCreate"
                         class="gap-1.5 text-xs font-bold shadow-sm shadow-primary/20"
                     >
-                        <span v-if="!createForm.processing" class="flex items-center gap-1.5">
-                            <Plus class="h-3.5 w-3.5" /> Create User
-                        </span>
+                        <span v-if="!createForm.processing" class="flex items-center gap-1.5"> <Plus class="h-3.5 w-3.5" /> Create User </span>
                         <span v-else class="flex items-center gap-1.5">
                             Creating… <span class="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
                         </span>
@@ -635,23 +741,30 @@ watch(isDeleteModalOpen, (val) => {
                             Edit User
                         </DialogTitle>
                         <DialogDescription class="mt-0.5 text-xs text-muted-foreground/80">
-                            Update account details for <span class="font-semibold text-foreground">{{ editingUser.name }}</span>.
+                            Update account details for <span class="font-semibold text-foreground">{{ editingUser.name }}</span
+                            >.
                         </DialogDescription>
                     </DialogHeader>
                 </div>
                 <div class="modal-body flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
                     <div class="grid gap-1.5">
-                        <Label class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Name <span class="text-destructive">*</span></Label>
+                        <Label class="text-xs font-bold uppercase tracking-wider text-muted-foreground"
+                            >Name <span class="text-destructive">*</span></Label
+                        >
                         <Input v-model="editForm.name" placeholder="Full name" />
                         <p v-if="editForm.errors.name" class="text-xs text-destructive">{{ editForm.errors.name }}</p>
                     </div>
                     <div class="grid gap-1.5">
-                        <Label class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Email <span class="text-destructive">*</span></Label>
+                        <Label class="text-xs font-bold uppercase tracking-wider text-muted-foreground"
+                            >Email <span class="text-destructive">*</span></Label
+                        >
                         <Input v-model="editForm.email" type="email" placeholder="user@example.com" />
                         <p v-if="editForm.errors.email" class="text-xs text-destructive">{{ editForm.errors.email }}</p>
                     </div>
                     <div class="grid gap-2">
-                        <Label class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Role <span class="text-destructive">*</span></Label>
+                        <Label class="text-xs font-bold uppercase tracking-wider text-muted-foreground"
+                            >Role <span class="text-destructive">*</span></Label
+                        >
                         <div class="flex flex-wrap gap-2">
                             <button
                                 v-for="r in ROLES"
@@ -661,11 +774,9 @@ watch(isDeleteModalOpen, (val) => {
                                 @click="editingUser.id !== currentUserId && (editForm.role = r.value as typeof editForm.role)"
                                 :class="[
                                     'inline-flex items-center gap-1.5 rounded-lg border-2 px-3 py-1.5 text-[11px] font-bold transition-all',
-                                    editingUser.id === currentUserId
-                                        ? 'cursor-not-allowed opacity-50'
-                                        : '',
+                                    editingUser.id === currentUserId ? 'cursor-not-allowed opacity-50' : '',
                                     editForm.role === r.value
-                                        ? [r.badgeClass, 'border-current shadow-sm scale-[1.03]']
+                                        ? [r.badgeClass, 'scale-[1.03] border-current shadow-sm']
                                         : 'border-muted text-muted-foreground hover:border-primary/30 hover:bg-muted/50',
                                 ]"
                             >
@@ -700,9 +811,7 @@ watch(isDeleteModalOpen, (val) => {
                         @click="submitEdit"
                         class="gap-1.5 text-xs font-bold shadow-sm shadow-primary/20"
                     >
-                        <span v-if="!editForm.processing" class="flex items-center gap-1.5">
-                            <Pencil class="h-3.5 w-3.5" /> Save Changes
-                        </span>
+                        <span v-if="!editForm.processing" class="flex items-center gap-1.5"> <Pencil class="h-3.5 w-3.5" /> Save Changes </span>
                         <span v-else class="flex items-center gap-1.5">
                             Saving… <span class="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
                         </span>
@@ -720,18 +829,19 @@ watch(isDeleteModalOpen, (val) => {
                             <Trash2 class="h-4 w-4" />
                             Delete User
                         </DialogTitle>
-                        <DialogDescription class="mt-0.5 text-xs text-muted-foreground/80">
-                            This action cannot be undone.
-                        </DialogDescription>
+                        <DialogDescription class="mt-0.5 text-xs text-muted-foreground/80"> This action cannot be undone. </DialogDescription>
                     </DialogHeader>
                 </div>
                 <div class="px-5 py-5">
                     <p class="text-sm text-foreground">
                         Are you sure you want to delete
-                        <span class="font-semibold">{{ deletingUser.name }}</span>?
-                        Their account will be permanently removed.
+                        <span class="font-semibold">{{ deletingUser.name }}</span
+                        >? Their account will be permanently removed.
                     </p>
-                    <div v-if="deletingUser.id === currentUserId" class="mt-3 flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2.5 text-xs font-medium text-destructive">
+                    <div
+                        v-if="deletingUser.id === currentUserId"
+                        class="mt-3 flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2.5 text-xs font-medium text-destructive"
+                    >
                         You cannot delete your own account.
                     </div>
                 </div>
@@ -744,9 +854,7 @@ watch(isDeleteModalOpen, (val) => {
                         @click="submitDelete"
                         class="gap-1.5 text-xs font-bold"
                     >
-                        <span v-if="!isDeleting" class="flex items-center gap-1.5">
-                            <Trash2 class="h-3.5 w-3.5" /> Delete
-                        </span>
+                        <span v-if="!isDeleting" class="flex items-center gap-1.5"> <Trash2 class="h-3.5 w-3.5" /> Delete </span>
                         <span v-else class="flex items-center gap-1.5">
                             Deleting… <span class="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
                         </span>
@@ -758,7 +866,6 @@ watch(isDeleteModalOpen, (val) => {
         <!-- ── User Detail Modal ─────────────────────────────────────────── -->
         <Dialog v-model:open="isDetailModalOpen">
             <DialogContent v-if="detailUser" class="flex max-h-[92dvh] flex-col overflow-hidden border-none p-0 shadow-2xl sm:max-w-[560px]">
-
                 <!-- Header -->
                 <div class="border-b border-border/50 bg-muted/30 px-6 pb-5 pt-6">
                     <div class="flex items-start gap-4">
@@ -770,17 +877,26 @@ watch(isDeleteModalOpen, (val) => {
                                     ? 'border-primary/40 bg-primary/15 text-primary'
                                     : 'border-border/60 bg-muted text-foreground',
                             ]"
-                        >{{ getInitials(detailUser.name) }}</div>
+                        >
+                            {{ getInitials(detailUser.name) }}
+                        </div>
 
                         <!-- Name / email / role -->
                         <div class="min-w-0 flex-1">
                             <div class="flex flex-wrap items-center gap-2">
                                 <h2 class="text-lg font-bold leading-tight text-foreground">{{ detailUser.name }}</h2>
-                                <span v-if="detailUser.id === currentUserId" class="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">You</span>
+                                <span
+                                    v-if="detailUser.id === currentUserId"
+                                    class="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary"
+                                    >You</span
+                                >
                             </div>
                             <p class="mt-0.5 text-sm text-muted-foreground">{{ detailUser.email }}</p>
                             <div class="mt-2 flex flex-wrap items-center gap-2">
-                                <Badge variant="outline" :class="['inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold', getRoleBadgeClass(detailUser.role)]">
+                                <Badge
+                                    variant="outline"
+                                    :class="['inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold', getRoleBadgeClass(detailUser.role)]"
+                                >
                                     <component :is="getRoleIcon(detailUser.role)" class="h-3 w-3 shrink-0" />
                                     {{ detailUser.role.charAt(0).toUpperCase() + detailUser.role.slice(1) }}
                                 </Badge>
@@ -812,26 +928,26 @@ watch(isDeleteModalOpen, (val) => {
                         @click="detailTab = 'reported'"
                         :class="[
                             'flex flex-1 items-center justify-center gap-1.5 py-3 text-xs font-bold transition-colors',
-                            detailTab === 'reported'
-                                ? 'border-b-2 border-primary text-primary'
-                                : 'text-muted-foreground hover:text-foreground',
+                            detailTab === 'reported' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground',
                         ]"
                     >
                         Reported
-                        <span class="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">{{ detailUser.reportedTickets.length }}</span>
+                        <span class="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">{{
+                            detailUser.reportedTickets.length
+                        }}</span>
                     </button>
                     <button
                         type="button"
                         @click="detailTab = 'handled'"
                         :class="[
                             'flex flex-1 items-center justify-center gap-1.5 py-3 text-xs font-bold transition-colors',
-                            detailTab === 'handled'
-                                ? 'border-b-2 border-primary text-primary'
-                                : 'text-muted-foreground hover:text-foreground',
+                            detailTab === 'handled' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground',
                         ]"
                     >
                         Handled
-                        <span class="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">{{ detailUser.handledTickets.length }}</span>
+                        <span class="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">{{
+                            detailUser.handledTickets.length
+                        }}</span>
                     </button>
                 </div>
 
@@ -852,16 +968,27 @@ watch(isDeleteModalOpen, (val) => {
                             >
                                 <div class="min-w-0 flex-1">
                                     <div class="flex items-start justify-between gap-2">
-                                        <p class="truncate text-sm font-semibold text-foreground leading-snug">{{ ticket.title }}</p>
-                                        <span :class="['shrink-0 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase', getPriorityBadge(ticket.priority)]">
+                                        <p class="truncate text-sm font-semibold leading-snug text-foreground">{{ ticket.title }}</p>
+                                        <span
+                                            :class="[
+                                                'inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase',
+                                                getPriorityBadge(ticket.priority),
+                                            ]"
+                                        >
                                             <component :is="getPriorityIcon(ticket.priority)" class="h-2.5 w-2.5" />
                                             {{ ticket.priority }}
                                         </span>
                                     </div>
                                     <div class="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-muted-foreground">
-                                        <span class="font-mono text-muted-foreground/50 uppercase tracking-wider">{{ ticket.tktId }}</span>
+                                        <span class="font-mono uppercase tracking-wider text-muted-foreground/50">{{ ticket.tktId }}</span>
                                         <span class="opacity-30">·</span>
-                                        <Badge variant="outline" :class="['inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold border', getStatusColor(ticket.status)]">
+                                        <Badge
+                                            variant="outline"
+                                            :class="[
+                                                'inline-flex items-center gap-1 border px-1.5 py-0.5 text-[10px] font-bold',
+                                                getStatusColor(ticket.status),
+                                            ]"
+                                        >
                                             <component :is="getStatusIcon(ticket.status)" class="h-2.5 w-2.5 shrink-0" />
                                             {{ ticket.status }}
                                         </Badge>
@@ -891,16 +1018,27 @@ watch(isDeleteModalOpen, (val) => {
                             >
                                 <div class="min-w-0 flex-1">
                                     <div class="flex items-start justify-between gap-2">
-                                        <p class="truncate text-sm font-semibold text-foreground leading-snug">{{ ticket.title }}</p>
-                                        <span :class="['shrink-0 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase', getPriorityBadge(ticket.priority)]">
+                                        <p class="truncate text-sm font-semibold leading-snug text-foreground">{{ ticket.title }}</p>
+                                        <span
+                                            :class="[
+                                                'inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase',
+                                                getPriorityBadge(ticket.priority),
+                                            ]"
+                                        >
                                             <component :is="getPriorityIcon(ticket.priority)" class="h-2.5 w-2.5" />
                                             {{ ticket.priority }}
                                         </span>
                                     </div>
                                     <div class="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-muted-foreground">
-                                        <span class="font-mono text-muted-foreground/50 uppercase tracking-wider">{{ ticket.tktId }}</span>
+                                        <span class="font-mono uppercase tracking-wider text-muted-foreground/50">{{ ticket.tktId }}</span>
                                         <span class="opacity-30">·</span>
-                                        <Badge variant="outline" :class="['inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold border', getStatusColor(ticket.status)]">
+                                        <Badge
+                                            variant="outline"
+                                            :class="[
+                                                'inline-flex items-center gap-1 border px-1.5 py-0.5 text-[10px] font-bold',
+                                                getStatusColor(ticket.status),
+                                            ]"
+                                        >
                                             <component :is="getStatusIcon(ticket.status)" class="h-2.5 w-2.5 shrink-0" />
                                             {{ ticket.status }}
                                         </Badge>
@@ -920,7 +1058,16 @@ watch(isDeleteModalOpen, (val) => {
                 <DialogFooter class="border-t border-border/50 bg-muted/20 px-5 py-3.5">
                     <div class="flex w-full items-center justify-between">
                         <div class="flex gap-2">
-                            <Button type="button" variant="outline" size="sm" @click="openEditModal(detailUser); isDetailModalOpen = false" class="gap-1.5 text-xs font-bold">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                @click="
+                                    openEditModal(detailUser);
+                                    isDetailModalOpen = false;
+                                "
+                                class="gap-1.5 text-xs font-bold"
+                            >
                                 <Pencil class="h-3.5 w-3.5" /> Edit
                             </Button>
                             <Button
@@ -928,23 +1075,22 @@ watch(isDeleteModalOpen, (val) => {
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                @click="openDeleteModal(detailUser); isDetailModalOpen = false"
+                                @click="
+                                    openDeleteModal(detailUser);
+                                    isDetailModalOpen = false;
+                                "
                                 class="gap-1.5 text-xs font-bold text-destructive hover:text-destructive"
                             >
                                 <Trash2 class="h-3.5 w-3.5" /> Delete
                             </Button>
                         </div>
-                        <Button type="button" variant="ghost" size="sm" @click="isDetailModalOpen = false" class="text-xs font-bold">
-                            Close
-                        </Button>
+                        <Button type="button" variant="ghost" size="sm" @click="isDetailModalOpen = false" class="text-xs font-bold"> Close </Button>
                     </div>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
         <!-- ──────────────────────────────────────────────────────────────── -->
-
     </AppLayout>
 </template>
 
-<style scoped>
-</style>
+<style scoped></style>

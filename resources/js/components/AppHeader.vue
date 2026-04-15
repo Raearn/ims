@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import AppLogo from '@/components/AppLogo.vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
+import ThemeToggle from '@/components/ThemeToggle.vue';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -14,11 +15,10 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import UserMenuContent from '@/components/UserMenuContent.vue';
-import ThemeToggle from '@/components/ThemeToggle.vue';
 import { getInitials } from '@/composables/useInitials';
 import type { BreadcrumbItem, NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, Menu, Search, Plus, Ticket, UserPlus } from 'lucide-vue-next';
+import { LayoutGrid, Menu, Plus, Search, Ticket, UserPlus } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 interface Props {
@@ -66,7 +66,7 @@ const rightNavItems: NavItem[] = [];
                             <SheetHeader class="flex justify-start text-left">
                                 <AppLogoIcon class="size-6 fill-current text-black dark:text-white" />
                             </SheetHeader>
-                            <div class="flex flex-col justify-between h-full space-y-4 py-6 flex-1">
+                            <div class="flex h-full flex-1 flex-col justify-between space-y-4 py-6">
                                 <nav class="-mx-3 space-y-1">
                                     <Link
                                         v-for="item in mainNavItems"
@@ -123,7 +123,7 @@ const rightNavItems: NavItem[] = [];
                 <div class="ml-auto flex items-center space-x-2">
                     <div class="relative flex items-center space-x-1">
                         <ThemeToggle />
-                        
+
                         <Button variant="ghost" size="icon" class="group h-9 w-9 cursor-pointer">
                             <Search class="size-5 opacity-80 group-hover:opacity-100" />
                         </Button>
@@ -158,13 +158,13 @@ const rightNavItems: NavItem[] = [];
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" class="w-48">
                             <DropdownMenuItem as-child class="cursor-pointer">
-                                <Link :href="route('tickets', { create: 'true' })" class="flex items-center w-full">
+                                <Link :href="route('tickets', { create: 'true' })" class="flex w-full items-center">
                                     <Ticket class="mr-2 h-4 w-4" />
                                     <span>Add New Incident</span>
                                 </Link>
                             </DropdownMenuItem>
                             <DropdownMenuItem as-child class="cursor-pointer">
-                                <Link :href="route('users', { create: 'true' })" class="flex items-center w-full">
+                                <Link :href="route('users', { create: 'true' })" class="flex w-full items-center">
                                     <UserPlus class="mr-2 h-4 w-4" />
                                     <span>Add New User</span>
                                 </Link>

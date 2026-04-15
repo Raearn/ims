@@ -1,15 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { usePage, router } from '@inertiajs/vue3';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { router, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import { Bell, Check, CheckCheck, Loader2 } from 'lucide-vue-next';
-import { Button } from '@/components/ui/button';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Badge } from '@/components/ui/badge';
+import { onMounted, ref } from 'vue';
 
 interface NotificationData {
     type: string;
@@ -52,13 +48,15 @@ async function handleNotificationClick(notification: Notification) {
         notification.read_at = new Date().toISOString();
         unreadCount.value = Math.max(0, unreadCount.value - 1);
     }
-    
+
     open.value = false;
 
     if (!notification.data.ticket_id) {
         return;
     }
-    const role = String(page.props.auth?.user?.role ?? '').trim().toLowerCase();
+    const role = String(page.props.auth?.user?.role ?? '')
+        .trim()
+        .toLowerCase();
     if (role === 'admin' || role === 'supervisor') {
         router.get(route('tickets'), { ticket_id: notification.data.ticket_id });
     } else if (role === 'technical') {
@@ -163,14 +161,8 @@ onMounted(() => {
                             </p>
                             <p class="mt-1 text-xs text-muted-foreground">{{ notification.created_at }}</p>
                         </div>
-                        <Check
-                            v-if="notification.read_at"
-                            class="mt-1 h-3.5 w-3.5 shrink-0 text-muted-foreground/50"
-                        />
-                        <span
-                            v-else
-                            class="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-blue-500"
-                        />
+                        <Check v-if="notification.read_at" class="mt-1 h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
+                        <span v-else class="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-blue-500" />
                     </button>
                 </div>
             </div>

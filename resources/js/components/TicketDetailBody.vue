@@ -2,13 +2,10 @@
 import TicketComments from '@/components/TicketComments.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
+import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ensureLucideIconsLoaded, resolveLucideIcon } from '@/composables/useLucideIconRegistry';
+import { laravelFetch } from '@/lib/laravelFetch';
+import type { TicketDetail } from '@/types/ticketDetail';
 import { router } from '@inertiajs/vue3';
 import {
     CheckCircle2,
@@ -33,8 +30,6 @@ import {
     UserPlus,
 } from 'lucide-vue-next';
 import { computed, onMounted, ref, watch } from 'vue';
-import { laravelFetch } from '@/lib/laravelFetch';
-import type { TicketDetail } from '@/types/ticketDetail';
 
 interface ActivityEntry {
     id: number;
@@ -133,7 +128,12 @@ const getInitials = (name: string): string => {
     if (name === 'Unassigned') {
         return 'UN';
     }
-    return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+    return name
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .substring(0, 2)
+        .toUpperCase();
 };
 
 type IconComp = typeof History;
@@ -153,11 +153,9 @@ const ACTIVITY_CONFIG: Record<string, { icon: IconComp; classes: string; verb: s
     reaction_removed: { icon: Smile, classes: 'bg-muted border-border/50 text-muted-foreground', verb: 'removed a reaction' },
 };
 
-const getActivityIcon = (action: string): IconComp =>
-    (ACTIVITY_CONFIG[action]?.icon ?? History) as IconComp;
+const getActivityIcon = (action: string): IconComp => (ACTIVITY_CONFIG[action]?.icon ?? History) as IconComp;
 
-const getActivityIconClass = (action: string): string =>
-    ACTIVITY_CONFIG[action]?.classes ?? 'bg-muted border-border/50 text-muted-foreground';
+const getActivityIconClass = (action: string): string => ACTIVITY_CONFIG[action]?.classes ?? 'bg-muted border-border/50 text-muted-foreground';
 
 const getActivityLabel = (entry: ActivityEntry): string => {
     const verb = ACTIVITY_CONFIG[entry.action]?.verb ?? entry.action.replace(/_/g, ' ');
@@ -255,14 +253,24 @@ function openInTickets(): void {
             <div class="border-b border-primary/10 bg-primary/5 px-5 pb-4 pt-5">
                 <DialogHeader v-if="!isEmbedded">
                     <div class="mb-2 flex flex-wrap items-center gap-2">
-                        <Badge variant="outline" class="border-primary/20 bg-primary/10 px-2 py-0 text-[10px] font-bold uppercase tracking-wider text-primary">
+                        <Badge
+                            variant="outline"
+                            class="border-primary/20 bg-primary/10 px-2 py-0 text-[10px] font-bold uppercase tracking-wider text-primary"
+                        >
                             {{ ticket.id }}
                         </Badge>
-                        <Badge variant="outline" :class="['inline-flex items-center gap-1 border px-2 py-0.5 text-[10px] font-bold']" :style="getStatusStyle(ticket.status)">
+                        <Badge
+                            variant="outline"
+                            :class="['inline-flex items-center gap-1 border px-2 py-0.5 text-[10px] font-bold']"
+                            :style="getStatusStyle(ticket.status)"
+                        >
                             <component :is="getStatusIcon(ticket.status)" class="h-3 w-3" />
                             {{ ticket.status }}
                         </Badge>
-                        <span class="inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[10px] font-bold uppercase" :style="getPriorityStyle(ticket.priority)">
+                        <span
+                            class="inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[10px] font-bold uppercase"
+                            :style="getPriorityStyle(ticket.priority)"
+                        >
                             <component :is="getPriorityIcon(ticket.priority)" class="h-3 w-3" />
                             {{ ticket.priority }}
                         </span>
@@ -273,20 +281,28 @@ function openInTickets(): void {
                     <DialogTitle class="text-base font-bold leading-snug tracking-tight sm:text-lg">
                         {{ ticket.title }}
                     </DialogTitle>
-                    <DialogDescription class="mt-0.5 text-xs text-muted-foreground/70">
-                        Submitted {{ ticket.createdAtFormatted }}
-                    </DialogDescription>
+                    <DialogDescription class="mt-0.5 text-xs text-muted-foreground/70"> Submitted {{ ticket.createdAtFormatted }} </DialogDescription>
                 </DialogHeader>
                 <div v-else>
                     <div class="mb-2 flex flex-wrap items-center gap-2">
-                        <Badge variant="outline" class="border-primary/20 bg-primary/10 px-2 py-0 text-[10px] font-bold uppercase tracking-wider text-primary">
+                        <Badge
+                            variant="outline"
+                            class="border-primary/20 bg-primary/10 px-2 py-0 text-[10px] font-bold uppercase tracking-wider text-primary"
+                        >
                             {{ ticket.id }}
                         </Badge>
-                        <Badge variant="outline" :class="['inline-flex items-center gap-1 border px-2 py-0.5 text-[10px] font-bold']" :style="getStatusStyle(ticket.status)">
+                        <Badge
+                            variant="outline"
+                            :class="['inline-flex items-center gap-1 border px-2 py-0.5 text-[10px] font-bold']"
+                            :style="getStatusStyle(ticket.status)"
+                        >
                             <component :is="getStatusIcon(ticket.status)" class="h-3 w-3" />
                             {{ ticket.status }}
                         </Badge>
-                        <span class="inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[10px] font-bold uppercase" :style="getPriorityStyle(ticket.priority)">
+                        <span
+                            class="inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[10px] font-bold uppercase"
+                            :style="getPriorityStyle(ticket.priority)"
+                        >
                             <component :is="getPriorityIcon(ticket.priority)" class="h-3 w-3" />
                             {{ ticket.priority }}
                         </span>
@@ -297,13 +313,11 @@ function openInTickets(): void {
                     <h2 class="text-base font-bold leading-snug tracking-tight text-foreground sm:text-lg">
                         {{ ticket.title }}
                     </h2>
-                    <p class="mt-0.5 text-xs text-muted-foreground/70">
-                        Submitted {{ ticket.createdAtFormatted }}
-                    </p>
+                    <p class="mt-0.5 text-xs text-muted-foreground/70">Submitted {{ ticket.createdAtFormatted }}</p>
                 </div>
             </div>
 
-            <div class="modal-body flex min-h-0 max-h-[min(52vh,520px)] flex-1 flex-col overflow-y-auto sm:max-h-[min(60vh,600px)]">
+            <div class="modal-body flex max-h-[min(52vh,520px)] min-h-0 flex-1 flex-col overflow-y-auto sm:max-h-[min(60vh,600px)]">
                 <div class="flex items-center gap-1 border-b border-border/40 px-5 pb-0 pt-4">
                     <button
                         type="button"
@@ -340,7 +354,9 @@ function openInTickets(): void {
                         <div class="flex flex-col gap-1 rounded-xl border border-border/40 bg-muted/40 px-3 py-2.5">
                             <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Reporter</span>
                             <div class="flex items-center gap-1.5">
-                                <div class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted text-[9px] font-bold">
+                                <div
+                                    class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted text-[9px] font-bold"
+                                >
                                     {{ getInitials(ticket.reporter) }}
                                 </div>
                                 <span class="truncate text-sm font-semibold text-foreground">{{ ticket.reporter }}</span>
@@ -354,7 +370,10 @@ function openInTickets(): void {
                                     :key="h.id"
                                     class="inline-flex items-center gap-1 rounded-full border border-border/50 bg-muted px-1.5 py-0.5 text-[11px] font-semibold"
                                 >
-                                    <span class="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-muted-foreground/20 text-[8px] font-bold">{{ getInitials(h.name) }}</span>
+                                    <span
+                                        class="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-muted-foreground/20 text-[8px] font-bold"
+                                        >{{ getInitials(h.name) }}</span
+                                    >
                                     {{ h.name }}
                                 </span>
                             </div>
@@ -365,7 +384,12 @@ function openInTickets(): void {
                     <div v-if="ticket.tags && ticket.tags.length > 0" class="flex flex-col gap-2">
                         <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Tags</span>
                         <div class="flex flex-wrap gap-1.5">
-                            <Badge v-for="tag in ticket.tags" :key="tag" variant="secondary" class="border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary hover:bg-primary/20">
+                            <Badge
+                                v-for="tag in ticket.tags"
+                                :key="tag"
+                                variant="secondary"
+                                class="border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary hover:bg-primary/20"
+                            >
                                 {{ tag }}
                             </Badge>
                         </div>
@@ -375,10 +399,13 @@ function openInTickets(): void {
                         <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Description</span>
                         <div
                             v-if="ticket.description"
-                            class="prose prose-sm max-w-none rounded-xl border border-border/40 bg-muted/20 px-4 py-3 text-sm leading-relaxed text-foreground dark:prose-invert"
+                            class="prose prose-sm dark:prose-invert max-w-none rounded-xl border border-border/40 bg-muted/20 px-4 py-3 text-sm leading-relaxed text-foreground"
                             v-html="ticket.description"
                         />
-                        <div v-else class="rounded-xl border border-dashed border-border/40 bg-muted/10 px-4 py-5 text-center text-sm italic text-muted-foreground/60">
+                        <div
+                            v-else
+                            class="rounded-xl border border-dashed border-border/40 bg-muted/10 px-4 py-5 text-center text-sm italic text-muted-foreground/60"
+                        >
                             No description provided.
                         </div>
                     </div>
@@ -389,7 +416,7 @@ function openInTickets(): void {
                             <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Solution</span>
                         </div>
                         <div
-                            class="prose prose-sm max-w-none rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-relaxed text-foreground dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:prose-invert"
+                            class="prose prose-sm dark:prose-invert max-w-none rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-relaxed text-foreground dark:border-emerald-500/25 dark:bg-emerald-500/10"
                             v-html="ticket.solution"
                         />
                     </div>
@@ -399,7 +426,12 @@ function openInTickets(): void {
                             <ImageIcon class="h-3.5 w-3.5 text-muted-foreground" />
                             <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Attachment</span>
                         </div>
-                        <a :href="ticket.attachmentUrl" target="_blank" rel="noopener noreferrer" class="block overflow-hidden rounded-xl border border-border/50 bg-muted/20 transition-opacity hover:opacity-90">
+                        <a
+                            :href="ticket.attachmentUrl"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="block overflow-hidden rounded-xl border border-border/50 bg-muted/20 transition-opacity hover:opacity-90"
+                        >
                             <img :src="ticket.attachmentUrl" alt="Ticket attachment" class="max-h-52 w-full object-contain" />
                         </a>
                     </div>
@@ -439,12 +471,13 @@ function openInTickets(): void {
                     <div v-else class="relative">
                         <div class="absolute bottom-4 left-3.5 top-4 w-px bg-border/50" />
                         <div class="flex flex-col gap-0">
-                            <div
-                                v-for="entry in activityLog"
-                                :key="entry.id"
-                                class="group relative flex items-start gap-3 py-2.5"
-                            >
-                                <div :class="['z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border', getActivityIconClass(entry.action)]">
+                            <div v-for="entry in activityLog" :key="entry.id" class="group relative flex items-start gap-3 py-2.5">
+                                <div
+                                    :class="[
+                                        'z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border',
+                                        getActivityIconClass(entry.action),
+                                    ]"
+                                >
                                     <component :is="getActivityIcon(entry.action)" class="h-3.5 w-3.5" />
                                 </div>
                                 <div class="min-w-0 flex-1 pt-0.5">
@@ -453,12 +486,30 @@ function openInTickets(): void {
                                         {{ getActivityLabel(entry) }}
                                     </p>
                                     <div
-                                        v-if="(entry.oldValue || entry.newValue) && !['comment_posted','comment_deleted','comment_pinned','comment_unpinned','reaction_added','reaction_removed'].includes(entry.action)"
+                                        v-if="
+                                            (entry.oldValue || entry.newValue) &&
+                                            ![
+                                                'comment_posted',
+                                                'comment_deleted',
+                                                'comment_pinned',
+                                                'comment_unpinned',
+                                                'reaction_added',
+                                                'reaction_removed',
+                                            ].includes(entry.action)
+                                        "
                                         class="mt-1 flex flex-wrap items-center gap-1.5"
                                     >
-                                        <span v-if="entry.oldValue" class="inline-flex items-center rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] font-semibold text-destructive/80 line-through">{{ entry.oldValue }}</span>
+                                        <span
+                                            v-if="entry.oldValue"
+                                            class="inline-flex items-center rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] font-semibold text-destructive/80 line-through"
+                                            >{{ entry.oldValue }}</span
+                                        >
                                         <ChevronRight v-if="entry.oldValue && entry.newValue" class="h-3 w-3 shrink-0 text-muted-foreground/50" />
-                                        <span v-if="entry.newValue" class="inline-flex items-center rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">{{ entry.newValue }}</span>
+                                        <span
+                                            v-if="entry.newValue"
+                                            class="inline-flex items-center rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400"
+                                            >{{ entry.newValue }}</span
+                                        >
                                     </div>
                                     <p class="mt-0.5 text-[10px] text-muted-foreground/50" :title="entry.createdAtFormatted">{{ entry.createdAt }}</p>
                                 </div>
@@ -469,51 +520,26 @@ function openInTickets(): void {
             </div>
 
             <DialogFooter v-if="!isEmbedded" class="flex flex-wrap items-center gap-2 border-t border-border/50 bg-muted/20 px-5 py-4">
-                <Button
-                    v-if="showOpenInTicketsButton"
-                    variant="outline"
-                    class="gap-1.5 text-xs font-bold"
-                    @click="openInTickets"
-                >
+                <Button v-if="showOpenInTicketsButton" variant="outline" class="gap-1.5 text-xs font-bold" @click="openInTickets">
                     <ExternalLinkIcon class="h-3.5 w-3.5" />
                     Open in Incidents
                 </Button>
-                <Button
-                    v-if="showEditButton"
-                    variant="outline"
-                    class="gap-1.5 text-xs font-bold"
-                    @click="onEdit"
-                >
+                <Button v-if="showEditButton" variant="outline" class="gap-1.5 text-xs font-bold" @click="onEdit">
                     <Pencil class="h-3.5 w-3.5" /> Edit
                 </Button>
-                <Button variant="outline" class="ml-auto text-xs font-bold" @click="emit('close')">
-                    Close
-                </Button>
+                <Button variant="outline" class="ml-auto text-xs font-bold" @click="emit('close')"> Close </Button>
             </DialogFooter>
             <div v-else class="flex flex-wrap items-center gap-2 border-t border-border/50 bg-muted/20 px-5 py-4">
-                <Button
-                    v-if="showOpenInTicketsButton"
-                    variant="outline"
-                    class="gap-1.5 text-xs font-bold"
-                    @click="openInTickets"
-                >
+                <Button v-if="showOpenInTicketsButton" variant="outline" class="gap-1.5 text-xs font-bold" @click="openInTickets">
                     <ExternalLinkIcon class="h-3.5 w-3.5" />
                     Open in Incidents
                 </Button>
-                <Button
-                    v-if="showEditButton"
-                    variant="outline"
-                    class="gap-1.5 text-xs font-bold"
-                    @click="onEdit"
-                >
+                <Button v-if="showEditButton" variant="outline" class="gap-1.5 text-xs font-bold" @click="onEdit">
                     <Pencil class="h-3.5 w-3.5" /> Edit
                 </Button>
             </div>
         </template>
-        <div
-            v-else
-            class="flex flex-col items-center justify-center gap-2 px-5 py-12 text-center text-sm text-muted-foreground"
-        >
+        <div v-else class="flex flex-col items-center justify-center gap-2 px-5 py-12 text-center text-sm text-muted-foreground">
             Unable to load ticket details.
         </div>
     </div>

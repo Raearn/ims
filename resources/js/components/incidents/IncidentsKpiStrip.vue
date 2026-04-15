@@ -44,15 +44,17 @@ function statAriaLabel(stat: TicketStatRow): string {
             type="button"
             :aria-pressed="currentStatus === stat.status"
             :aria-label="statAriaLabel(stat)"
-            :class="cn(
-                'group relative flex min-h-[7rem] flex-col overflow-hidden rounded-2xl border bg-card/95 p-3.5 text-left shadow-sm ring-1 ring-border/20 transition-all duration-200 dark:bg-card/80 dark:ring-border/15',
-                'hover:-translate-y-0.5 hover:shadow-md hover:ring-border/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-                currentStatus === stat.status
-                    ? stat.accentHex
-                        ? 'z-[1] ring-transparent'
-                        : cn('z-[1] ring-2 dark:bg-card', stat.borderActive, stat.glowClass, stat.ringClass)
-                    : 'border-border/55 hover:border-primary/25',
-            )"
+            :class="
+                cn(
+                    'group relative flex min-h-[7rem] flex-col overflow-hidden rounded-2xl border bg-card/95 p-3.5 text-left shadow-sm ring-1 ring-border/20 transition-all duration-200 dark:bg-card/80 dark:ring-border/15',
+                    'hover:-translate-y-0.5 hover:shadow-md hover:ring-border/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                    currentStatus === stat.status
+                        ? stat.accentHex
+                            ? 'z-[1] ring-transparent'
+                            : cn('z-[1] ring-2 dark:bg-card', stat.borderActive, stat.glowClass, stat.ringClass)
+                        : 'border-border/55 hover:border-primary/25',
+                )
+            "
             :style="currentStatus === stat.status && stat.accentHex ? statCardActiveAccentStyle(stat.accentHex) : {}"
             @click="$emit('update:currentStatus', stat.status)"
         >
@@ -127,14 +129,8 @@ function statAriaLabel(stat: TicketStatRow): string {
                         />
                         <div v-else class="h-full w-full rounded-full bg-gradient-to-r from-primary/50 to-primary/25" />
                     </div>
-                    <p
-                        v-if="stat.status !== 'All'"
-                        class="text-[11px] font-medium tabular-nums text-muted-foreground"
-                    >
-                        <span
-                            :class="stat.accentHex ? '' : stat.colorClass + '/80'"
-                            :style="stat.accentHex ? { color: stat.accentHex + 'dd' } : {}"
-                        >
+                    <p v-if="stat.status !== 'All'" class="text-[11px] font-medium tabular-nums text-muted-foreground">
+                        <span :class="stat.accentHex ? '' : stat.colorClass + '/80'" :style="stat.accentHex ? { color: stat.accentHex + 'dd' } : {}">
                             {{ shareOfTotal(stat) }}%
                         </span>
                         <span class="text-muted-foreground/80"> of total</span>

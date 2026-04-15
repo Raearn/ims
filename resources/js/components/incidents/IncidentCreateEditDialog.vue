@@ -4,37 +4,15 @@ import IncidentCategoryPicker from '@/components/IncidentCategoryPicker.vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { compressImage } from '@/lib/utils';
 import { ensureLucideIconsLoaded, lucideAllIconMap, resolveLucideIcon } from '@/composables/useLucideIconRegistry';
+import { compressImage } from '@/lib/utils';
 import type { InertiaForm } from '@inertiajs/vue3';
-import {
-    CalendarClock,
-    CheckCircle2,
-    Circle,
-    Info,
-    Plus,
-    Save,
-    Search,
-    Upload,
-    X,
-} from 'lucide-vue-next';
+import { CalendarClock, CheckCircle2, Circle, Info, Plus, Save, Search, Upload, X } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
-import type {
-    IncidentCategoryOption,
-    IncidentPriorityOption,
-    IncidentStatusOption,
-    IncidentTicketRow,
-} from './incidentFormTypes';
+import type { IncidentCategoryOption, IncidentPriorityOption, IncidentStatusOption, IncidentTicketRow } from './incidentFormTypes';
 
 export type IncidentMainForm = {
     title: string;
@@ -160,10 +138,7 @@ const setAttachmentFile = async (file: File | null) => {
     const compressed = await compressImage(file);
     props.form.attachment = compressed;
     emit('update:attachmentPreview', URL.createObjectURL(compressed));
-    emit(
-        'update:attachmentCompression',
-        compressed !== file ? { before: file.size, after: compressed.size } : null,
-    );
+    emit('update:attachmentCompression', compressed !== file ? { before: file.size, after: compressed.size } : null);
 };
 
 const onAttachmentChange = (e: Event) => {
@@ -250,13 +225,15 @@ watch(
                                     required
                                     class="py-5 text-sm"
                                 />
-                            <span v-if="form.errors.title" class="text-xs font-medium text-destructive">{{ form.errors.title }}</span>
+                                <span v-if="form.errors.title" class="text-xs font-medium text-destructive">{{ form.errors.title }}</span>
                             </div>
 
                             <div class="grid gap-2">
                                 <Label for="incident-occurred-at" class="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                                     Date &amp; Time of Incident
-                                    <span class="ml-1 font-normal normal-case text-muted-foreground/60">(optional — if different from report date)</span>
+                                    <span class="ml-1 font-normal normal-case text-muted-foreground/60"
+                                        >(optional — if different from report date)</span
+                                    >
                                 </Label>
                                 <div
                                     :class="[
@@ -269,9 +246,7 @@ watch(
                                     <div
                                         :class="[
                                             'flex h-full items-center justify-center pl-3.5 pr-2 transition-colors',
-                                            form.incident_occurred_at
-                                                ? 'text-primary'
-                                                : 'text-muted-foreground group-focus-within:text-primary',
+                                            form.incident_occurred_at ? 'text-primary' : 'text-muted-foreground group-focus-within:text-primary',
                                         ]"
                                     >
                                         <CalendarClock class="h-4 w-4" />
@@ -295,7 +270,9 @@ watch(
                                         </button>
                                     </div>
                                 </div>
-                                <span v-if="form.errors.incident_occurred_at" class="text-xs font-medium text-destructive">{{ form.errors.incident_occurred_at }}</span>
+                                <span v-if="form.errors.incident_occurred_at" class="text-xs font-medium text-destructive">{{
+                                    form.errors.incident_occurred_at
+                                }}</span>
                             </div>
 
                             <div class="grid gap-2">
@@ -303,9 +280,7 @@ watch(
                                     Description <span class="font-normal normal-case text-muted-foreground/60">(optional)</span>
                                 </Label>
                                 <RichTextEditor v-model="form.description" placeholder="Provide more context about the issue…" />
-                                <span v-if="form.errors.description" class="text-xs font-medium text-destructive">{{
-                                    form.errors.description
-                                }}</span>
+                                <span v-if="form.errors.description" class="text-xs font-medium text-destructive">{{ form.errors.description }}</span>
                             </div>
 
                             <div class="grid gap-2">
@@ -331,7 +306,9 @@ watch(
                                 </div>
 
                                 <div class="relative">
-                                    <Search class="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                                    <Search
+                                        class="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+                                    />
                                     <input
                                         v-model="tagSearchInput"
                                         type="text"
@@ -368,9 +345,7 @@ watch(
                                         ]"
                                         @click="
                                             () => {
-                                                form.tags = form.tags.includes(tag)
-                                                    ? form.tags.filter((t) => t !== tag)
-                                                    : [...form.tags, tag];
+                                                form.tags = form.tags.includes(tag) ? form.tags.filter((t) => t !== tag) : [...form.tags, tag];
                                             }
                                         "
                                     >
@@ -429,7 +404,9 @@ watch(
                                         v-if="attachmentCompression"
                                         class="absolute bottom-2 left-2 flex items-center gap-1 rounded-full border border-emerald-500/30 bg-background/90 px-2 py-0.5 text-[10px] shadow-sm backdrop-blur-sm"
                                     >
-                                        <span class="text-muted-foreground line-through">{{ (attachmentCompression.before / 1024).toFixed(0) }}KB</span>
+                                        <span class="text-muted-foreground line-through"
+                                            >{{ (attachmentCompression.before / 1024).toFixed(0) }}KB</span
+                                        >
                                         <span class="text-muted-foreground/50">→</span>
                                         <span class="font-semibold text-emerald-500">{{ (attachmentCompression.after / 1024).toFixed(0) }}KB</span>
                                         <span class="text-muted-foreground/70">·</span>
@@ -443,7 +420,7 @@ watch(
                                     :class="[
                                         'group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-5 transition-all',
                                         isDraggingOver
-                                            ? 'scale-[1.01] border-primary bg-primary/8'
+                                            ? 'bg-primary/8 scale-[1.01] border-primary'
                                             : 'border-muted-foreground/20 bg-muted/10 hover:border-primary/40 hover:bg-primary/5',
                                     ]"
                                     @dragover.prevent="isDraggingOver = true"
@@ -514,10 +491,7 @@ watch(
                                         </div>
                                         <div class="flex min-w-0 flex-col items-start">
                                             <span
-                                                :class="[
-                                                    'text-xs font-bold',
-                                                    form.priority === prio.name ? 'text-primary' : 'text-muted-foreground',
-                                                ]"
+                                                :class="['text-xs font-bold', form.priority === prio.name ? 'text-primary' : 'text-muted-foreground']"
                                                 >{{ prio.name }}</span
                                             >
                                             <span class="mt-0.5 truncate text-[10px] leading-none text-muted-foreground/60">
@@ -590,7 +564,9 @@ watch(
                                     </span>
                                 </div>
                                 <div class="relative">
-                                    <Search class="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                                    <Search
+                                        class="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+                                    />
                                     <input
                                         v-model="handlerSearch"
                                         type="text"
@@ -607,9 +583,7 @@ watch(
                                         type="button"
                                         :class="[
                                             'flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors',
-                                            form.handler_ids.includes(user.id)
-                                                ? 'bg-primary/10 text-primary'
-                                                : 'text-foreground hover:bg-muted/50',
+                                            form.handler_ids.includes(user.id) ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-muted/50',
                                         ]"
                                         @click="
                                             form.handler_ids = form.handler_ids.includes(user.id)
@@ -628,10 +602,7 @@ watch(
                                             {{ getInitials(user.name) }}
                                         </div>
                                         <span class="truncate text-xs font-medium">{{ user.name }}</span>
-                                        <CheckCircle2
-                                            v-if="form.handler_ids.includes(user.id)"
-                                            class="ml-auto h-3.5 w-3.5 shrink-0 text-primary"
-                                        />
+                                        <CheckCircle2 v-if="form.handler_ids.includes(user.id)" class="ml-auto h-3.5 w-3.5 shrink-0 text-primary" />
                                     </button>
                                     <div v-if="filteredUsers.length === 0" class="px-3 py-4 text-center text-xs italic text-muted-foreground/60">
                                         No handlers found.
@@ -658,8 +629,9 @@ watch(
                                         >.
                                     </template>
                                     <template v-else>
-                                        Your incident will be assigned to the <span class="font-bold text-foreground">{{ selectedCategoryLabel }}</span>
-                                        team with <span class="font-bold text-foreground">{{ form.priority }}</span> priority.
+                                        Your incident will be assigned to the
+                                        <span class="font-bold text-foreground">{{ selectedCategoryLabel }}</span> team with
+                                        <span class="font-bold text-foreground">{{ form.priority }}</span> priority.
                                     </template>
                                 </p>
                             </div>

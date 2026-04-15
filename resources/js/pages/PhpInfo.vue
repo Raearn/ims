@@ -16,11 +16,10 @@ const breadcrumbs: BreadcrumbItem[] = [
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="mx-auto flex h-full w-full max-w-6xl flex-1 flex-col gap-6 p-4 pb-20 md:p-6">
-            
             <div class="flex items-center gap-4">
                 <Link
                     :href="route('diagnostics')"
-                    class="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    class="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                     <ArrowLeft class="h-4 w-4" />
                 </Link>
@@ -33,14 +32,9 @@ const breadcrumbs: BreadcrumbItem[] = [
                 </div>
             </div>
 
-            <div class="flex-1 overflow-hidden rounded-xl border border-border/60 bg-white shadow-sm h-[800px]">
-                <iframe
-                    :src="route('diagnostics.phpinfo.data')"
-                    class="w-full h-full border-none"
-                    title="PHP Info"
-                ></iframe>
+            <div class="h-[800px] flex-1 overflow-hidden rounded-xl border border-border/60 bg-white shadow-sm">
+                <iframe :src="route('diagnostics.phpinfo.data')" class="h-full w-full border-none" title="PHP Info"></iframe>
             </div>
-
         </div>
     </AppLayout>
 </template>

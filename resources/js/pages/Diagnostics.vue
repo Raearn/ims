@@ -83,7 +83,11 @@ const isRefreshing = ref(false);
 const refresh = (): void => {
     if (isRefreshing.value) return;
     isRefreshing.value = true;
-    router.reload({ onFinish: () => { isRefreshing.value = false; } });
+    router.reload({
+        onFinish: () => {
+            isRefreshing.value = false;
+        },
+    });
 };
 
 // ── Logs ───────────────────────────────────────────────────────────────────
@@ -95,7 +99,9 @@ const copyLogs = async (): Promise<void> => {
     try {
         await navigator.clipboard.writeText(content);
         copied.value = true;
-        setTimeout(() => { copied.value = false; }, 2000);
+        setTimeout(() => {
+            copied.value = false;
+        }, 2000);
     } catch (err) {
         console.error('Failed to copy logs', err);
     }
@@ -106,17 +112,25 @@ const isCreatingBackup = ref(false);
 const createBackup = (): void => {
     if (isCreatingBackup.value) return;
     isCreatingBackup.value = true;
-    router.post(route('diagnostics.backup'), {}, {
-        preserveScroll: true,
-        onFinish: () => { isCreatingBackup.value = false; },
-    });
+    router.post(
+        route('diagnostics.backup'),
+        {},
+        {
+            preserveScroll: true,
+            onFinish: () => {
+                isCreatingBackup.value = false;
+            },
+        },
+    );
 };
 
 // ── Backup delete ──────────────────────────────────────────────────────────
 const confirmingDelete = ref<string | null>(null);
 const isDeletingBackup = ref<string | null>(null);
 
-const confirmDelete = (filename: string): void => { confirmingDelete.value = filename; };
+const confirmDelete = (filename: string): void => {
+    confirmingDelete.value = filename;
+};
 
 const deleteBackup = (): void => {
     if (!confirmingDelete.value || isDeletingBackup.value) return;
@@ -125,7 +139,9 @@ const deleteBackup = (): void => {
     confirmingDelete.value = null;
     router.delete(route('diagnostics.backup.delete', { filename }), {
         preserveScroll: true,
-        onFinish: () => { isDeletingBackup.value = null; },
+        onFinish: () => {
+            isDeletingBackup.value = null;
+        },
     });
 };
 
@@ -142,7 +158,6 @@ const ticketBarWidth = (count: number): string => {
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="mx-auto flex h-full w-full max-w-6xl flex-1 flex-col gap-6 p-4 pb-20 md:p-6">
-
             <!-- Flash banners -->
             <Transition
                 enter-active-class="transition duration-200 ease-out"
@@ -207,7 +222,9 @@ const ticketBarWidth = (count: number): string => {
             <section class="flex flex-col gap-3">
                 <h2 class="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Health Checks</h2>
                 <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <div class="group flex items-center justify-between rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 shadow-sm transition-all hover:border-emerald-500/40 hover:bg-emerald-500/10">
+                    <div
+                        class="group flex items-center justify-between rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 shadow-sm transition-all hover:border-emerald-500/40 hover:bg-emerald-500/10"
+                    >
                         <div class="flex flex-col gap-0.5">
                             <Database class="mb-1 h-4 w-4 text-emerald-500" />
                             <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Database</span>
@@ -235,7 +252,9 @@ const ticketBarWidth = (count: number): string => {
                         <AlertCircle v-else class="h-5 w-5 text-rose-500 opacity-70 transition-transform group-hover:scale-110" />
                     </div>
 
-                    <div class="group flex items-center justify-between rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 shadow-sm transition-all hover:border-amber-500/40 hover:bg-amber-500/10">
+                    <div
+                        class="group flex items-center justify-between rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 shadow-sm transition-all hover:border-amber-500/40 hover:bg-amber-500/10"
+                    >
                         <div class="flex flex-col gap-0.5">
                             <Server class="mb-1 h-4 w-4 text-amber-500" />
                             <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Environment</span>
@@ -269,7 +288,6 @@ const ticketBarWidth = (count: number): string => {
             <section class="flex flex-col gap-3">
                 <h2 class="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Database Statistics</h2>
                 <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-
                     <!-- Users -->
                     <Card class="border border-border/60 bg-card shadow-sm transition-shadow hover:shadow-md">
                         <CardContent class="p-5">
@@ -283,15 +301,24 @@ const ticketBarWidth = (count: number): string => {
                             <div class="space-y-2 text-sm text-muted-foreground">
                                 <div class="flex items-center justify-between">
                                     <span>Admins</span>
-                                    <span class="rounded border border-rose-500/20 bg-rose-500/10 px-1.5 py-0.5 text-xs font-semibold text-rose-500">{{ dbStats.users.admins }}</span>
+                                    <span
+                                        class="rounded border border-rose-500/20 bg-rose-500/10 px-1.5 py-0.5 text-xs font-semibold text-rose-500"
+                                        >{{ dbStats.users.admins }}</span
+                                    >
                                 </div>
                                 <div class="flex items-center justify-between">
                                     <span>Supervisors</span>
-                                    <span class="rounded border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-xs font-semibold text-amber-500">{{ dbStats.users.supervisors }}</span>
+                                    <span
+                                        class="rounded border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-xs font-semibold text-amber-500"
+                                        >{{ dbStats.users.supervisors }}</span
+                                    >
                                 </div>
                                 <div class="flex items-center justify-between">
                                     <span>Technicals</span>
-                                    <span class="rounded border border-blue-500/20 bg-blue-500/10 px-1.5 py-0.5 text-xs font-semibold text-blue-500">{{ dbStats.users.technicals }}</span>
+                                    <span
+                                        class="rounded border border-blue-500/20 bg-blue-500/10 px-1.5 py-0.5 text-xs font-semibold text-blue-500"
+                                        >{{ dbStats.users.technicals }}</span
+                                    >
                                 </div>
                             </div>
                         </CardContent>
@@ -314,7 +341,10 @@ const ticketBarWidth = (count: number): string => {
                                         <span class="font-semibold tabular-nums text-rose-500">{{ dbStats.tickets.open }}</span>
                                     </div>
                                     <div class="h-1.5 w-full overflow-hidden rounded-full bg-muted/60">
-                                        <div class="h-full rounded-full bg-rose-500 transition-all duration-500" :style="{ width: ticketBarWidth(dbStats.tickets.open) }" />
+                                        <div
+                                            class="h-full rounded-full bg-rose-500 transition-all duration-500"
+                                            :style="{ width: ticketBarWidth(dbStats.tickets.open) }"
+                                        />
                                     </div>
                                 </div>
                                 <div class="space-y-1">
@@ -323,7 +353,10 @@ const ticketBarWidth = (count: number): string => {
                                         <span class="font-semibold tabular-nums text-blue-500">{{ dbStats.tickets.in_progress }}</span>
                                     </div>
                                     <div class="h-1.5 w-full overflow-hidden rounded-full bg-muted/60">
-                                        <div class="h-full rounded-full bg-blue-500 transition-all duration-500" :style="{ width: ticketBarWidth(dbStats.tickets.in_progress) }" />
+                                        <div
+                                            class="h-full rounded-full bg-blue-500 transition-all duration-500"
+                                            :style="{ width: ticketBarWidth(dbStats.tickets.in_progress) }"
+                                        />
                                     </div>
                                 </div>
                                 <div class="space-y-1">
@@ -332,7 +365,10 @@ const ticketBarWidth = (count: number): string => {
                                         <span class="font-semibold tabular-nums text-amber-500">{{ dbStats.tickets.on_hold }}</span>
                                     </div>
                                     <div class="h-1.5 w-full overflow-hidden rounded-full bg-muted/60">
-                                        <div class="h-full rounded-full bg-amber-500 transition-all duration-500" :style="{ width: ticketBarWidth(dbStats.tickets.on_hold) }" />
+                                        <div
+                                            class="h-full rounded-full bg-amber-500 transition-all duration-500"
+                                            :style="{ width: ticketBarWidth(dbStats.tickets.on_hold) }"
+                                        />
                                     </div>
                                 </div>
                                 <div class="space-y-1">
@@ -341,7 +377,10 @@ const ticketBarWidth = (count: number): string => {
                                         <span class="font-semibold tabular-nums text-emerald-500">{{ dbStats.tickets.resolved }}</span>
                                     </div>
                                     <div class="h-1.5 w-full overflow-hidden rounded-full bg-muted/60">
-                                        <div class="h-full rounded-full bg-emerald-500 transition-all duration-500" :style="{ width: ticketBarWidth(dbStats.tickets.resolved) }" />
+                                        <div
+                                            class="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                                            :style="{ width: ticketBarWidth(dbStats.tickets.resolved) }"
+                                        />
                                     </div>
                                 </div>
                                 <div class="space-y-1">
@@ -350,7 +389,10 @@ const ticketBarWidth = (count: number): string => {
                                         <span class="font-semibold tabular-nums">{{ dbStats.tickets.cancelled }}</span>
                                     </div>
                                     <div class="h-1.5 w-full overflow-hidden rounded-full bg-muted/60">
-                                        <div class="h-full rounded-full bg-muted-foreground/40 transition-all duration-500" :style="{ width: ticketBarWidth(dbStats.tickets.cancelled) }" />
+                                        <div
+                                            class="h-full rounded-full bg-muted-foreground/40 transition-all duration-500"
+                                            :style="{ width: ticketBarWidth(dbStats.tickets.cancelled) }"
+                                        />
                                     </div>
                                 </div>
                             </div>
@@ -370,11 +412,17 @@ const ticketBarWidth = (count: number): string => {
                             <div class="space-y-2 text-sm text-muted-foreground">
                                 <div class="flex items-center justify-between">
                                     <span>Reactions</span>
-                                    <span class="rounded border border-purple-500/20 bg-purple-500/10 px-1.5 py-0.5 text-xs font-semibold text-purple-500">{{ dbStats.comments.reactions }}</span>
+                                    <span
+                                        class="rounded border border-purple-500/20 bg-purple-500/10 px-1.5 py-0.5 text-xs font-semibold text-purple-500"
+                                        >{{ dbStats.comments.reactions }}</span
+                                    >
                                 </div>
                                 <div class="flex items-center justify-between">
                                     <span>Votes</span>
-                                    <span class="rounded border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-xs font-semibold text-emerald-500">{{ dbStats.comments.votes }}</span>
+                                    <span
+                                        class="rounded border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-xs font-semibold text-emerald-500"
+                                        >{{ dbStats.comments.votes }}</span
+                                    >
                                 </div>
                             </div>
                         </CardContent>
@@ -410,26 +458,28 @@ const ticketBarWidth = (count: number): string => {
                                 <div class="flex items-center gap-2 text-sm text-muted-foreground">
                                     <Settings class="h-4 w-4 shrink-0" /> PHP Version
                                 </div>
-                                <span class="font-semibold text-sm tabular-nums">{{ phpVersion }}</span>
+                                <span class="text-sm font-semibold tabular-nums">{{ phpVersion }}</span>
                             </div>
                             <div class="flex items-center justify-between border-b border-border/40 py-2.5">
                                 <div class="flex items-center gap-2 text-sm text-muted-foreground">
                                     <Server class="h-4 w-4 shrink-0" /> Environment
                                 </div>
-                                <Badge variant="secondary" class="rounded-md border-none bg-muted/60 px-2 py-0.5 font-bold hover:bg-muted/60">{{ environment }}</Badge>
+                                <Badge variant="secondary" class="rounded-md border-none bg-muted/60 px-2 py-0.5 font-bold hover:bg-muted/60">{{
+                                    environment
+                                }}</Badge>
                             </div>
                             <div class="flex items-center justify-between border-b border-border/40 py-2.5">
                                 <div class="flex items-center gap-2 text-sm text-muted-foreground">
                                     <Database class="h-4 w-4 shrink-0" /> Database Name
                                 </div>
-                                <span class="font-semibold text-sm">{{ dbName }}</span>
+                                <span class="text-sm font-semibold">{{ dbName }}</span>
                             </div>
                             <div class="flex items-center justify-between border-b border-border/40 py-2.5">
                                 <div class="flex items-center gap-2 text-sm text-muted-foreground">
                                     <Database class="h-4 w-4 shrink-0" /> DB Size (on disk)
                                 </div>
                                 <div class="flex flex-col items-end gap-0.5">
-                                    <span class="font-semibold text-sm tabular-nums">{{ dbSizeMb }} MB</span>
+                                    <span class="text-sm font-semibold tabular-nums">{{ dbSizeMb }} MB</span>
                                     <span class="text-[10px] text-muted-foreground/60">data + indexes</span>
                                 </div>
                             </div>
@@ -438,7 +488,7 @@ const ticketBarWidth = (count: number): string => {
                                     <DatabaseBackup class="h-4 w-4 shrink-0" /> Backups Size
                                 </div>
                                 <div class="flex flex-col items-end gap-0.5">
-                                    <span class="font-semibold text-sm tabular-nums">{{ backupsTotalSizeMb }} MB</span>
+                                    <span class="text-sm font-semibold tabular-nums">{{ backupsTotalSizeMb }} MB</span>
                                     <span class="text-[10px] text-muted-foreground/60">all .sql files</span>
                                 </div>
                             </div>
@@ -446,7 +496,7 @@ const ticketBarWidth = (count: number): string => {
                                 <div class="flex items-center gap-2 text-sm text-muted-foreground">
                                     <Activity class="h-4 w-4 shrink-0" /> Timezone
                                 </div>
-                                <span class="font-semibold text-sm">{{ timezone }}</span>
+                                <span class="text-sm font-semibold">{{ timezone }}</span>
                             </div>
                         </div>
                         <!-- Col 2 -->
@@ -455,12 +505,10 @@ const ticketBarWidth = (count: number): string => {
                                 <div class="flex items-center gap-2 text-sm text-muted-foreground">
                                     <Activity class="h-4 w-4 shrink-0" /> Laravel Version
                                 </div>
-                                <span class="font-semibold text-sm tabular-nums">{{ laravelVersion }}</span>
+                                <span class="text-sm font-semibold tabular-nums">{{ laravelVersion }}</span>
                             </div>
                             <div class="flex items-center justify-between border-b border-border/40 py-2.5">
-                                <div class="flex items-center gap-2 text-sm text-muted-foreground">
-                                    <Bug class="h-4 w-4 shrink-0" /> Debug Mode
-                                </div>
+                                <div class="flex items-center gap-2 text-sm text-muted-foreground"><Bug class="h-4 w-4 shrink-0" /> Debug Mode</div>
                                 <Badge :variant="debugMode ? 'destructive' : 'secondary'" class="rounded-md border-none px-2 py-0.5 font-bold">
                                     {{ debugMode ? 'Enabled' : 'Disabled' }}
                                 </Badge>
@@ -469,25 +517,25 @@ const ticketBarWidth = (count: number): string => {
                                 <div class="flex items-center gap-2 text-sm text-muted-foreground">
                                     <Database class="h-4 w-4 shrink-0" /> DB Driver
                                 </div>
-                                <span class="font-semibold text-sm capitalize">{{ dbConnection }}</span>
+                                <span class="text-sm font-semibold capitalize">{{ dbConnection }}</span>
                             </div>
                             <div class="flex items-center justify-between border-b border-border/40 py-2.5">
                                 <div class="flex items-center gap-2 text-sm text-muted-foreground">
                                     <HardDrive class="h-4 w-4 shrink-0" /> Cache Driver
                                 </div>
-                                <span class="font-semibold text-sm capitalize">{{ cacheDriver }}</span>
+                                <span class="text-sm font-semibold capitalize">{{ cacheDriver }}</span>
                             </div>
                             <div class="flex items-center justify-between border-b border-border/40 py-2.5">
                                 <div class="flex items-center gap-2 text-sm text-muted-foreground">
                                     <Clock class="h-4 w-4 shrink-0" /> Server Time
                                 </div>
-                                <span class="font-semibold text-sm tabular-nums">{{ serverTime }}</span>
+                                <span class="text-sm font-semibold tabular-nums">{{ serverTime }}</span>
                             </div>
                             <div class="flex items-center justify-between py-2.5">
-                                <div class="flex items-center gap-2 text-sm text-muted-foreground">
-                                    <Server class="h-4 w-4 shrink-0" /> OS Info
-                                </div>
-                                <span class="max-w-[200px] truncate text-right text-xs font-medium text-muted-foreground" :title="serverInfo">{{ serverInfo }}</span>
+                                <div class="flex items-center gap-2 text-sm text-muted-foreground"><Server class="h-4 w-4 shrink-0" /> OS Info</div>
+                                <span class="max-w-[200px] truncate text-right text-xs font-medium text-muted-foreground" :title="serverInfo">{{
+                                    serverInfo
+                                }}</span>
                             </div>
                         </div>
                     </div>
@@ -499,7 +547,9 @@ const ticketBarWidth = (count: number): string => {
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
                         <h2 class="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Data Backups</h2>
-                        <span v-if="backups.length > 0" class="rounded-full bg-muted/60 px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">{{ backups.length }}</span>
+                        <span v-if="backups.length > 0" class="rounded-full bg-muted/60 px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">{{
+                            backups.length
+                        }}</span>
                     </div>
                     <button
                         type="button"
@@ -518,7 +568,9 @@ const ticketBarWidth = (count: number): string => {
                             <DatabaseBackup class="h-6 w-6 text-muted-foreground/40" />
                         </div>
                         <p class="text-sm font-semibold text-foreground">No backups yet</p>
-                        <p class="mt-1 text-xs text-muted-foreground">Click <span class="font-medium">Create Backup</span> to generate your first database snapshot.</p>
+                        <p class="mt-1 text-xs text-muted-foreground">
+                            Click <span class="font-medium">Create Backup</span> to generate your first database snapshot.
+                        </p>
                     </div>
                     <div v-else class="divide-y divide-border/40">
                         <div
@@ -591,7 +643,7 @@ const ticketBarWidth = (count: number): string => {
 
                 <div class="flex flex-col overflow-hidden rounded-xl border border-border/60 bg-[#0d1117]">
                     <div class="flex items-center justify-between border-b border-white/10 bg-[#161b22] px-4 py-2">
-                        <span class="truncate text-xs font-mono text-white/50">
+                        <span class="truncate font-mono text-xs text-white/50">
                             {{ activeLogTab === 'laravel' ? logs.laravel.path : logs.php.path }}
                         </span>
                         <div class="ml-3 flex shrink-0 items-center gap-2">
@@ -609,16 +661,24 @@ const ticketBarWidth = (count: number): string => {
                         </div>
                     </div>
                     <div class="max-h-[500px] overflow-auto p-4">
-                        <pre class="whitespace-pre-wrap break-all text-xs font-mono leading-relaxed text-slate-300">{{ activeLogTab === 'laravel' ? logs.laravel.content : logs.php.content }}</pre>
+                        <pre class="whitespace-pre-wrap break-all font-mono text-xs leading-relaxed text-slate-300">{{
+                            activeLogTab === 'laravel' ? logs.laravel.content : logs.php.content
+                        }}</pre>
                     </div>
                 </div>
             </section>
-
         </div>
     </AppLayout>
 
     <!-- Delete Confirmation Dialog -->
-    <Dialog :open="confirmingDelete !== null" @update:open="(v) => { if (!v) confirmingDelete = null; }">
+    <Dialog
+        :open="confirmingDelete !== null"
+        @update:open="
+            (v) => {
+                if (!v) confirmingDelete = null;
+            }
+        "
+    >
         <DialogContent class="max-w-sm">
             <DialogHeader>
                 <DialogTitle class="flex items-center gap-2 text-base">
@@ -627,8 +687,8 @@ const ticketBarWidth = (count: number): string => {
                 </DialogTitle>
                 <DialogDescription class="break-all text-sm">
                     Are you sure you want to permanently delete
-                    <span class="font-medium text-foreground">{{ confirmingDelete }}</span>?
-                    This cannot be undone.
+                    <span class="font-medium text-foreground">{{ confirmingDelete }}</span
+                    >? This cannot be undone.
                 </DialogDescription>
             </DialogHeader>
             <DialogFooter class="mt-2 gap-2 sm:gap-2">

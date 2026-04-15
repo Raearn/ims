@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import { ensureLucideIconsLoaded, resolveLucideIcon } from '@/composables/useLucideIconRegistry';
 import { Circle } from 'lucide-vue-next';
 import { computed, onMounted } from 'vue';
-import { ensureLucideIconsLoaded, resolveLucideIcon } from '@/composables/useLucideIconRegistry';
 
 const props = withDefaults(
     defineProps<{
@@ -101,9 +101,7 @@ function parseCompactLine(line: string): ParsedRow | null {
 /** Legacy status one-liner. */
 function parseLegacyStatusLine(line: string): ParsedRow | null {
     const trimmed = line.trim();
-    const m = trimmed.match(
-        /^(.+?)\s*[—–]\s*icon:\s*([^,]+),\s*color:\s*([^,]+),\s*handler_requirement:\s*(.+)$/i,
-    );
+    const m = trimmed.match(/^(.+?)\s*[—–]\s*icon:\s*([^,]+),\s*color:\s*([^,]+),\s*handler_requirement:\s*(.+)$/i);
     if (!m) {
         return null;
     }
@@ -115,8 +113,7 @@ function parseLegacyStatusLine(line: string): ParsedRow | null {
 
     const iconName = iconNameRaw.length > 0 ? iconNameRaw : 'Circle';
     const colorHex = parseColorToken(colorRaw);
-    const handlerLabel =
-        handlerRaw === 'none' ? '—' : handlerRaw === 'optional' ? 'Optional' : handlerRaw === 'required' ? 'Required' : m[4].trim();
+    const handlerLabel = handlerRaw === 'none' ? '—' : handlerRaw === 'optional' ? 'Optional' : handlerRaw === 'required' ? 'Required' : m[4].trim();
 
     return {
         kind: 'parsed',
@@ -173,22 +170,24 @@ function parseLegacyCategoryLine(line: string): ParsedRow | null {
 
 function parseLine(line: string): ParsedRow {
     return (
-        parseCompactLine(line)
-        ?? parseLegacyStatusLine(line)
-        ?? parseLegacyPriorityLine(line)
-        ?? parseLegacyCategoryLine(line)
-        ?? { kind: 'raw', line }
+        parseCompactLine(line) ??
+        parseLegacyStatusLine(line) ??
+        parseLegacyPriorityLine(line) ??
+        parseLegacyCategoryLine(line) ?? { kind: 'raw', line }
     );
 }
 
 const rows = computed((): ParsedRow[] => {
-    return props.text.split('\n').map((line) => parseLine(line)).filter((row) => {
-        if (row.kind === 'raw') {
-            return row.line.trim().length > 0;
-        }
+    return props.text
+        .split('\n')
+        .map((line) => parseLine(line))
+        .filter((row) => {
+            if (row.kind === 'raw') {
+                return row.line.trim().length > 0;
+            }
 
-        return true;
-    });
+            return true;
+        });
 });
 
 onMounted(() => {
@@ -198,16 +197,10 @@ onMounted(() => {
 const isPrevious = computed(() => props.tone === 'previous');
 
 const nameClass = computed(() =>
-    isPrevious.value
-        ? 'min-w-0 font-semibold text-destructive/90 line-through'
-        : 'min-w-0 font-semibold text-emerald-800 dark:text-emerald-200',
+    isPrevious.value ? 'min-w-0 font-semibold text-destructive/90 line-through' : 'min-w-0 font-semibold text-emerald-800 dark:text-emerald-200',
 );
 
-const handlerClass = computed(() =>
-    isPrevious.value
-        ? 'text-destructive/75 line-through'
-        : 'text-emerald-700/90 dark:text-emerald-300/90',
-);
+const handlerClass = computed(() => (isPrevious.value ? 'text-destructive/75 line-through' : 'text-emerald-700/90 dark:text-emerald-300/90'));
 
 const rawLineClass = computed(() =>
     isPrevious.value
@@ -223,14 +216,9 @@ function iconUsesPriorityColor(item: ParsedRow & { kind: 'parsed' }): boolean {
 <template>
     <div class="space-y-2">
         <template v-for="(item, i) in rows" :key="i">
-            <div
-                v-if="item.kind === 'parsed'"
-                class="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] leading-tight"
-            >
+            <div v-if="item.kind === 'parsed'" class="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] leading-tight">
                 <span :class="nameClass">{{ item.name }}</span>
-                <span
-                    class="inline-flex items-center gap-1.5 rounded-md border border-border/50 bg-background/60 px-1.5 py-0.5"
-                >
+                <span class="inline-flex items-center gap-1.5 rounded-md border border-border/50 bg-background/60 px-1.5 py-0.5">
                     <component
                         :is="resolveLucideIcon(item.iconName, Circle)"
                         class="h-3.5 w-3.5 shrink-0"
@@ -247,10 +235,7 @@ function iconUsesPriorityColor(item: ParsedRow & { kind: 'parsed' }): boolean {
                         <span v-else class="text-[9px] text-muted-foreground">—</span>
                     </template>
                 </span>
-                <span
-                    v-if="item.variant === 'status' && item.handlerLabel !== ''"
-                    :class="handlerClass"
-                >{{ item.handlerLabel }}</span>
+                <span v-if="item.variant === 'status' && item.handlerLabel !== ''" :class="handlerClass">{{ item.handlerLabel }}</span>
             </div>
             <div v-else :class="rawLineClass">{{ item.line }}</div>
         </template>

@@ -14,7 +14,7 @@ export async function refreshXsrfCookie(): Promise<void> {
 
 export async function laravelFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
     const headers = new Headers(init.headers ?? undefined);
-    if (! headers.has('Accept')) {
+    if (!headers.has('Accept')) {
         headers.set('Accept', 'application/json');
     }
     headers.set('X-Requested-With', 'XMLHttpRequest');

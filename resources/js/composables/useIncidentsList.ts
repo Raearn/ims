@@ -1,14 +1,14 @@
-import { ticketMatchesCategorySubtreeFilter } from '@/lib/ticketCategoryFilter';
-import { lucideAllIconMap, resolveLucideIcon } from '@/composables/useLucideIconRegistry';
-import { Circle, HelpCircle, Ticket } from 'lucide-vue-next';
-import type { Ref } from 'vue';
-import { computed, ref, watch } from 'vue';
 import type {
     IncidentCategoryOption,
     IncidentPriorityOption,
     IncidentStatusOption,
     IncidentTicketRow,
 } from '@/components/incidents/incidentFormTypes';
+import { lucideAllIconMap, resolveLucideIcon } from '@/composables/useLucideIconRegistry';
+import { ticketMatchesCategorySubtreeFilter } from '@/lib/ticketCategoryFilter';
+import { Circle, HelpCircle, Ticket } from 'lucide-vue-next';
+import type { Ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 export type TicketStatRow = {
     label: string;
@@ -62,9 +62,7 @@ export function useIncidentsList(
         })),
     );
 
-    const primaryQueueStatusName = computed(
-        () => statuses.value.find((s) => s.handler_requirement === 'none')?.name ?? 'Open',
-    );
+    const primaryQueueStatusName = computed(() => statuses.value.find((s) => s.handler_requirement === 'none')?.name ?? 'Open');
 
     const searchDateFiltered = computed(() => {
         let base = tickets.value;
@@ -91,14 +89,7 @@ export function useIncidentsList(
         if (currentCategory.value !== 'All') {
             const filterId = Number(currentCategory.value);
             if (Number.isFinite(filterId)) {
-                base = base.filter((t) =>
-                    ticketMatchesCategorySubtreeFilter(
-                        categories.value,
-                        filterId,
-                        t.ticketCategoryId,
-                        t.category,
-                    ),
-                );
+                base = base.filter((t) => ticketMatchesCategorySubtreeFilter(categories.value, filterId, t.ticketCategoryId, t.category));
             }
         }
 
@@ -150,9 +141,7 @@ export function useIncidentsList(
         return base;
     });
 
-    const priorityOrder = computed(() =>
-        Object.fromEntries(priorities.value.map((p, i) => [p.name, priorities.value.length - i])),
-    );
+    const priorityOrder = computed(() => Object.fromEntries(priorities.value.map((p, i) => [p.name, priorities.value.length - i])));
     const statusOrder = computed(() => Object.fromEntries(statuses.value.map((s, i) => [s.name, i + 1])));
 
     const sortedTickets = computed(() => {
@@ -230,10 +219,7 @@ export function useIncidentsList(
         return counts;
     });
 
-    const isAllSelected = computed(
-        () =>
-            sortedTickets.value.length > 0 && sortedTickets.value.every((t) => selectedIds.value.includes(t.numericId)),
-    );
+    const isAllSelected = computed(() => sortedTickets.value.length > 0 && sortedTickets.value.every((t) => selectedIds.value.includes(t.numericId)));
 
     const toggleSelectAll = () => {
         if (isAllSelected.value) {

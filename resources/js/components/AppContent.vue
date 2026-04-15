@@ -12,10 +12,7 @@ const props = defineProps<Props>();
 const className = computed(() => props.class);
 
 const sidebarInsetClass = computed(() =>
-    cn(
-        'bg-gradient-to-b from-muted/20 via-background to-background dark:from-muted/[0.06] dark:via-background',
-        className.value,
-    ),
+    cn('bg-gradient-to-b from-muted/20 via-background to-background dark:from-muted/[0.06] dark:via-background', className.value),
 );
 </script>
 

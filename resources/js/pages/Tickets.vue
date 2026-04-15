@@ -1,44 +1,28 @@
 <script setup lang="ts">
+import IncidentCreateEditDialog from '@/components/incidents/IncidentCreateEditDialog.vue';
 import type {
     IncidentCategoryOption,
     IncidentPriorityOption,
     IncidentStatusOption,
     IncidentTicketRow,
 } from '@/components/incidents/incidentFormTypes';
-import IncidentCreateEditDialog from '@/components/incidents/IncidentCreateEditDialog.vue';
 import IncidentsFiltersToolbar from '@/components/incidents/IncidentsFiltersToolbar.vue';
 import IncidentsKpiStrip from '@/components/incidents/IncidentsKpiStrip.vue';
 import IncidentsListPanel from '@/components/incidents/IncidentsListPanel.vue';
 import IncidentsPageHeader from '@/components/incidents/IncidentsPageHeader.vue';
-import { useIncidentsList } from '@/composables/useIncidentsList';
-import { ensureLucideIconsLoaded, lucideAllIconMap, resolveLucideIcon } from '@/composables/useLucideIconRegistry';
-import { laravelFetch } from '@/lib/laravelFetch';
-import { Head, router, useForm, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/layouts/AppLayout.vue';
+import RichTextEditor from '@/components/RichTextEditor.vue';
 import TicketDetailModal from '@/components/TicketDetailModal.vue';
-import { type BreadcrumbItem } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import RichTextEditor from '@/components/RichTextEditor.vue';
-import {
-    AlertTriangle,
-    CheckCircle2,
-    Circle,
-    RefreshCcw,
-    Search,
-    Trash2,
-    UserPlus,
-    X,
-} from 'lucide-vue-next';
+import { useIncidentsList } from '@/composables/useIncidentsList';
+import { ensureLucideIconsLoaded, lucideAllIconMap, resolveLucideIcon } from '@/composables/useLucideIconRegistry';
+import AppLayout from '@/layouts/AppLayout.vue';
+import { laravelFetch } from '@/lib/laravelFetch';
+import { type BreadcrumbItem } from '@/types';
+import { Head, router, useForm, usePage } from '@inertiajs/vue3';
+import { AlertTriangle, CheckCircle2, Circle, RefreshCcw, Search, Trash2, UserPlus, X } from 'lucide-vue-next';
 import { computed, onMounted, onUnmounted, ref, toRef, watch } from 'vue';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -103,9 +87,7 @@ const {
 
 const listPanelRef = ref<InstanceType<typeof IncidentsListPanel> | null>(null);
 
-const openQueueCount = computed(
-    () => ticketStats.value.find((s) => s.status === primaryQueueStatusName.value)?.value ?? 0,
-);
+const openQueueCount = computed(() => ticketStats.value.find((s) => s.status === primaryQueueStatusName.value)?.value ?? 0);
 
 const showFiltersReset = computed(
     () =>
@@ -191,9 +173,7 @@ const form = useForm({
 const isAssignModalOpen = ref(false);
 const assigningTicket = ref<IncidentTicketRow | null>(null);
 const assignHandlerSearch = ref('');
-const assignStatusOverride = ref<string>(
-    props.statuses.find((s) => s.handler_requirement === 'required')?.name ?? 'In Progress',
-);
+const assignStatusOverride = ref<string>(props.statuses.find((s) => s.handler_requirement === 'required')?.name ?? 'In Progress');
 
 const assignForm = useForm({
     handler_ids: [] as number[],
@@ -396,8 +376,7 @@ const openChangeStatusModal = (ticket: IncidentTicketRow, defaultStatus?: string
     if (defaultStatus && changeStatusOptions.value.includes(defaultStatus)) {
         changeStatusValue.value = defaultStatus;
     } else {
-        changeStatusValue.value =
-            changeStatusOptions.value.find((s) => !isStatusNoHandlers(s)) ?? changeStatusOptions.value[0] ?? '';
+        changeStatusValue.value = changeStatusOptions.value.find((s) => !isStatusNoHandlers(s)) ?? changeStatusOptions.value[0] ?? '';
     }
     if (!isStatusNoHandlers(changeStatusValue.value)) {
         changeStatusForm.handler_ids = [...ticket.handlerIds];
@@ -530,8 +509,13 @@ const exportToExcel = async () => {
                 return '—';
             }
             return (
-                html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim() ||
-                '—'
+                html
+                    .replace(/<[^>]*>/g, '')
+                    .replace(/&nbsp;/g, ' ')
+                    .replace(/&amp;/g, '&')
+                    .replace(/&lt;/g, '<')
+                    .replace(/&gt;/g, '>')
+                    .trim() || '—'
             );
         };
 
@@ -610,18 +594,16 @@ const submit = () => {
     }
 
     if (editingTicket.value) {
-        form
-            .transform((data) => ({ ...data, _method: 'put' }))
-            .post(route('tickets.update', { ticket: editingTicket.value!.numericId }), {
-                forceFormData: true,
-                onSuccess: () => {
-                    isCreateModalOpen.value = false;
-                    form.reset();
-                    attachmentPreview.value = null;
-                    attachmentCompression.value = null;
-                    editingTicket.value = null;
-                },
-            });
+        form.transform((data) => ({ ...data, _method: 'put' })).post(route('tickets.update', { ticket: editingTicket.value!.numericId }), {
+            forceFormData: true,
+            onSuccess: () => {
+                isCreateModalOpen.value = false;
+                form.reset();
+                attachmentPreview.value = null;
+                attachmentCompression.value = null;
+                editingTicket.value = null;
+            },
+        });
     } else {
         form.post(route('tickets.store'), {
             forceFormData: true,
@@ -695,9 +677,12 @@ onUnmounted(() => {
     removeFinishListener();
 });
 
-watch(() => page.url, () => {
-    checkQueryForTicket();
-});
+watch(
+    () => page.url,
+    () => {
+        checkQueryForTicket();
+    },
+);
 
 const statusOptionsLocal = computed(() => {
     void lucideAllIconMap.value;
@@ -928,46 +913,59 @@ const getInitials = (name: string) => {
 
         <!-- ── Assign Handler Modal ───────────────────────────────── -->
         <Dialog v-model:open="isAssignModalOpen">
-            <DialogContent class="sm:max-w-[460px] p-0 overflow-hidden border-none shadow-2xl flex flex-col max-h-[90dvh]" v-if="assigningTicket">
+            <DialogContent class="flex max-h-[90dvh] flex-col overflow-hidden border-none p-0 shadow-2xl sm:max-w-[460px]" v-if="assigningTicket">
                 <!-- Header -->
-                <div class="bg-primary/5 px-5 pt-5 pb-4 border-b border-primary/10">
+                <div class="border-b border-primary/10 bg-primary/5 px-5 pb-4 pt-5">
                     <DialogHeader>
-                        <div class="flex items-center gap-2 mb-2 flex-wrap">
-                            <Badge variant="outline" class="bg-primary/10 text-primary border-primary/20 px-2 py-0 text-[10px] font-bold uppercase tracking-wider">
+                        <div class="mb-2 flex flex-wrap items-center gap-2">
+                            <Badge
+                                variant="outline"
+                                class="border-primary/20 bg-primary/10 px-2 py-0 text-[10px] font-bold uppercase tracking-wider text-primary"
+                            >
                                 {{ assigningTicket.id }}
                             </Badge>
                             <!-- Current status -->
-                            <Badge variant="outline" :class="['inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 border']" :style="getStatusStyle(assigningTicket.status)">
+                            <Badge
+                                variant="outline"
+                                :class="['inline-flex items-center gap-1 border px-2 py-0.5 text-[10px] font-bold']"
+                                :style="getStatusStyle(assigningTicket.status)"
+                            >
                                 <component :is="getStatusIcon(assigningTicket.status)" class="h-3 w-3" />
                                 {{ assigningTicket.status }}
                             </Badge>
                             <!-- Arrow + new status preview (Open tickets only) -->
                             <template v-if="isStatusNoHandlers(assigningTicket.status)">
-                                <span class="text-muted-foreground/40 text-xs">→</span>
-                                <Badge variant="outline" :class="['inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 border']" :style="getStatusStyle(assignStatusOverride)">
+                                <span class="text-xs text-muted-foreground/40">→</span>
+                                <Badge
+                                    variant="outline"
+                                    :class="['inline-flex items-center gap-1 border px-2 py-0.5 text-[10px] font-bold']"
+                                    :style="getStatusStyle(assignStatusOverride)"
+                                >
                                     <component :is="getStatusIcon(assignStatusOverride)" class="h-3 w-3" />
                                     {{ assignStatusOverride }}
                                 </Badge>
                             </template>
                         </div>
-                        <DialogTitle class="text-base font-bold tracking-tight leading-snug flex items-center gap-2">
-                            <UserPlus class="h-4 w-4 text-primary shrink-0" />
+                        <DialogTitle class="flex items-center gap-2 text-base font-bold leading-snug tracking-tight">
+                            <UserPlus class="h-4 w-4 shrink-0 text-primary" />
                             {{ isStatusNoHandlers(assigningTicket.status) ? 'Assign Handler & Update Status' : 'Assign Handlers' }}
                         </DialogTitle>
-                        <DialogDescription class="text-xs text-muted-foreground/80 truncate mt-0.5">
+                        <DialogDescription class="mt-0.5 truncate text-xs text-muted-foreground/80">
                             {{ assigningTicket.title }}
                         </DialogDescription>
                     </DialogHeader>
                 </div>
 
                 <!-- Body -->
-                <div class="modal-body flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-5">
-
+                <div class="modal-body flex flex-1 flex-col gap-5 overflow-y-auto px-5 py-4">
                     <!-- ① Status picker — only for Open tickets -->
                     <div v-if="isStatusNoHandlers(assigningTicket.status)" class="flex flex-col gap-2.5">
                         <div class="flex items-center gap-2">
                             <p class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Set New Status</p>
-                            <span class="inline-flex items-center rounded-md bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-rose-500">Required</span>
+                            <span
+                                class="inline-flex items-center rounded-md border border-rose-500/20 bg-rose-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-rose-500"
+                                >Required</span
+                            >
                         </div>
                         <div class="flex flex-wrap gap-2">
                             <button
@@ -976,10 +974,10 @@ const getInitials = (name: string) => {
                                 type="button"
                                 @click="assignStatusOverride = s.name"
                                 :class="[
-                                    'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-bold border-2 transition-all',
+                                    'inline-flex items-center gap-1.5 rounded-lg border-2 px-3 py-1.5 text-[11px] font-bold transition-all',
                                     assignStatusOverride === s.name
-                                        ? 'border-current shadow-sm scale-[1.03]'
-                                        : 'border-muted text-muted-foreground hover:border-primary/30 hover:bg-muted/50'
+                                        ? 'scale-[1.03] border-current shadow-sm'
+                                        : 'border-muted text-muted-foreground hover:border-primary/30 hover:bg-muted/50',
                                 ]"
                                 :style="assignStatusOverride === s.name ? getStatusStyle(s.name) : {}"
                             >
@@ -999,24 +997,26 @@ const getInitials = (name: string) => {
                             <span
                                 v-for="id in assignForm.handler_ids"
                                 :key="id"
-                                class="inline-flex items-center gap-1.5 rounded-full bg-primary/10 border border-primary/20 pl-2 pr-1 py-1 text-[11px] font-semibold text-primary"
+                                class="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 py-1 pl-2 pr-1 text-[11px] font-semibold text-primary"
                             >
-                                <span class="h-4 w-4 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[9px] font-bold shrink-0">
-                                    {{ getInitials(users.find(u => u.id === id)?.name ?? '') }}
+                                <span
+                                    class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground"
+                                >
+                                    {{ getInitials(users.find((u) => u.id === id)?.name ?? '') }}
                                 </span>
-                                {{ users.find(u => u.id === id)?.name }}
+                                {{ users.find((u) => u.id === id)?.name }}
                                 <button
                                     type="button"
-                                    @click="assignForm.handler_ids = assignForm.handler_ids.filter(i => i !== id)"
-                                    class="ml-0.5 h-4 w-4 rounded-full hover:bg-primary/20 flex items-center justify-center transition-colors"
+                                    @click="assignForm.handler_ids = assignForm.handler_ids.filter((i) => i !== id)"
+                                    class="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full transition-colors hover:bg-primary/20"
                                 >
                                     <X class="h-2.5 w-2.5" />
                                 </button>
                             </span>
                         </div>
                         <div v-else class="flex items-center gap-2 rounded-xl border border-dashed border-border/50 bg-muted/10 px-4 py-3">
-                            <UserPlus class="h-4 w-4 text-muted-foreground/40 shrink-0" />
-                            <p class="text-xs text-muted-foreground/60 italic">Select handlers from the list below.</p>
+                            <UserPlus class="h-4 w-4 shrink-0 text-muted-foreground/40" />
+                            <p class="text-xs italic text-muted-foreground/60">Select handlers from the list below.</p>
                         </div>
                     </div>
 
@@ -1024,75 +1024,84 @@ const getInitials = (name: string) => {
                     <div class="flex flex-col gap-2">
                         <p class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Select Handlers</p>
                         <div class="relative">
-                            <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                            <Search class="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                             <input
                                 v-model="assignHandlerSearch"
                                 type="text"
                                 placeholder="Search users…"
-                                class="w-full rounded-lg border border-input bg-background pl-9 pr-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                class="w-full rounded-lg border border-input bg-background py-2 pl-9 pr-3 text-sm shadow-sm placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                             />
                         </div>
-                        <div class="handler-list overflow-y-auto rounded-xl border border-border/50 divide-y divide-border/40 bg-muted/10" style="max-height: 200px;">
+                        <div
+                            class="handler-list divide-y divide-border/40 overflow-y-auto rounded-xl border border-border/50 bg-muted/10"
+                            style="max-height: 200px"
+                        >
                             <button
                                 v-for="user in filteredAssignUsers"
                                 :key="user.id"
                                 type="button"
-                                @click="assignForm.handler_ids = assignForm.handler_ids.includes(user.id)
-                                    ? assignForm.handler_ids.filter(i => i !== user.id)
-                                    : [...assignForm.handler_ids, user.id]"
+                                @click="
+                                    assignForm.handler_ids = assignForm.handler_ids.includes(user.id)
+                                        ? assignForm.handler_ids.filter((i) => i !== user.id)
+                                        : [...assignForm.handler_ids, user.id]
+                                "
                                 :class="[
-                                    'w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors',
-                                    assignForm.handler_ids.includes(user.id) ? 'bg-primary/10 text-primary' : 'hover:bg-muted/60 text-foreground'
+                                    'flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors',
+                                    assignForm.handler_ids.includes(user.id) ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-muted/60',
                                 ]"
                             >
-                                <div :class="[
-                                    'h-7 w-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 border transition-colors',
-                                    assignForm.handler_ids.includes(user.id) ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted border-border/50'
-                                ]">
+                                <div
+                                    :class="[
+                                        'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold transition-colors',
+                                        assignForm.handler_ids.includes(user.id)
+                                            ? 'border-primary bg-primary text-primary-foreground'
+                                            : 'border-border/50 bg-muted',
+                                    ]"
+                                >
                                     {{ getInitials(user.name) }}
                                 </div>
-                                <span class="text-sm font-medium truncate flex-1">{{ user.name }}</span>
-                                <div :class="[
-                                    'h-5 w-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors',
-                                    assignForm.handler_ids.includes(user.id) ? 'bg-primary border-primary' : 'border-border/50'
-                                ]">
+                                <span class="flex-1 truncate text-sm font-medium">{{ user.name }}</span>
+                                <div
+                                    :class="[
+                                        'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+                                        assignForm.handler_ids.includes(user.id) ? 'border-primary bg-primary' : 'border-border/50',
+                                    ]"
+                                >
                                     <CheckCircle2 v-if="assignForm.handler_ids.includes(user.id)" class="h-3 w-3 text-primary-foreground" />
                                 </div>
                             </button>
-                            <div v-if="filteredAssignUsers.length === 0" class="px-4 py-6 text-center text-xs text-muted-foreground/60 italic">
+                            <div v-if="filteredAssignUsers.length === 0" class="px-4 py-6 text-center text-xs italic text-muted-foreground/60">
                                 No users match your search.
                             </div>
                         </div>
                     </div>
 
-                    <span v-if="assignForm.errors.handler_ids" class="text-xs text-destructive font-medium">{{ assignForm.errors.handler_ids }}</span>
+                    <span v-if="assignForm.errors.handler_ids" class="text-xs font-medium text-destructive">{{ assignForm.errors.handler_ids }}</span>
                 </div>
 
                 <!-- Solution (required when assigning to Resolved) -->
-                <div v-if="assignStatusOverride === 'Resolved'" class="px-5 grid gap-2">
+                <div v-if="assignStatusOverride === 'Resolved'" class="grid gap-2 px-5">
                     <Label class="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                         Solution <span class="ml-1 text-destructive">*</span>
                     </Label>
                     <RichTextEditor v-model="assignForm.solution" placeholder="Describe how the issue was resolved…" />
-                    <span v-if="assignForm.errors.solution" class="text-xs text-destructive font-medium">{{ assignForm.errors.solution }}</span>
+                    <span v-if="assignForm.errors.solution" class="text-xs font-medium text-destructive">{{ assignForm.errors.solution }}</span>
                 </div>
 
                 <!-- Footer -->
-                <DialogFooter class="px-5 py-4 bg-muted/20 border-t border-border/50">
+                <DialogFooter class="border-t border-border/50 bg-muted/20 px-5 py-4">
                     <div class="flex w-full items-center justify-between gap-2">
                         <p class="text-xs text-muted-foreground">
                             <span class="font-semibold text-foreground">{{ assignForm.handler_ids.length }}</span>
                             handler{{ assignForm.handler_ids.length !== 1 ? 's' : '' }} selected
                         </p>
                         <div class="flex items-center gap-2">
-                            <Button type="button" variant="outline" @click="isAssignModalOpen = false" class="text-xs font-bold">
-                                Cancel
-                            </Button>
+                            <Button type="button" variant="outline" @click="isAssignModalOpen = false" class="text-xs font-bold"> Cancel </Button>
                             <Button
                                 type="button"
                                 :disabled="assignForm.processing || assignForm.handler_ids.length === 0"
                                 @click="submitAssign"
-                                class="text-xs font-bold gap-1.5 shadow-sm shadow-primary/20"
+                                class="gap-1.5 text-xs font-bold shadow-sm shadow-primary/20"
                             >
                                 <span v-if="!assignForm.processing" class="flex items-center gap-1.5">
                                     <UserPlus class="h-3.5 w-3.5" />
@@ -1110,39 +1119,49 @@ const getInitials = (name: string) => {
 
         <!-- ── Change Status Modal ───────────────────────────────── -->
         <Dialog v-model:open="isChangeStatusModalOpen">
-            <DialogContent class="sm:max-w-[460px] p-0 overflow-hidden border-none shadow-2xl flex flex-col max-h-[90dvh]" v-if="changeStatusTicket">
+            <DialogContent class="flex max-h-[90dvh] flex-col overflow-hidden border-none p-0 shadow-2xl sm:max-w-[460px]" v-if="changeStatusTicket">
                 <!-- Header -->
-                <div class="bg-primary/5 px-5 pt-5 pb-4 border-b border-primary/10">
+                <div class="border-b border-primary/10 bg-primary/5 px-5 pb-4 pt-5">
                     <DialogHeader>
-                        <div class="flex items-center gap-2 mb-2 flex-wrap">
-                            <Badge variant="outline" class="bg-primary/10 text-primary border-primary/20 px-2 py-0 text-[10px] font-bold uppercase tracking-wider">
+                        <div class="mb-2 flex flex-wrap items-center gap-2">
+                            <Badge
+                                variant="outline"
+                                class="border-primary/20 bg-primary/10 px-2 py-0 text-[10px] font-bold uppercase tracking-wider text-primary"
+                            >
                                 {{ changeStatusTicket.id }}
                             </Badge>
-                            <Badge variant="outline" :class="['inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 border']" :style="getStatusStyle(changeStatusTicket.status)">
+                            <Badge
+                                variant="outline"
+                                :class="['inline-flex items-center gap-1 border px-2 py-0.5 text-[10px] font-bold']"
+                                :style="getStatusStyle(changeStatusTicket.status)"
+                            >
                                 <component :is="getStatusIcon(changeStatusTicket.status)" class="h-3 w-3" />
                                 {{ changeStatusTicket.status }}
                             </Badge>
                             <template v-if="changeStatusValue">
-                                <span class="text-muted-foreground/40 text-xs">→</span>
-                                <Badge variant="outline" :class="['inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 border']" :style="getStatusStyle(changeStatusValue)">
+                                <span class="text-xs text-muted-foreground/40">→</span>
+                                <Badge
+                                    variant="outline"
+                                    :class="['inline-flex items-center gap-1 border px-2 py-0.5 text-[10px] font-bold']"
+                                    :style="getStatusStyle(changeStatusValue)"
+                                >
                                     <component :is="getStatusIcon(changeStatusValue)" class="h-3 w-3" />
                                     {{ changeStatusValue }}
                                 </Badge>
                             </template>
                         </div>
-                        <DialogTitle class="text-base font-bold tracking-tight leading-snug flex items-center gap-2">
-                            <RefreshCcw class="h-4 w-4 text-primary shrink-0" />
+                        <DialogTitle class="flex items-center gap-2 text-base font-bold leading-snug tracking-tight">
+                            <RefreshCcw class="h-4 w-4 shrink-0 text-primary" />
                             Change Status & Handlers
                         </DialogTitle>
-                        <DialogDescription class="text-xs text-muted-foreground/80 truncate mt-0.5">
+                        <DialogDescription class="mt-0.5 truncate text-xs text-muted-foreground/80">
                             {{ changeStatusTicket.title }}
                         </DialogDescription>
                     </DialogHeader>
                 </div>
 
                 <!-- Body -->
-                <div class="modal-body flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-5">
-
+                <div class="modal-body flex flex-1 flex-col gap-5 overflow-y-auto px-5 py-4">
                     <!-- ① Status picker -->
                     <div class="flex flex-col gap-2.5">
                         <p class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">New Status</p>
@@ -1153,10 +1172,10 @@ const getInitials = (name: string) => {
                                 type="button"
                                 @click="changeStatusValue = s"
                                 :class="[
-                                    'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-bold border-2 transition-all',
+                                    'inline-flex items-center gap-1.5 rounded-lg border-2 px-3 py-1.5 text-[11px] font-bold transition-all',
                                     changeStatusValue === s
-                                        ? 'border-current shadow-sm scale-[1.03]'
-                                        : 'border-muted text-muted-foreground hover:border-primary/30 hover:bg-muted/50'
+                                        ? 'scale-[1.03] border-current shadow-sm'
+                                        : 'border-muted text-muted-foreground hover:border-primary/30 hover:bg-muted/50',
                                 ]"
                                 :style="changeStatusValue === s ? getStatusStyle(s) : {}"
                             >
@@ -1178,73 +1197,98 @@ const getInitials = (name: string) => {
                             <span
                                 v-for="id in changeStatusForm.handler_ids"
                                 :key="id"
-                                class="inline-flex items-center gap-1.5 rounded-full bg-primary/10 border border-primary/20 pl-2 pr-1 py-1 text-[11px] font-semibold text-primary"
+                                class="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 py-1 pl-2 pr-1 text-[11px] font-semibold text-primary"
                             >
-                                <span class="h-4 w-4 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[9px] font-bold shrink-0">
-                                    {{ getInitials(users.find(u => u.id === id)?.name ?? '') }}
+                                <span
+                                    class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground"
+                                >
+                                    {{ getInitials(users.find((u) => u.id === id)?.name ?? '') }}
                                 </span>
-                                {{ users.find(u => u.id === id)?.name }}
+                                {{ users.find((u) => u.id === id)?.name }}
                                 <button
                                     type="button"
-                                    @click="changeStatusForm.handler_ids = changeStatusForm.handler_ids.filter(i => i !== id)"
-                                    class="ml-0.5 h-4 w-4 rounded-full hover:bg-primary/20 flex items-center justify-center transition-colors"
+                                    @click="changeStatusForm.handler_ids = changeStatusForm.handler_ids.filter((i) => i !== id)"
+                                    class="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full transition-colors hover:bg-primary/20"
                                 >
                                     <X class="h-2.5 w-2.5" />
                                 </button>
                             </span>
                         </div>
                         <div v-else class="flex items-center gap-2 rounded-xl border border-dashed border-border/50 bg-muted/10 px-4 py-3">
-                            <UserPlus class="h-4 w-4 text-muted-foreground/40 shrink-0" />
-                            <p class="text-xs text-muted-foreground/60 italic">
-                                {{ isStatusHandlerOptional(changeStatusValue) ? 'No handlers assigned. Optionally add one below.' : 'At least one handler is required for this status.' }}
+                            <UserPlus class="h-4 w-4 shrink-0 text-muted-foreground/40" />
+                            <p class="text-xs italic text-muted-foreground/60">
+                                {{
+                                    isStatusHandlerOptional(changeStatusValue)
+                                        ? 'No handlers assigned. Optionally add one below.'
+                                        : 'At least one handler is required for this status.'
+                                }}
                             </p>
                         </div>
                     </div>
 
                     <!-- Search + user list -->
                     <div v-if="changeStatusValue && !isStatusNoHandlers(changeStatusValue)" class="flex flex-col gap-2">
-                        <p class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                        <p class="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                             Update Handlers
-                            <span v-if="isStatusHandlerOptional(changeStatusValue)" class="normal-case font-normal text-muted-foreground/50">(optional)</span>
-                            <span v-else-if="isStatusHandlerRequired(changeStatusValue)" class="inline-flex items-center rounded-md bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-rose-500">Required</span>
+                            <span v-if="isStatusHandlerOptional(changeStatusValue)" class="font-normal normal-case text-muted-foreground/50"
+                                >(optional)</span
+                            >
+                            <span
+                                v-else-if="isStatusHandlerRequired(changeStatusValue)"
+                                class="inline-flex items-center rounded-md border border-rose-500/20 bg-rose-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-rose-500"
+                                >Required</span
+                            >
                         </p>
                         <div class="relative">
-                            <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                            <Search class="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                             <input
                                 v-model="changeStatusHandlerSearch"
                                 type="text"
                                 placeholder="Search users…"
-                                class="w-full rounded-lg border border-input bg-background pl-9 pr-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                class="w-full rounded-lg border border-input bg-background py-2 pl-9 pr-3 text-sm shadow-sm placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                             />
                         </div>
-                        <div class="handler-list overflow-y-auto rounded-xl border border-border/50 divide-y divide-border/40 bg-muted/10" style="max-height: 190px;">
+                        <div
+                            class="handler-list divide-y divide-border/40 overflow-y-auto rounded-xl border border-border/50 bg-muted/10"
+                            style="max-height: 190px"
+                        >
                             <button
                                 v-for="user in filteredChangeStatusUsers"
                                 :key="user.id"
                                 type="button"
-                                @click="changeStatusForm.handler_ids = changeStatusForm.handler_ids.includes(user.id)
-                                    ? changeStatusForm.handler_ids.filter(i => i !== user.id)
-                                    : [...changeStatusForm.handler_ids, user.id]"
+                                @click="
+                                    changeStatusForm.handler_ids = changeStatusForm.handler_ids.includes(user.id)
+                                        ? changeStatusForm.handler_ids.filter((i) => i !== user.id)
+                                        : [...changeStatusForm.handler_ids, user.id]
+                                "
                                 :class="[
-                                    'w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors',
-                                    changeStatusForm.handler_ids.includes(user.id) ? 'bg-primary/10 text-primary' : 'hover:bg-muted/60 text-foreground'
+                                    'flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors',
+                                    changeStatusForm.handler_ids.includes(user.id)
+                                        ? 'bg-primary/10 text-primary'
+                                        : 'text-foreground hover:bg-muted/60',
                                 ]"
                             >
-                                <div :class="[
-                                    'h-7 w-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 border transition-colors',
-                                    changeStatusForm.handler_ids.includes(user.id) ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted border-border/50'
-                                ]">
+                                <div
+                                    :class="[
+                                        'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold transition-colors',
+                                        changeStatusForm.handler_ids.includes(user.id)
+                                            ? 'border-primary bg-primary text-primary-foreground'
+                                            : 'border-border/50 bg-muted',
+                                    ]"
+                                >
                                     {{ getInitials(user.name) }}
                                 </div>
-                                <span class="text-sm font-medium truncate flex-1">{{ user.name }}</span>
-                                <div :class="[
-                                    'h-5 w-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors',
-                                    changeStatusForm.handler_ids.includes(user.id) ? 'bg-primary border-primary' : 'border-border/50'
-                                ]">
+                                <span class="flex-1 truncate text-sm font-medium">{{ user.name }}</span>
+                                <div
+                                    :class="[
+                                        'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+                                        changeStatusForm.handler_ids.includes(user.id) ? 'border-primary bg-primary' : 'border-border/50',
+                                    ]"
+                                >
                                     <CheckCircle2 v-if="changeStatusForm.handler_ids.includes(user.id)" class="h-3 w-3 text-primary-foreground" />
                                 </div>
                             </button>
-                            <div v-if="filteredChangeStatusUsers.length === 0" class="px-4 py-6 text-center text-xs text-muted-foreground/60 italic">
+                            <div v-if="filteredChangeStatusUsers.length === 0" class="px-4 py-6 text-center text-xs italic text-muted-foreground/60">
                                 No users match your search.
                             </div>
                         </div>
@@ -1252,16 +1296,18 @@ const getInitials = (name: string) => {
                 </div>
 
                 <!-- Solution (required when Resolved) -->
-                <div v-if="changeStatusValue === 'Resolved'" class="px-5 grid gap-2">
+                <div v-if="changeStatusValue === 'Resolved'" class="grid gap-2 px-5">
                     <Label class="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                         Solution <span class="ml-1 text-destructive">*</span>
                     </Label>
                     <RichTextEditor v-model="changeStatusForm.solution" placeholder="Describe how the issue was resolved…" />
-                    <span v-if="changeStatusForm.errors.solution" class="text-xs text-destructive font-medium">{{ changeStatusForm.errors.solution }}</span>
+                    <span v-if="changeStatusForm.errors.solution" class="text-xs font-medium text-destructive">{{
+                        changeStatusForm.errors.solution
+                    }}</span>
                 </div>
 
                 <!-- Footer -->
-                <DialogFooter class="px-5 py-4 bg-muted/20 border-t border-border/50">
+                <DialogFooter class="border-t border-border/50 bg-muted/20 px-5 py-4">
                     <div class="flex w-full items-center justify-between gap-2">
                         <p class="text-xs text-muted-foreground">
                             <span class="font-semibold text-foreground">{{ changeStatusForm.handler_ids.length }}</span>
@@ -1273,9 +1319,13 @@ const getInitials = (name: string) => {
                             </Button>
                             <Button
                                 type="button"
-                                :disabled="changeStatusForm.processing || !changeStatusValue || (isStatusHandlerRequired(changeStatusValue) && changeStatusForm.handler_ids.length === 0)"
+                                :disabled="
+                                    changeStatusForm.processing ||
+                                    !changeStatusValue ||
+                                    (isStatusHandlerRequired(changeStatusValue) && changeStatusForm.handler_ids.length === 0)
+                                "
                                 @click="submitChangeStatus"
-                                class="text-xs font-bold gap-1.5 shadow-sm shadow-primary/20"
+                                class="gap-1.5 text-xs font-bold shadow-sm shadow-primary/20"
                             >
                                 <span v-if="!changeStatusForm.processing" class="flex items-center gap-1.5">
                                     <RefreshCcw class="h-3.5 w-3.5" /> Save Changes
@@ -1292,21 +1342,23 @@ const getInitials = (name: string) => {
 
         <!-- ── Bulk Change Status Modal ──────────────────────────── -->
         <Dialog v-model:open="isBulkStatusModalOpen">
-            <DialogContent class="sm:max-w-[460px] p-0 overflow-hidden border-none shadow-2xl flex flex-col max-h-[90dvh]">
-                <div class="bg-primary/5 px-5 pt-5 pb-4 border-b border-primary/10">
+            <DialogContent class="flex max-h-[90dvh] flex-col overflow-hidden border-none p-0 shadow-2xl sm:max-w-[460px]">
+                <div class="border-b border-primary/10 bg-primary/5 px-5 pb-4 pt-5">
                     <DialogHeader>
-                        <DialogTitle class="text-base font-bold tracking-tight flex items-center gap-2">
-                            <RefreshCcw class="h-4 w-4 text-primary shrink-0" />
+                        <DialogTitle class="flex items-center gap-2 text-base font-bold tracking-tight">
+                            <RefreshCcw class="h-4 w-4 shrink-0 text-primary" />
                             Bulk Change Status
                         </DialogTitle>
-                        <DialogDescription class="text-xs text-muted-foreground/80 mt-0.5">
-                            Applies to <span class="font-semibold text-foreground">{{ selectedIds.length }}</span> selected incident{{ selectedIds.length !== 1 ? 's' : '' }}.
+                        <DialogDescription class="mt-0.5 text-xs text-muted-foreground/80">
+                            Applies to <span class="font-semibold text-foreground">{{ selectedIds.length }}</span> selected incident{{
+                                selectedIds.length !== 1 ? 's' : ''
+                            }}.
                         </DialogDescription>
                     </DialogHeader>
                 </div>
 
                 <!-- Body -->
-                <div class="modal-body flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-5">
+                <div class="modal-body flex flex-1 flex-col gap-5 overflow-y-auto px-5 py-4">
                     <!-- ① Status picker -->
                     <div class="flex flex-col gap-2.5">
                         <p class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">New Status</p>
@@ -1317,10 +1369,10 @@ const getInitials = (name: string) => {
                                 type="button"
                                 @click="bulkStatusValue = s"
                                 :class="[
-                                    'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-bold border-2 transition-all',
+                                    'inline-flex items-center gap-1.5 rounded-lg border-2 px-3 py-1.5 text-[11px] font-bold transition-all',
                                     bulkStatusValue === s
-                                        ? 'border-current shadow-sm scale-[1.03]'
-                                        : 'border-muted text-muted-foreground hover:border-primary/30 hover:bg-muted/50'
+                                        ? 'scale-[1.03] border-current shadow-sm'
+                                        : 'border-muted text-muted-foreground hover:border-primary/30 hover:bg-muted/50',
                                 ]"
                                 :style="bulkStatusValue === s ? getStatusStyle(s) : {}"
                             >
@@ -1329,10 +1381,14 @@ const getInitials = (name: string) => {
                             </button>
                         </div>
                         <!-- Open notice -->
-                        <div v-if="isStatusNoHandlers(bulkStatusValue)" class="flex items-start gap-2.5 rounded-xl border border-rose-500/20 bg-rose-500/5 px-3.5 py-2.5">
-                            <AlertTriangle class="h-3.5 w-3.5 text-rose-500 shrink-0 mt-0.5" />
-                            <p class="text-xs text-rose-600 dark:text-rose-400 leading-relaxed">
-                                All handlers will be <span class="font-semibold">removed</span> from the selected incidents when using a status that does not use handlers.
+                        <div
+                            v-if="isStatusNoHandlers(bulkStatusValue)"
+                            class="flex items-start gap-2.5 rounded-xl border border-rose-500/20 bg-rose-500/5 px-3.5 py-2.5"
+                        >
+                            <AlertTriangle class="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-500" />
+                            <p class="text-xs leading-relaxed text-rose-600 dark:text-rose-400">
+                                All handlers will be <span class="font-semibold">removed</span> from the selected incidents when using a status that
+                                does not use handlers.
                             </p>
                         </div>
                     </div>
@@ -1349,73 +1405,96 @@ const getInitials = (name: string) => {
                             <span
                                 v-for="id in bulkStatusHandlerIds"
                                 :key="id"
-                                class="inline-flex items-center gap-1.5 rounded-full bg-primary/10 border border-primary/20 pl-2 pr-1 py-1 text-[11px] font-semibold text-primary"
+                                class="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 py-1 pl-2 pr-1 text-[11px] font-semibold text-primary"
                             >
-                                <span class="h-4 w-4 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[9px] font-bold shrink-0">
-                                    {{ getInitials(users.find(u => u.id === id)?.name ?? '') }}
+                                <span
+                                    class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground"
+                                >
+                                    {{ getInitials(users.find((u) => u.id === id)?.name ?? '') }}
                                 </span>
-                                {{ users.find(u => u.id === id)?.name }}
+                                {{ users.find((u) => u.id === id)?.name }}
                                 <button
                                     type="button"
-                                    @click="bulkStatusHandlerIds = bulkStatusHandlerIds.filter(i => i !== id)"
-                                    class="ml-0.5 h-4 w-4 rounded-full hover:bg-primary/20 flex items-center justify-center transition-colors"
+                                    @click="bulkStatusHandlerIds = bulkStatusHandlerIds.filter((i) => i !== id)"
+                                    class="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full transition-colors hover:bg-primary/20"
                                 >
                                     <X class="h-2.5 w-2.5" />
                                 </button>
                             </span>
                         </div>
                         <div v-else class="flex items-center gap-2 rounded-xl border border-dashed border-border/50 bg-muted/10 px-4 py-3">
-                            <UserPlus class="h-4 w-4 text-muted-foreground/40 shrink-0" />
-                            <p class="text-xs text-muted-foreground/60 italic">
-                                {{ isStatusHandlerOptional(bulkStatusValue) ? 'No handlers. Optionally assign one below.' : 'At least one handler is required for this status.' }}
+                            <UserPlus class="h-4 w-4 shrink-0 text-muted-foreground/40" />
+                            <p class="text-xs italic text-muted-foreground/60">
+                                {{
+                                    isStatusHandlerOptional(bulkStatusValue)
+                                        ? 'No handlers. Optionally assign one below.'
+                                        : 'At least one handler is required for this status.'
+                                }}
                             </p>
                         </div>
                     </div>
 
                     <!-- Search + user list -->
                     <div v-if="!isStatusNoHandlers(bulkStatusValue)" class="flex flex-col gap-2">
-                        <p class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                        <p class="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                             Assign Handlers
-                            <span v-if="isStatusHandlerOptional(bulkStatusValue)" class="normal-case font-normal text-muted-foreground/50">(optional)</span>
-                            <span v-else-if="isStatusHandlerRequired(bulkStatusValue)" class="inline-flex items-center rounded-md bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-rose-500">Required</span>
+                            <span v-if="isStatusHandlerOptional(bulkStatusValue)" class="font-normal normal-case text-muted-foreground/50"
+                                >(optional)</span
+                            >
+                            <span
+                                v-else-if="isStatusHandlerRequired(bulkStatusValue)"
+                                class="inline-flex items-center rounded-md border border-rose-500/20 bg-rose-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-rose-500"
+                                >Required</span
+                            >
                         </p>
                         <div class="relative">
-                            <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                            <Search class="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                             <input
                                 v-model="bulkStatusHandlerSearch"
                                 type="text"
                                 placeholder="Search users…"
-                                class="w-full rounded-lg border border-input bg-background pl-9 pr-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                class="w-full rounded-lg border border-input bg-background py-2 pl-9 pr-3 text-sm shadow-sm placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                             />
                         </div>
-                        <div class="handler-list overflow-y-auto rounded-xl border border-border/50 divide-y divide-border/40 bg-muted/10" style="max-height: 190px;">
+                        <div
+                            class="handler-list divide-y divide-border/40 overflow-y-auto rounded-xl border border-border/50 bg-muted/10"
+                            style="max-height: 190px"
+                        >
                             <button
                                 v-for="user in filteredBulkStatusUsers"
                                 :key="user.id"
                                 type="button"
-                                @click="bulkStatusHandlerIds = bulkStatusHandlerIds.includes(user.id)
-                                    ? bulkStatusHandlerIds.filter(i => i !== user.id)
-                                    : [...bulkStatusHandlerIds, user.id]"
+                                @click="
+                                    bulkStatusHandlerIds = bulkStatusHandlerIds.includes(user.id)
+                                        ? bulkStatusHandlerIds.filter((i) => i !== user.id)
+                                        : [...bulkStatusHandlerIds, user.id]
+                                "
                                 :class="[
-                                    'w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors',
-                                    bulkStatusHandlerIds.includes(user.id) ? 'bg-primary/10 text-primary' : 'hover:bg-muted/60 text-foreground'
+                                    'flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors',
+                                    bulkStatusHandlerIds.includes(user.id) ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-muted/60',
                                 ]"
                             >
-                                <div :class="[
-                                    'h-7 w-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 border transition-colors',
-                                    bulkStatusHandlerIds.includes(user.id) ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted border-border/50'
-                                ]">
+                                <div
+                                    :class="[
+                                        'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold transition-colors',
+                                        bulkStatusHandlerIds.includes(user.id)
+                                            ? 'border-primary bg-primary text-primary-foreground'
+                                            : 'border-border/50 bg-muted',
+                                    ]"
+                                >
                                     {{ getInitials(user.name) }}
                                 </div>
-                                <span class="text-sm font-medium truncate flex-1">{{ user.name }}</span>
-                                <div :class="[
-                                    'h-5 w-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors',
-                                    bulkStatusHandlerIds.includes(user.id) ? 'bg-primary border-primary' : 'border-border/50'
-                                ]">
+                                <span class="flex-1 truncate text-sm font-medium">{{ user.name }}</span>
+                                <div
+                                    :class="[
+                                        'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+                                        bulkStatusHandlerIds.includes(user.id) ? 'border-primary bg-primary' : 'border-border/50',
+                                    ]"
+                                >
                                     <CheckCircle2 v-if="bulkStatusHandlerIds.includes(user.id)" class="h-3 w-3 text-primary-foreground" />
                                 </div>
                             </button>
-                            <div v-if="filteredBulkStatusUsers.length === 0" class="px-4 py-6 text-center text-xs text-muted-foreground/60 italic">
+                            <div v-if="filteredBulkStatusUsers.length === 0" class="px-4 py-6 text-center text-xs italic text-muted-foreground/60">
                                 No users match your search.
                             </div>
                         </div>
@@ -1423,14 +1502,14 @@ const getInitials = (name: string) => {
                 </div>
 
                 <!-- Solution (required when bulk resolving) -->
-                <div v-if="bulkStatusValue === 'Resolved'" class="px-5 grid gap-2">
+                <div v-if="bulkStatusValue === 'Resolved'" class="grid gap-2 px-5">
                     <Label class="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                         Solution <span class="ml-1 text-destructive">*</span>
                     </Label>
                     <RichTextEditor v-model="bulkStatusSolution" placeholder="Describe how the issue was resolved…" />
                 </div>
 
-                <DialogFooter class="px-5 py-4 bg-muted/20 border-t border-border/50">
+                <DialogFooter class="border-t border-border/50 bg-muted/20 px-5 py-4">
                     <div class="flex w-full items-center justify-between gap-2">
                         <p class="text-xs text-muted-foreground">
                             <template v-if="!isStatusNoHandlers(bulkStatusValue)">
@@ -1440,17 +1519,21 @@ const getInitials = (name: string) => {
                             <template v-else>Handlers will be cleared</template>
                         </p>
                         <div class="flex items-center gap-2">
-                            <Button type="button" variant="outline" @click="isBulkStatusModalOpen = false" class="text-xs font-bold">
-                                Cancel
-                            </Button>
+                            <Button type="button" variant="outline" @click="isBulkStatusModalOpen = false" class="text-xs font-bold"> Cancel </Button>
                             <Button
                                 type="button"
-                                :disabled="bulkStatusForm.processing || !bulkStatusValue || (isStatusHandlerRequired(bulkStatusValue) && bulkStatusHandlerIds.length === 0)"
+                                :disabled="
+                                    bulkStatusForm.processing ||
+                                    !bulkStatusValue ||
+                                    (isStatusHandlerRequired(bulkStatusValue) && bulkStatusHandlerIds.length === 0)
+                                "
                                 @click="submitBulkStatus"
-                                class="text-xs font-bold gap-1.5"
+                                class="gap-1.5 text-xs font-bold"
                             >
                                 <span v-if="!bulkStatusForm.processing" class="flex items-center gap-1.5">
-                                    <RefreshCcw class="h-3.5 w-3.5" /> Apply to {{ selectedIds.length }} Incident{{ selectedIds.length !== 1 ? 's' : '' }}
+                                    <RefreshCcw class="h-3.5 w-3.5" /> Apply to {{ selectedIds.length }} Incident{{
+                                        selectedIds.length !== 1 ? 's' : ''
+                                    }}
                                 </span>
                                 <span v-else class="flex items-center gap-1.5">
                                     Saving… <span class="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -1464,45 +1547,52 @@ const getInitials = (name: string) => {
 
         <!-- ── Single Delete Confirm Dialog ─────────────────────── -->
         <Dialog v-model:open="isDeleteModalOpen">
-            <DialogContent class="sm:max-w-[400px] p-0 overflow-hidden shadow-xl flex flex-col">
+            <DialogContent class="flex flex-col overflow-hidden p-0 shadow-xl sm:max-w-[400px]">
                 <!-- Header -->
-                <div class="px-5 pt-5 pb-4 border-b border-border/50">
+                <div class="border-b border-border/50 px-5 pb-4 pt-5">
                     <DialogHeader>
-                        <DialogTitle class="text-base font-bold tracking-tight flex items-center gap-2.5">
-                            <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-rose-100 dark:bg-rose-500/15 ring-1 ring-rose-200 dark:ring-rose-500/25">
+                        <DialogTitle class="flex items-center gap-2.5 text-base font-bold tracking-tight">
+                            <div
+                                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-rose-100 ring-1 ring-rose-200 dark:bg-rose-500/15 dark:ring-rose-500/25"
+                            >
                                 <Trash2 class="h-4 w-4 text-rose-600 dark:text-rose-400" />
                             </div>
                             Delete Incident?
                         </DialogTitle>
-                        <DialogDescription class="text-xs text-muted-foreground mt-1 leading-relaxed">
+                        <DialogDescription class="mt-1 text-xs leading-relaxed text-muted-foreground">
                             This action is permanent and cannot be undone.
                         </DialogDescription>
                     </DialogHeader>
                 </div>
 
                 <!-- Body -->
-                <div class="px-5 py-4 flex flex-col gap-3">
+                <div class="flex flex-col gap-3 px-5 py-4">
                     <!-- Incident preview -->
-                    <div v-if="deleteTarget" class="rounded-xl border border-border bg-muted/50 px-4 py-3 flex flex-col gap-1.5">
+                    <div v-if="deleteTarget" class="flex flex-col gap-1.5 rounded-xl border border-border bg-muted/50 px-4 py-3">
                         <div class="flex items-center gap-2">
                             <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{{ deleteTarget.id }}</span>
-                            <Badge variant="outline" class="text-[10px] px-1.5 py-0 font-semibold">{{ deleteTarget.status }}</Badge>
+                            <Badge variant="outline" class="px-1.5 py-0 text-[10px] font-semibold">{{ deleteTarget.status }}</Badge>
                         </div>
-                        <p class="text-sm font-semibold text-foreground leading-snug line-clamp-2">{{ deleteTarget.title }}</p>
-                        <p class="text-[11px] text-muted-foreground">Reported by <span class="font-medium text-foreground/70">{{ deleteTarget.reporter }}</span></p>
+                        <p class="line-clamp-2 text-sm font-semibold leading-snug text-foreground">{{ deleteTarget.title }}</p>
+                        <p class="text-[11px] text-muted-foreground">
+                            Reported by <span class="font-medium text-foreground/70">{{ deleteTarget.reporter }}</span>
+                        </p>
                     </div>
 
                     <!-- Warning notice -->
-                    <div class="flex items-start gap-3 rounded-xl border border-amber-200 dark:border-amber-500/25 bg-amber-50 dark:bg-amber-500/10 px-4 py-3">
-                        <AlertTriangle class="h-4 w-4 text-amber-500 dark:text-amber-400 shrink-0 mt-0.5" />
-                        <p class="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">
-                            All associated data including handlers, attachments, and history will be <span class="font-semibold">permanently removed</span>.
+                    <div
+                        class="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-500/25 dark:bg-amber-500/10"
+                    >
+                        <AlertTriangle class="mt-0.5 h-4 w-4 shrink-0 text-amber-500 dark:text-amber-400" />
+                        <p class="text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+                            All associated data including handlers, attachments, and history will be
+                            <span class="font-semibold">permanently removed</span>.
                         </p>
                     </div>
                 </div>
 
                 <!-- Footer -->
-                <DialogFooter class="px-5 py-4 border-t border-border/50">
+                <DialogFooter class="border-t border-border/50 px-5 py-4">
                     <div class="flex w-full items-center justify-end gap-2">
                         <Button type="button" variant="outline" size="sm" @click="isDeleteModalOpen = false" class="text-xs font-semibold">
                             Cancel
@@ -1513,7 +1603,7 @@ const getInitials = (name: string) => {
                             size="sm"
                             :disabled="deleteForm.processing"
                             @click="submitDelete"
-                            class="text-xs font-semibold gap-1.5"
+                            class="gap-1.5 text-xs font-semibold"
                         >
                             <span v-if="!deleteForm.processing" class="flex items-center gap-1.5">
                                 <Trash2 class="h-3.5 w-3.5" /> Delete Incident
@@ -1529,31 +1619,33 @@ const getInitials = (name: string) => {
 
         <!-- ── Bulk Delete Confirm Dialog ────────────────────────── -->
         <Dialog v-model:open="isBulkDeleteConfirmOpen">
-            <DialogContent class="sm:max-w-[400px] p-0 overflow-hidden shadow-xl flex flex-col">
+            <DialogContent class="flex flex-col overflow-hidden p-0 shadow-xl sm:max-w-[400px]">
                 <!-- Header -->
-                <div class="px-5 pt-5 pb-4 border-b border-border/50">
+                <div class="border-b border-border/50 px-5 pb-4 pt-5">
                     <DialogHeader>
-                        <DialogTitle class="text-base font-bold tracking-tight flex items-center gap-2.5">
-                            <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-rose-100 dark:bg-rose-500/15 ring-1 ring-rose-200 dark:ring-rose-500/25">
+                        <DialogTitle class="flex items-center gap-2.5 text-base font-bold tracking-tight">
+                            <div
+                                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-rose-100 ring-1 ring-rose-200 dark:bg-rose-500/15 dark:ring-rose-500/25"
+                            >
                                 <Trash2 class="h-4 w-4 text-rose-600 dark:text-rose-400" />
                             </div>
                             Delete {{ selectedIds.length }} Incident{{ selectedIds.length !== 1 ? 's' : '' }}?
                         </DialogTitle>
-                        <DialogDescription class="text-xs text-muted-foreground mt-1 leading-relaxed">
+                        <DialogDescription class="mt-1 text-xs leading-relaxed text-muted-foreground">
                             This action is permanent and cannot be undone.
                         </DialogDescription>
                     </DialogHeader>
                 </div>
 
                 <!-- Body -->
-                <div class="px-5 py-4 flex flex-col gap-3">
+                <div class="flex flex-col gap-3 px-5 py-4">
                     <!-- Count summary -->
-                    <div class="rounded-xl border border-border bg-muted/50 px-4 py-3 flex items-center gap-3">
-                        <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-background border border-border shadow-sm">
-                            <span class="text-sm font-black text-foreground tabular-nums">{{ selectedIds.length }}</span>
+                    <div class="flex items-center gap-3 rounded-xl border border-border bg-muted/50 px-4 py-3">
+                        <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background shadow-sm">
+                            <span class="text-sm font-black tabular-nums text-foreground">{{ selectedIds.length }}</span>
                         </div>
                         <div>
-                            <p class="text-sm font-semibold text-foreground leading-snug">
+                            <p class="text-sm font-semibold leading-snug text-foreground">
                                 {{ selectedIds.length }} incident{{ selectedIds.length !== 1 ? 's' : '' }} selected
                             </p>
                             <p class="text-[11px] text-muted-foreground">All of their data will be removed.</p>
@@ -1561,16 +1653,19 @@ const getInitials = (name: string) => {
                     </div>
 
                     <!-- Warning notice -->
-                    <div class="flex items-start gap-3 rounded-xl border border-amber-200 dark:border-amber-500/25 bg-amber-50 dark:bg-amber-500/10 px-4 py-3">
-                        <AlertTriangle class="h-4 w-4 text-amber-500 dark:text-amber-400 shrink-0 mt-0.5" />
-                        <p class="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">
-                            Handlers, attachments, and history for all selected incidents will be <span class="font-semibold">permanently removed</span>.
+                    <div
+                        class="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-500/25 dark:bg-amber-500/10"
+                    >
+                        <AlertTriangle class="mt-0.5 h-4 w-4 shrink-0 text-amber-500 dark:text-amber-400" />
+                        <p class="text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+                            Handlers, attachments, and history for all selected incidents will be
+                            <span class="font-semibold">permanently removed</span>.
                         </p>
                     </div>
                 </div>
 
                 <!-- Footer -->
-                <DialogFooter class="px-5 py-4 border-t border-border/50">
+                <DialogFooter class="border-t border-border/50 px-5 py-4">
                     <div class="flex w-full items-center justify-end gap-2">
                         <Button type="button" variant="outline" size="sm" @click="isBulkDeleteConfirmOpen = false" class="text-xs font-semibold">
                             Cancel
@@ -1581,7 +1676,7 @@ const getInitials = (name: string) => {
                             size="sm"
                             :disabled="bulkDeleteForm.processing"
                             @click="submitBulkDelete"
-                            class="text-xs font-semibold gap-1.5"
+                            class="gap-1.5 text-xs font-semibold"
                         >
                             <span v-if="!bulkDeleteForm.processing" class="flex items-center gap-1.5">
                                 <Trash2 class="h-3.5 w-3.5" /> Delete {{ selectedIds.length }} Incident{{ selectedIds.length !== 1 ? 's' : '' }}
@@ -1598,11 +1693,20 @@ const getInitials = (name: string) => {
 </template>
 
 <style scoped>
-.no-scrollbar::-webkit-scrollbar { display: none; }
-.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
 
 .handler-tooltip-enter-active,
-.handler-tooltip-leave-active { transition: opacity 0.12s ease; }
+.handler-tooltip-leave-active {
+    transition: opacity 0.12s ease;
+}
 .handler-tooltip-enter-from,
-.handler-tooltip-leave-to { opacity: 0; }
+.handler-tooltip-leave-to {
+    opacity: 0;
+}
 </style>

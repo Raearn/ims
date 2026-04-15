@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { useDark, useToggle } from '@vueuse/core';
-import { Moon, Sun } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useDark, useToggle } from '@vueuse/core';
+import { Moon, Sun } from 'lucide-vue-next';
 
 const isDark = useDark();
 const toggleDark = useToggle(isDark);

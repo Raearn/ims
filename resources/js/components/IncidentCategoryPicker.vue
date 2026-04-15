@@ -56,7 +56,7 @@ function categoryBelongsToRoot(rootId: number, categoryId: number | null): boole
         return false;
     }
     const row = props.categories.find((c) => c.id === categoryId);
-    if (! row) {
+    if (!row) {
         return false;
     }
     if (row.id === rootId) {
@@ -102,7 +102,7 @@ function onRootClick(root: IncidentCategoryOption): void {
     }
     const keepSelection = categoryBelongsToRoot(root.id, props.modelValue);
     expandedRootId.value = root.id;
-    if (! keepSelection) {
+    if (!keepSelection) {
         // Replace any selection from another family (e.g. leaf Hardware) with this root.
         // Inertia `useForm` may not persist `null`, so selecting the parent id is reliable.
         select(root.id);
@@ -170,13 +170,11 @@ watch(
                 type="button"
                 @click="onRootClick(root)"
                 :class="[
-                    'flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 p-3 transition-all relative group',
+                    'group relative flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 p-3 transition-all',
                     isRootGridPrimarySelected(root)
                         ? 'border-primary bg-primary/5 text-primary shadow-sm'
-                        : 'border-muted hover:border-primary/30 hover:bg-muted/50 text-muted-foreground',
-                    expandedRootId === root.id && childrenOf(root.id).length > 0
-                        ? 'ring-2 ring-primary/30 border-primary/40'
-                        : '',
+                        : 'border-muted text-muted-foreground hover:border-primary/30 hover:bg-muted/50',
+                    expandedRootId === root.id && childrenOf(root.id).length > 0 ? 'border-primary/40 ring-2 ring-primary/30' : '',
                 ]"
             >
                 <component :is="iconFor(root.icon)" class="h-4 w-4" />
@@ -186,7 +184,7 @@ watch(
                     class="absolute bottom-1 right-1 h-3 w-3 text-muted-foreground/70 opacity-80 group-hover:text-primary"
                     :class="expandedRootId === root.id ? 'rotate-90 text-primary' : ''"
                 />
-                <div v-if="isRootGridPrimarySelected(root)" class="absolute -top-1.5 -right-1.5">
+                <div v-if="isRootGridPrimarySelected(root)" class="absolute -right-1.5 -top-1.5">
                     <CheckCircle2 class="h-4 w-4 fill-primary text-white" />
                 </div>
             </button>
@@ -204,23 +202,21 @@ watch(
                 v-if="expandedRoot && expandedChildren.length > 0"
                 class="rounded-xl border-2 border-primary/30 bg-muted/40 p-3 shadow-lg shadow-black/5 ring-1 ring-border/60 dark:shadow-black/20"
             >
-                <p class="mb-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                    {{ expandedRoot.name }} — choose a type
-                </p>
+                <p class="mb-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{{ expandedRoot.name }} — choose a type</p>
                 <div class="grid grid-cols-3 gap-2">
                     <button
                         type="button"
                         @click="selectParentFromPanel"
                         :class="[
-                            'flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 p-3 transition-all relative',
+                            'relative flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 p-3 transition-all',
                             modelValue === expandedRoot.id
                                 ? 'border-primary bg-primary/5 text-primary shadow-sm'
-                                : 'border-muted hover:border-primary/30 hover:bg-background/80 text-muted-foreground',
+                                : 'border-muted text-muted-foreground hover:border-primary/30 hover:bg-background/80',
                         ]"
                     >
                         <component :is="iconFor(expandedRoot.icon)" class="h-4 w-4" />
                         <span class="w-full truncate text-center text-[10px] font-bold uppercase">{{ expandedRoot.name }}</span>
-                        <div v-if="modelValue === expandedRoot.id" class="absolute -top-1.5 -right-1.5">
+                        <div v-if="modelValue === expandedRoot.id" class="absolute -right-1.5 -top-1.5">
                             <CheckCircle2 class="h-4 w-4 fill-primary text-white" />
                         </div>
                     </button>
@@ -230,15 +226,15 @@ watch(
                         type="button"
                         @click="select(ch.id)"
                         :class="[
-                            'flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 p-3 transition-all relative',
+                            'relative flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 p-3 transition-all',
                             modelValue === ch.id
                                 ? 'border-primary bg-primary/5 text-primary shadow-sm'
-                                : 'border-muted hover:border-primary/30 hover:bg-background/80 text-muted-foreground',
+                                : 'border-muted text-muted-foreground hover:border-primary/30 hover:bg-background/80',
                         ]"
                     >
                         <component :is="iconFor(ch.icon)" class="h-4 w-4" />
                         <span class="w-full truncate text-center text-[10px] font-bold uppercase">{{ ch.name }}</span>
-                        <div v-if="modelValue === ch.id" class="absolute -top-1.5 -right-1.5">
+                        <div v-if="modelValue === ch.id" class="absolute -right-1.5 -top-1.5">
                             <CheckCircle2 class="h-4 w-4 fill-primary text-white" />
                         </div>
                     </button>

@@ -63,16 +63,14 @@ const segments = computed(() => {
     });
 });
 
-const active = computed(() =>
-    hoveredIndex.value !== null ? segments.value[hoveredIndex.value] : null
-);
+const active = computed(() => (hoveredIndex.value !== null ? segments.value[hoveredIndex.value] : null));
 </script>
 
 <template>
     <div class="flex flex-col gap-5">
         <!-- SVG Donut -->
         <div class="relative mx-auto w-full max-w-[220px]">
-            <svg viewBox="0 0 200 200" class="w-full h-auto overflow-visible">
+            <svg viewBox="0 0 200 200" class="h-auto w-full overflow-visible">
                 <!-- Segments -->
                 <g v-for="seg in segments" :key="seg.name">
                     <!-- Visual path: animates, no pointer events -->
@@ -91,7 +89,7 @@ const active = computed(() =>
                     <path
                         :d="seg.hitPath"
                         fill="transparent"
-                        style="cursor: pointer;"
+                        style="cursor: pointer"
                         @mouseenter="hoveredIndex = seg.index"
                         @mouseleave="hoveredIndex = null"
                         @click="emit('segment-click', seg.name)"
@@ -99,55 +97,46 @@ const active = computed(() =>
                 </g>
 
                 <!-- Center label -->
-                <g style="pointer-events: none;">
+                <g style="pointer-events: none">
                     <transition name="fade-label" mode="out-in">
                         <!-- Hovered state -->
                         <g v-if="active" :key="active.name">
                             <circle :cx="CX" :cy="CY" r="44" :fill="active.hex" fill-opacity="0.08" />
                             <text
-                                :x="CX" :y="CY - 16"
+                                :x="CX"
+                                :y="CY - 16"
                                 text-anchor="middle"
                                 font-size="9.5"
                                 font-weight="600"
                                 letter-spacing="0.04em"
                                 fill="currentColor"
                                 opacity="0.5"
-                            >{{ active.name.toUpperCase() }}</text>
-                            <text
-                                :x="CX" :y="CY + 14"
-                                text-anchor="middle"
-                                font-size="26"
-                                font-weight="700"
-                                fill="currentColor"
-                            >{{ active.count }}</text>
-                            <text
-                                :x="CX" :y="CY + 28"
-                                text-anchor="middle"
-                                font-size="10"
-                                font-weight="500"
-                                fill="currentColor"
-                                opacity="0.45"
-                            >{{ active.pct }}%</text>
+                            >
+                                {{ active.name.toUpperCase() }}
+                            </text>
+                            <text :x="CX" :y="CY + 14" text-anchor="middle" font-size="26" font-weight="700" fill="currentColor">
+                                {{ active.count }}
+                            </text>
+                            <text :x="CX" :y="CY + 28" text-anchor="middle" font-size="10" font-weight="500" fill="currentColor" opacity="0.45">
+                                {{ active.pct }}%
+                            </text>
                         </g>
 
                         <!-- Default state -->
                         <g v-else key="total">
                             <text
-                                :x="CX" :y="CY - 12"
+                                :x="CX"
+                                :y="CY - 12"
                                 text-anchor="middle"
                                 font-size="9.5"
                                 font-weight="600"
                                 letter-spacing="0.05em"
                                 fill="currentColor"
                                 opacity="0.4"
-                            >TOTAL</text>
-                            <text
-                                :x="CX" :y="CY + 18"
-                                text-anchor="middle"
-                                font-size="28"
-                                font-weight="700"
-                                fill="currentColor"
-                            >{{ total }}</text>
+                            >
+                                TOTAL
+                            </text>
+                            <text :x="CX" :y="CY + 18" text-anchor="middle" font-size="28" font-weight="700" fill="currentColor">{{ total }}</text>
                         </g>
                     </transition>
                 </g>
@@ -159,24 +148,23 @@ const active = computed(() =>
             <button
                 v-for="seg in segments"
                 :key="seg.name"
-                class="flex items-center gap-2 min-w-0 rounded-md px-2 py-1.5 text-left transition-all duration-150"
-                :class="hoveredIndex !== null && hoveredIndex !== seg.index
-                    ? 'opacity-30'
-                    : 'hover:bg-muted/60'"
+                class="flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left transition-all duration-150"
+                :class="hoveredIndex !== null && hoveredIndex !== seg.index ? 'opacity-30' : 'hover:bg-muted/60'"
                 @mouseenter="hoveredIndex = seg.index"
                 @mouseleave="hoveredIndex = null"
                 @click="emit('segment-click', seg.name)"
             >
                 <div
-                    class="w-2.5 h-2.5 rounded-full shrink-0 transition-transform duration-150"
+                    class="h-2.5 w-2.5 shrink-0 rounded-full transition-transform duration-150"
                     :style="{ backgroundColor: seg.hex }"
                     :class="hoveredIndex === seg.index ? 'scale-[1.4]' : ''"
                 ></div>
-                <span class="text-xs text-muted-foreground truncate flex-1">{{ seg.name }}</span>
+                <span class="flex-1 truncate text-xs text-muted-foreground">{{ seg.name }}</span>
                 <span
-                    class="text-xs font-bold tabular-nums shrink-0 transition-colors duration-150"
+                    class="shrink-0 text-xs font-bold tabular-nums transition-colors duration-150"
                     :style="hoveredIndex === seg.index ? { color: seg.hex } : {}"
-                >{{ seg.pct }}%</span>
+                    >{{ seg.pct }}%</span
+                >
             </button>
         </div>
     </div>
@@ -185,7 +173,9 @@ const active = computed(() =>
 <style scoped>
 .fade-label-enter-active,
 .fade-label-leave-active {
-    transition: opacity 0.15s ease, transform 0.15s ease;
+    transition:
+        opacity 0.15s ease,
+        transform 0.15s ease;
 }
 .fade-label-enter-from,
 .fade-label-leave-to {

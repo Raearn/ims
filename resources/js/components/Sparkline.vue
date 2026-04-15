@@ -162,12 +162,7 @@ const crosshairY = computed(() => (hoverIndex.value === null ? 0 : yAt(hoverInde
                 stroke-linejoin="round"
                 class="transition-all duration-500 ease-out"
             />
-            <rect
-                :width="width"
-                :height="height"
-                fill="transparent"
-                class="outline-none"
-            />
+            <rect :width="width" :height="height" fill="transparent" class="outline-none" />
             <line
                 v-if="hoverIndex !== null && data.length >= 2"
                 :x1="crosshairX"

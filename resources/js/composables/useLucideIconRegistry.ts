@@ -1,17 +1,6 @@
+import { AlertCircle, AlertTriangle, ArrowUpCircle, Circle, Code, HardDrive, HelpCircle, Key, Network, Shield } from 'lucide-vue-next';
 import type { Component } from 'vue';
 import { markRaw, ref, shallowRef } from 'vue';
-import {
-    AlertCircle,
-    AlertTriangle,
-    ArrowUpCircle,
-    Circle,
-    Code,
-    HardDrive,
-    HelpCircle,
-    Key,
-    Network,
-    Shield,
-} from 'lucide-vue-next';
 
 /**
  * Small set of icons bundled immediately (used before the full Lucide chunk loads).
@@ -56,7 +45,7 @@ export function ensureLucideIconsLoaded(): Promise<void> {
             const mod = await import('lucide-vue-next');
             lucideAllIconMap.value = Object.fromEntries(
                 Object.entries(mod)
-                    .filter(([k, v]) => /^[A-Z]/.test(k) && ! k.endsWith('Icon') && v != null)
+                    .filter(([k, v]) => /^[A-Z]/.test(k) && !k.endsWith('Icon') && v != null)
                     .map(([k, v]) => [k, markRaw(v as Component)]),
             );
         } finally {

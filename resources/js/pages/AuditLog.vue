@@ -1,47 +1,48 @@
 <script setup lang="ts">
+import AuditChangeDetailModal, { type AuditChangeDetailEntry } from '@/components/AuditChangeDetailModal.vue';
+import AuditConfigChangeBlock from '@/components/AuditConfigChangeBlock.vue';
+import TicketDetailModal, { type TicketDetail } from '@/components/TicketDetailModal.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
-import AuditChangeDetailModal, { type AuditChangeDetailEntry } from '@/components/AuditChangeDetailModal.vue';
-import AuditConfigChangeBlock from '@/components/AuditConfigChangeBlock.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
-import TicketDetailModal, { type TicketDetail } from '@/components/TicketDetailModal.vue';
+import { laravelFetch } from '@/lib/laravelFetch';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
 import {
     CheckCircle2,
     ChevronLeft,
     ChevronRight,
+    Crown,
     ExternalLink,
     FilePenLine,
     FileSpreadsheet,
     FileText,
     Flag,
     GitBranch,
+    Headset,
     History,
+    KeyRound,
+    Layers,
     ListFilter,
     LogIn,
     LogOut,
     MessageSquare,
+    Pencil,
     Pin,
     PinOff,
     ScrollText,
     Search,
-    Pencil,
-    SlidersHorizontal,
-    Tags,
-    Layers,
-    Crown,
-    Headset,
     ShieldCheck,
+    SlidersHorizontal,
     Smile,
+    Tags,
     ThumbsDown,
     ThumbsUp,
     Trash2,
     UserCog,
-    KeyRound,
     UserMinus,
     UserPlus,
     UserRound,
@@ -50,7 +51,6 @@ import {
     X,
 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
-import { laravelFetch } from '@/lib/laravelFetch';
 
 interface ActivityRow {
     id: number;
@@ -103,11 +103,11 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 // ── Filter state ───────────────────────────────────────────────────────────
-const filterAction   = ref(props.filters.action ?? '');
-const filterUserId   = ref(props.filters.user_id ?? '');
-const filterSearch   = ref(props.filters.search ?? '');
-const filterFrom     = ref(props.filters.from ?? '');
-const filterTo       = ref(props.filters.to ?? '');
+const filterAction = ref(props.filters.action ?? '');
+const filterUserId = ref(props.filters.user_id ?? '');
+const filterSearch = ref(props.filters.search ?? '');
+const filterFrom = ref(props.filters.from ?? '');
+const filterTo = ref(props.filters.to ?? '');
 
 const ALL_ACTIONS = [
     'created',
@@ -144,90 +144,83 @@ const ALL_ACTIONS = [
 ] as const;
 
 const ACTION_LABELS: Record<string, string> = {
-    created:           'Incident Created',
-    ticket_edited:     'Incident Edited',
+    created: 'Incident Created',
+    ticket_edited: 'Incident Edited',
     dashboard_export_pdf: 'Dashboard Export (PDF)',
     tickets_export_excel: 'Incidents Export (Excel)',
-    status_changed:    'Status Changed',
-    priority_changed:  'Priority Changed',
-    solution_updated:  'Solution Updated',
-    handler_assigned:  'Handler Assigned',
-    handler_removed:   'Handler Removed',
-    comment_posted:    'Comment Posted',
-    comment_deleted:   'Comment Deleted',
-    comment_pinned:    'Comment Pinned',
-    comment_unpinned:  'Comment Unpinned',
-    reaction_added:    'Reaction Added',
-    reaction_removed:  'Reaction Removed',
-    upvote_added:      'Upvote Added',
-    upvote_removed:    'Upvote Removed',
-    downvote_added:    'Downvote Added',
-    downvote_removed:  'Downvote Removed',
-    vote_changed:      'Vote Changed',
-    ticket_deleted:    'Incident Deleted',
-    user_login:        'User Login',
-    user_logout:       'User Logout',
-    user_created:      'User Created',
-    user_updated:      'User Updated',
+    status_changed: 'Status Changed',
+    priority_changed: 'Priority Changed',
+    solution_updated: 'Solution Updated',
+    handler_assigned: 'Handler Assigned',
+    handler_removed: 'Handler Removed',
+    comment_posted: 'Comment Posted',
+    comment_deleted: 'Comment Deleted',
+    comment_pinned: 'Comment Pinned',
+    comment_unpinned: 'Comment Unpinned',
+    reaction_added: 'Reaction Added',
+    reaction_removed: 'Reaction Removed',
+    upvote_added: 'Upvote Added',
+    upvote_removed: 'Upvote Removed',
+    downvote_added: 'Downvote Added',
+    downvote_removed: 'Downvote Removed',
+    vote_changed: 'Vote Changed',
+    ticket_deleted: 'Incident Deleted',
+    user_login: 'User Login',
+    user_logout: 'User Logout',
+    user_created: 'User Created',
+    user_updated: 'User Updated',
     user_role_changed: 'User Role Changed',
-    user_deleted:      'User Deleted',
-    settings_updated:  'App Settings Updated',
+    user_deleted: 'User Deleted',
+    settings_updated: 'App Settings Updated',
     ticket_categories_updated: 'Incident Categories Updated',
     ticket_priorities_updated: 'Incident Priorities Updated',
-    ticket_statuses_updated:   'Incident Statuses Updated',
+    ticket_statuses_updated: 'Incident Statuses Updated',
 };
 
 type IconComponent = typeof History;
 
 const ACTIVITY_CONFIG: Record<string, { icon: IconComponent; classes: string }> = {
-    created:           { icon: FilePenLine,   classes: 'bg-primary/10 text-primary border-primary/20' },
-    ticket_edited:     { icon: Pencil,        classes: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20' },
+    created: { icon: FilePenLine, classes: 'bg-primary/10 text-primary border-primary/20' },
+    ticket_edited: { icon: Pencil, classes: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20' },
     dashboard_export_pdf: { icon: FileText, classes: 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20' },
     tickets_export_excel: { icon: FileSpreadsheet, classes: 'bg-green-600/10 text-green-700 dark:text-green-400 border-green-600/20' },
-    status_changed:    { icon: GitBranch,     classes: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' },
-    priority_changed:  { icon: Flag,          classes: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' },
-    solution_updated:  { icon: CheckCircle2,  classes: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' },
-    handler_assigned:  { icon: UserPlus,      classes: 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20' },
-    handler_removed:   { icon: UserMinus,     classes: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' },
-    comment_posted:    { icon: MessageSquare, classes: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20' },
-    comment_deleted:   { icon: Trash2,        classes: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' },
-    comment_pinned:    { icon: Pin,           classes: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' },
-    comment_unpinned:  { icon: PinOff,        classes: 'bg-muted text-muted-foreground border-border/50' },
-    reaction_added:    { icon: Smile,         classes: 'bg-pink-500/10 text-pink-600 dark:text-pink-400 border-pink-500/20' },
-    reaction_removed:  { icon: Smile,         classes: 'bg-muted text-muted-foreground border-border/50' },
-    upvote_added:      { icon: ThumbsUp,      classes: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' },
-    upvote_removed:    { icon: ThumbsUp,      classes: 'bg-muted text-muted-foreground border-border/50' },
-    downvote_added:    { icon: ThumbsDown,    classes: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' },
-    downvote_removed:  { icon: ThumbsDown,    classes: 'bg-muted text-muted-foreground border-border/50' },
-    vote_changed:      { icon: ThumbsUp,      classes: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' },
-    ticket_deleted:    { icon: Trash2,        classes: 'bg-rose-600/10 text-rose-700 dark:text-rose-400 border-rose-600/20' },
-    user_login:        { icon: LogIn,         classes: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' },
-    user_logout:       { icon: LogOut,        classes: 'bg-muted text-muted-foreground border-border/50' },
-    user_created:      { icon: UserPlus,      classes: 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20' },
-    user_updated:      { icon: UserCog,       classes: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' },
-    user_role_changed: { icon: KeyRound,      classes: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20' },
-    user_deleted:      { icon: UserX,         classes: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' },
-    settings_updated:  { icon: SlidersHorizontal, classes: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20' },
+    status_changed: { icon: GitBranch, classes: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' },
+    priority_changed: { icon: Flag, classes: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' },
+    solution_updated: { icon: CheckCircle2, classes: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' },
+    handler_assigned: { icon: UserPlus, classes: 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20' },
+    handler_removed: { icon: UserMinus, classes: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' },
+    comment_posted: { icon: MessageSquare, classes: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20' },
+    comment_deleted: { icon: Trash2, classes: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' },
+    comment_pinned: { icon: Pin, classes: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' },
+    comment_unpinned: { icon: PinOff, classes: 'bg-muted text-muted-foreground border-border/50' },
+    reaction_added: { icon: Smile, classes: 'bg-pink-500/10 text-pink-600 dark:text-pink-400 border-pink-500/20' },
+    reaction_removed: { icon: Smile, classes: 'bg-muted text-muted-foreground border-border/50' },
+    upvote_added: { icon: ThumbsUp, classes: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' },
+    upvote_removed: { icon: ThumbsUp, classes: 'bg-muted text-muted-foreground border-border/50' },
+    downvote_added: { icon: ThumbsDown, classes: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' },
+    downvote_removed: { icon: ThumbsDown, classes: 'bg-muted text-muted-foreground border-border/50' },
+    vote_changed: { icon: ThumbsUp, classes: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' },
+    ticket_deleted: { icon: Trash2, classes: 'bg-rose-600/10 text-rose-700 dark:text-rose-400 border-rose-600/20' },
+    user_login: { icon: LogIn, classes: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' },
+    user_logout: { icon: LogOut, classes: 'bg-muted text-muted-foreground border-border/50' },
+    user_created: { icon: UserPlus, classes: 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20' },
+    user_updated: { icon: UserCog, classes: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' },
+    user_role_changed: { icon: KeyRound, classes: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20' },
+    user_deleted: { icon: UserX, classes: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' },
+    settings_updated: { icon: SlidersHorizontal, classes: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20' },
     ticket_categories_updated: { icon: Tags, classes: 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20' },
     ticket_priorities_updated: { icon: Flag, classes: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' },
-    ticket_statuses_updated:   { icon: Layers, classes: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' },
+    ticket_statuses_updated: { icon: Layers, classes: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' },
 };
 
-const getActivityIcon = (action: string): IconComponent =>
-    (ACTIVITY_CONFIG[action]?.icon ?? History) as IconComponent;
+const getActivityIcon = (action: string): IconComponent => (ACTIVITY_CONFIG[action]?.icon ?? History) as IconComponent;
 
-const getActivityIconClass = (action: string): string =>
-    ACTIVITY_CONFIG[action]?.classes ?? 'bg-muted text-muted-foreground border-border/50';
+const getActivityIconClass = (action: string): string => ACTIVITY_CONFIG[action]?.classes ?? 'bg-muted text-muted-foreground border-border/50';
 
-const getActionLabel = (action: string): string =>
-    ACTION_LABELS[action] ?? action.replace(/_/g, ' ');
+const getActionLabel = (action: string): string => ACTION_LABELS[action] ?? action.replace(/_/g, ' ');
 
 function isTicketConfigSettingsAudit(action: string): boolean {
-    return (
-        action === 'ticket_statuses_updated' ||
-        action === 'ticket_categories_updated' ||
-        action === 'ticket_priorities_updated'
-    );
+    return action === 'ticket_statuses_updated' || action === 'ticket_categories_updated' || action === 'ticket_priorities_updated';
 }
 
 const selectedActor = computed(() => {
@@ -309,30 +302,28 @@ function onActorSelectChange(value: unknown): void {
 }
 
 // ── Filter apply / clear ───────────────────────────────────────────────────
-const hasActiveFilters = computed(() =>
-    !!(filterAction.value || filterUserId.value || filterSearch.value || filterFrom.value || filterTo.value),
-);
+const hasActiveFilters = computed(() => !!(filterAction.value || filterUserId.value || filterSearch.value || filterFrom.value || filterTo.value));
 
 function applyFilters(): void {
     router.get(
         route('audit-log'),
         {
-            action:    filterAction.value || undefined,
-            user_id:   filterUserId.value || undefined,
-            search:    filterSearch.value || undefined,
-            from:      filterFrom.value || undefined,
-            to:        filterTo.value || undefined,
+            action: filterAction.value || undefined,
+            user_id: filterUserId.value || undefined,
+            search: filterSearch.value || undefined,
+            from: filterFrom.value || undefined,
+            to: filterTo.value || undefined,
         },
         { preserveState: true, replace: true, preserveScroll: true },
     );
 }
 
 function clearFilters(): void {
-    filterAction.value   = '';
-    filterUserId.value   = '';
-    filterSearch.value   = '';
-    filterFrom.value     = '';
-    filterTo.value       = '';
+    filterAction.value = '';
+    filterUserId.value = '';
+    filterSearch.value = '';
+    filterFrom.value = '';
+    filterTo.value = '';
     router.get(route('audit-log'), {}, { preserveState: false });
 }
 
@@ -366,7 +357,7 @@ async function openTicket(ticketId: number | null): Promise<void> {
             isTicketDetailOpen.value = false;
             return;
         }
-        const data = await res.json() as { ticket: TicketDetail; priorities: typeof ticketDetailPriorities.value };
+        const data = (await res.json()) as { ticket: TicketDetail; priorities: typeof ticketDetailPriorities.value };
         ticketDetail.value = data.ticket;
         ticketDetailPriorities.value = data.priorities;
     } catch {
@@ -418,21 +409,17 @@ function auditRowIsClickable(entry: ActivityRow): boolean {
 }
 
 // ── Pagination helper ──────────────────────────────────────────────────────
-const pageLinks = computed(() =>
-    props.activities.links.filter(l => l.label !== '« Previous' && l.label !== 'Next »'),
-);
+const pageLinks = computed(() => props.activities.links.filter((l) => l.label !== '« Previous' && l.label !== 'Next »'));
 
-const prevLink = computed(() => props.activities.links.find(l => l.label === '« Previous') ?? null);
-const nextLink = computed(() => props.activities.links.find(l => l.label === 'Next »') ?? null);
-
+const prevLink = computed(() => props.activities.links.find((l) => l.label === '« Previous') ?? null);
+const nextLink = computed(() => props.activities.links.find((l) => l.label === 'Next »') ?? null);
 </script>
 
 <template>
     <Head title="Audit Log" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
-        <div class="flex h-full min-w-0 w-full flex-1 flex-col gap-4 p-4 md:gap-6 md:p-6">
-
+        <div class="flex h-full w-full min-w-0 flex-1 flex-col gap-4 p-4 md:gap-6 md:p-6">
             <!-- Page header -->
             <div class="flex items-center justify-between gap-4">
                 <div>
@@ -457,19 +444,19 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
             <div class="flex min-w-0 flex-col gap-3 md:flex-row md:items-end md:justify-between md:gap-4">
                 <!-- Search by anything -->
                 <div class="relative w-full shrink-0 md:w-64 md:max-w-xs">
-                    <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
+                    <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
                     <Input
                         v-model="filterSearch"
                         type="text"
                         placeholder="Search title, incident ID, action, values…"
-                        class="h-9 pl-9 w-full bg-background shadow-sm border-border/60 transition-colors focus-visible:border-primary"
+                        class="h-9 w-full border-border/60 bg-background pl-9 shadow-sm transition-colors focus-visible:border-primary"
                     />
                     <!-- Clear search shortcut hint -->
                     <button
                         v-if="filterSearch"
                         type="button"
                         @click="filterSearch = ''"
-                        class="absolute right-2.5 top-1/2 -translate-y-1/2 flex h-4 w-4 items-center justify-center rounded text-muted-foreground/40 hover:text-foreground transition-colors"
+                        class="absolute right-2.5 top-1/2 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded text-muted-foreground/40 transition-colors hover:text-foreground"
                         aria-label="Clear search"
                     >
                         <X class="h-3.5 w-3.5" />
@@ -478,15 +465,12 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
 
                 <!-- Filters: single horizontal row (scroll on narrow viewports) -->
                 <div
-                    class="flex min-w-0 flex-nowrap items-end gap-2 overflow-x-auto pb-0.5 sm:gap-3 md:min-w-0 md:flex-1 md:justify-end md:overflow-visible md:pb-0 [-webkit-overflow-scrolling:touch]"
+                    class="flex min-w-0 flex-nowrap items-end gap-2 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch] sm:gap-3 md:min-w-0 md:flex-1 md:justify-end md:overflow-visible md:pb-0"
                 >
                     <!-- Action type -->
                     <div class="flex w-[min(16rem,calc(100vw-2rem))] shrink-0 flex-col gap-1 sm:w-[15rem]">
                         <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Action</span>
-                        <Select
-                            :model-value="filterAction || FILTER_ALL"
-                            @update:model-value="onActionSelectChange"
-                        >
+                        <Select :model-value="filterAction || FILTER_ALL" @update:model-value="onActionSelectChange">
                             <SelectTrigger
                                 class="h-9 border-border/60 bg-background shadow-sm focus:ring-1 focus:ring-primary data-[placeholder]:text-muted-foreground [&>span:first-child]:min-w-0 [&>span:first-child]:flex-1"
                             >
@@ -494,15 +478,10 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                                     <span
                                         class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border"
                                         :class="
-                                            filterAction
-                                                ? getActivityIconClass(filterAction)
-                                                : 'border-border/50 bg-muted/50 text-muted-foreground'
+                                            filterAction ? getActivityIconClass(filterAction) : 'border-border/50 bg-muted/50 text-muted-foreground'
                                         "
                                     >
-                                        <component
-                                            :is="filterAction ? getActivityIcon(filterAction) : ListFilter"
-                                            class="h-3.5 w-3.5"
-                                        />
+                                        <component :is="filterAction ? getActivityIcon(filterAction) : ListFilter" class="h-3.5 w-3.5" />
                                     </span>
                                     <span class="truncate text-xs font-semibold">
                                         {{ filterAction ? getActionLabel(filterAction) : 'All actions' }}
@@ -538,10 +517,7 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                     <!-- Actor -->
                     <div class="flex w-[min(18rem,calc(100vw-2rem))] shrink-0 flex-col gap-1 sm:w-[17rem]">
                         <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Actor</span>
-                        <Select
-                            :model-value="filterUserId || FILTER_ALL"
-                            @update:model-value="onActorSelectChange"
-                        >
+                        <Select :model-value="filterUserId || FILTER_ALL" @update:model-value="onActorSelectChange">
                             <SelectTrigger
                                 class="h-auto min-h-9 border-border/60 bg-background py-1.5 shadow-sm focus:ring-1 focus:ring-primary data-[placeholder]:text-muted-foreground [&>span:first-child]:min-w-0 [&>span:first-child]:flex-1"
                             >
@@ -554,13 +530,10 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                                             <component :is="getRoleIcon(selectedActor.role)" class="h-4 w-4" />
                                         </span>
                                         <div class="flex min-w-0 flex-1 flex-col items-start gap-0 leading-tight">
-                                            <span class="w-full truncate text-xs font-semibold text-foreground">{{
-                                                selectedActor.name
+                                            <span class="w-full truncate text-xs font-semibold text-foreground">{{ selectedActor.name }}</span>
+                                            <span class="text-[10px] font-semibold" :class="getRoleAccentTextClass(selectedActor.role)">{{
+                                                formatUserRoleLabel(selectedActor.role)
                                             }}</span>
-                                            <span
-                                                class="text-[10px] font-semibold"
-                                                :class="getRoleAccentTextClass(selectedActor.role)"
-                                            >{{ formatUserRoleLabel(selectedActor.role) }}</span>
                                         </div>
                                     </template>
                                     <template v-else>
@@ -617,19 +590,21 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                     <!-- Date range -->
                     <div class="flex shrink-0 flex-col gap-1">
                         <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Date Range</span>
-                        <div class="flex items-center gap-1.5 h-9 rounded-md border border-border/60 bg-background px-2.5 shadow-sm transition-colors focus-within:border-primary focus-within:ring-1 focus-within:ring-primary">
+                        <div
+                            class="flex h-9 items-center gap-1.5 rounded-md border border-border/60 bg-background px-2.5 shadow-sm transition-colors focus-within:border-primary focus-within:ring-1 focus-within:ring-primary"
+                        >
                             <input
                                 v-model="filterFrom"
                                 type="date"
                                 :max="filterTo || undefined"
-                                class="w-[105px] bg-transparent text-xs font-medium text-foreground placeholder:text-muted-foreground/50 focus:outline-none cursor-pointer [color-scheme:light] dark:[color-scheme:dark]"
+                                class="w-[105px] cursor-pointer bg-transparent text-xs font-medium text-foreground [color-scheme:light] placeholder:text-muted-foreground/50 focus:outline-none dark:[color-scheme:dark]"
                             />
-                            <span class="text-muted-foreground/40 text-xs font-medium select-none">to</span>
+                            <span class="select-none text-xs font-medium text-muted-foreground/40">to</span>
                             <input
                                 v-model="filterTo"
                                 type="date"
                                 :min="filterFrom || undefined"
-                                class="w-[105px] bg-transparent text-xs font-medium text-foreground placeholder:text-muted-foreground/50 focus:outline-none cursor-pointer [color-scheme:light] dark:[color-scheme:dark]"
+                                class="w-[105px] cursor-pointer bg-transparent text-xs font-medium text-foreground [color-scheme:light] placeholder:text-muted-foreground/50 focus:outline-none dark:[color-scheme:dark]"
                             />
                         </div>
                     </div>
@@ -649,9 +624,9 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
             </div>
 
             <!-- Table -->
-            <Card class="shadow-none border border-border/50 overflow-hidden w-full min-w-0">
+            <Card class="w-full min-w-0 overflow-hidden border border-border/50 shadow-none">
                 <div class="w-full min-w-0 overflow-x-auto">
-                    <table class="w-full min-w-[56rem] text-sm table-fixed border-collapse">
+                    <table class="w-full min-w-[56rem] table-fixed border-collapse text-sm">
                         <colgroup>
                             <col class="w-[13%]" />
                             <col class="w-[15%]" />
@@ -661,15 +636,30 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                         </colgroup>
                         <thead>
                             <tr class="border-b border-border/50 bg-muted/30">
-                                <th class="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Date / Time</th>
-                                <th class="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Actor</th>
-                                <th class="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Action</th>
-                                <th class="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Incident</th>
+                                <th
+                                    class="whitespace-nowrap px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
+                                >
+                                    Date / Time
+                                </th>
+                                <th
+                                    class="whitespace-nowrap px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
+                                >
+                                    Actor
+                                </th>
+                                <th
+                                    class="whitespace-nowrap px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
+                                >
+                                    Action
+                                </th>
+                                <th
+                                    class="whitespace-nowrap px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
+                                >
+                                    Incident
+                                </th>
                                 <th class="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Change</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-border/30">
-
                             <!-- Empty state -->
                             <tr v-if="activities.data.length === 0">
                                 <td colspan="5" class="px-4 py-16 text-center">
@@ -677,9 +667,7 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                                         <History class="h-10 w-10" />
                                         <p class="text-sm font-medium">No activity found</p>
                                         <div v-if="hasActiveFilters" class="flex flex-col items-center gap-3">
-                                            <p class="text-xs">
-                                                No events match your current filter criteria.
-                                            </p>
+                                            <p class="text-xs">No events match your current filter criteria.</p>
                                             <Button variant="outline" size="sm" @click="clearFilters" class="h-8 text-xs font-medium">
                                                 Clear Filters
                                             </Button>
@@ -693,29 +681,33 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                                 v-for="entry in activities.data"
                                 :key="entry.id"
                                 :class="[
-                                    'transition-colors group',
+                                    'group transition-colors',
                                     auditRowIsClickable(entry) ? 'cursor-pointer hover:bg-muted/40' : 'hover:bg-muted/20',
                                 ]"
                                 @click="onAuditRowClick(entry)"
                             >
                                 <!-- Date -->
-                                <td class="px-4 py-3 whitespace-nowrap">
+                                <td class="whitespace-nowrap px-4 py-3">
                                     <p class="text-xs font-medium text-foreground">{{ entry.createdAtFormatted }}</p>
-                                    <p class="text-[10px] text-muted-foreground/60 mt-0.5">{{ entry.createdAt }}</p>
+                                    <p class="mt-0.5 text-[10px] text-muted-foreground/60">{{ entry.createdAt }}</p>
                                 </td>
 
                                 <!-- Actor -->
-                                <td class="px-4 py-3 min-w-0 align-middle">
+                                <td class="min-w-0 px-4 py-3 align-middle">
                                     <div class="flex items-start gap-2">
                                         <div
                                             class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted text-[9px] font-bold uppercase"
                                         >
-                                            {{ entry.userName.split(' ').map((n) => n[0]).join('').substring(0, 2) }}
+                                            {{
+                                                entry.userName
+                                                    .split(' ')
+                                                    .map((n) => n[0])
+                                                    .join('')
+                                                    .substring(0, 2)
+                                            }}
                                         </div>
                                         <div class="flex min-w-0 flex-col gap-1">
-                                            <span class="truncate text-xs font-medium text-foreground">{{
-                                                entry.userName
-                                            }}</span>
+                                            <span class="truncate text-xs font-medium text-foreground">{{ entry.userName }}</span>
                                             <Badge
                                                 v-if="entry.userRole"
                                                 variant="outline"
@@ -724,10 +716,7 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                                                     getRoleBadgeClass(entry.userRole),
                                                 ]"
                                             >
-                                                <component
-                                                    :is="getRoleIcon(entry.userRole)"
-                                                    class="h-2.5 w-2.5 shrink-0"
-                                                />
+                                                <component :is="getRoleIcon(entry.userRole)" class="h-2.5 w-2.5 shrink-0" />
                                                 {{ formatUserRoleLabel(entry.userRole) }}
                                             </Badge>
                                         </div>
@@ -735,31 +724,39 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                                 </td>
 
                                 <!-- Action badge -->
-                                <td class="px-4 py-3 whitespace-nowrap">
-                                    <span :class="['inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold', getActivityIconClass(entry.action)]">
+                                <td class="whitespace-nowrap px-4 py-3">
+                                    <span
+                                        :class="[
+                                            'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold',
+                                            getActivityIconClass(entry.action),
+                                        ]"
+                                    >
                                         <component :is="getActivityIcon(entry.action)" class="h-3 w-3 shrink-0" />
                                         {{ getActionLabel(entry.action) }}
                                     </span>
                                 </td>
 
                                 <!-- Incident -->
-                                <td class="px-4 py-3 min-w-0 align-middle">
+                                <td class="min-w-0 px-4 py-3 align-middle">
                                     <template v-if="entry.ticketId">
                                         <p class="text-[10px] font-bold text-primary/70">{{ entry.ticketTktId }}</p>
-                                        <p class="text-xs text-muted-foreground break-words line-clamp-2">{{ entry.ticketTitle }}</p>
+                                        <p class="line-clamp-2 break-words text-xs text-muted-foreground">{{ entry.ticketTitle }}</p>
                                     </template>
                                     <span v-else class="text-xs text-muted-foreground/40">—</span>
                                 </td>
 
                                 <!-- Change: show “updated” only; full diff in row-click modal -->
-                                <td class="px-4 py-3 min-w-0 align-top">
-                                    <div class="flex items-start justify-between gap-3 min-w-0">
+                                <td class="min-w-0 px-4 py-3 align-top">
+                                    <div class="flex min-w-0 items-start justify-between gap-3">
                                         <div class="flex min-w-0 flex-1 flex-col gap-1">
                                             <template v-if="entry.newValue">
                                                 <div
                                                     class="max-h-48 overflow-y-auto overscroll-contain rounded-md border border-emerald-500/25 bg-emerald-500/5 px-2.5 py-2 dark:bg-emerald-500/10"
                                                 >
-                                                    <span class="mb-1 block text-[9px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400/90">Updated</span>
+                                                    <span
+                                                        class="mb-1 block text-[9px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400/90"
+                                                        >Updated</span
+                                                    >
                                                     <AuditConfigChangeBlock
                                                         v-if="isTicketConfigSettingsAudit(entry.action)"
                                                         :text="entry.newValue"
@@ -767,24 +764,22 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                                                     />
                                                     <div
                                                         v-else
-                                                        class="text-[10px] font-medium leading-relaxed whitespace-pre-wrap break-words text-emerald-800 dark:text-emerald-300"
-                                                    >{{ entry.newValue }}</div>
+                                                        class="whitespace-pre-wrap break-words text-[10px] font-medium leading-relaxed text-emerald-800 dark:text-emerald-300"
+                                                    >
+                                                        {{ entry.newValue }}
+                                                    </div>
                                                 </div>
-                                                <p
-                                                    v-if="entry.oldValue"
-                                                    class="text-[9px] text-muted-foreground/80"
-                                                >
+                                                <p v-if="entry.oldValue" class="text-[9px] text-muted-foreground/80">
                                                     Row click: previous vs updated
                                                 </p>
                                             </template>
-                                            <template v-else-if="entry.oldValue">
-                                            </template>
+                                            <template v-else-if="entry.oldValue"> </template>
                                             <span v-else class="text-[10px] text-muted-foreground/40">—</span>
                                         </div>
                                         <button
                                             v-if="entry.ticketId"
                                             type="button"
-                                            class="inline-flex shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                            class="inline-flex shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100"
                                             title="Open incident"
                                             aria-label="Open incident"
                                             @click.stop="openTicket(entry.ticketId)"
@@ -799,10 +794,11 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                 </div>
 
                 <!-- Pagination -->
-                <div v-if="activities.last_page > 1" class="flex items-center justify-between border-t border-border/40 px-4 py-3 bg-muted/10">
+                <div v-if="activities.last_page > 1" class="flex items-center justify-between border-t border-border/40 bg-muted/10 px-4 py-3">
                     <p class="text-xs text-muted-foreground">
-                        Showing <span class="font-semibold">{{ activities.from ?? 0 }}</span>–<span class="font-semibold">{{ activities.to ?? 0 }}</span>
-                        of <span class="font-semibold">{{ activities.total.toLocaleString() }}</span> events
+                        Showing <span class="font-semibold">{{ activities.from ?? 0 }}</span
+                        >–<span class="font-semibold">{{ activities.to ?? 0 }}</span> of
+                        <span class="font-semibold">{{ activities.total.toLocaleString() }}</span> events
                     </p>
 
                     <div class="flex items-center gap-1">
@@ -810,11 +806,14 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                         <Link
                             v-if="prevLink?.url"
                             :href="prevLink.url"
-                            class="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border/50 bg-background text-xs hover:bg-muted transition-colors"
+                            class="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border/50 bg-background text-xs transition-colors hover:bg-muted"
                         >
                             <ChevronLeft class="h-3.5 w-3.5" />
                         </Link>
-                        <span v-else class="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border/30 bg-muted/30 text-xs text-muted-foreground/40">
+                        <span
+                            v-else
+                            class="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border/30 bg-muted/30 text-xs text-muted-foreground/40"
+                        >
                             <ChevronLeft class="h-3.5 w-3.5" />
                         </span>
 
@@ -823,7 +822,7 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                             <Link
                                 v-if="link.url && !link.active"
                                 :href="link.url"
-                                class="inline-flex h-7 min-w-[28px] items-center justify-center rounded-md border border-border/50 bg-background px-2 text-xs hover:bg-muted transition-colors"
+                                class="inline-flex h-7 min-w-[28px] items-center justify-center rounded-md border border-border/50 bg-background px-2 text-xs transition-colors hover:bg-muted"
                             >
                                 <span v-html="link.label" />
                             </Link>
@@ -843,11 +842,14 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                         <Link
                             v-if="nextLink?.url"
                             :href="nextLink.url"
-                            class="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border/50 bg-background text-xs hover:bg-muted transition-colors"
+                            class="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border/50 bg-background text-xs transition-colors hover:bg-muted"
                         >
                             <ChevronRight class="h-3.5 w-3.5" />
                         </Link>
-                        <span v-else class="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border/30 bg-muted/30 text-xs text-muted-foreground/40">
+                        <span
+                            v-else
+                            class="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border/30 bg-muted/30 text-xs text-muted-foreground/40"
+                        >
                             <ChevronRight class="h-3.5 w-3.5" />
                         </span>
                     </div>
@@ -870,7 +872,6 @@ const nextLink = computed(() => props.activities.links.find(l => l.label === 'Ne
                 :show-edit-button="false"
                 :show-open-in-tickets-button="true"
             />
-
         </div>
     </AppLayout>
 </template>

@@ -15,7 +15,7 @@ defineProps<Props>();
         <AppLogoIcon class="size-5 fill-current group-data-[collapsible=icon]:size-4" />
     </div>
     <div class="ml-3 grid min-w-0 flex-1 text-left text-sm group-data-[collapsible=icon]:hidden">
-        <span class="mb-0.5 truncate font-bold leading-none tracking-tight text-foreground uppercase">EastWest IMS</span>
-        <span class="truncate text-[10px] text-muted-foreground font-medium uppercase tracking-widest">Management System</span>
+        <span class="mb-0.5 truncate font-bold uppercase leading-none tracking-tight text-foreground">EastWest IMS</span>
+        <span class="truncate text-[10px] font-medium uppercase tracking-widest text-muted-foreground">Management System</span>
     </div>
 </template>

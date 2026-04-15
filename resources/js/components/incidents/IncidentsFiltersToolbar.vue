@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { SlidersHorizontal, X } from 'lucide-vue-next';
-import { ref, computed } from 'vue';
+import { computed, ref } from 'vue';
 
 type CategoryOpt = {
     id: number;
@@ -111,12 +111,14 @@ function closeSheetAfterPick(): void {
                             </div>
                             <div class="grid gap-2">
                                 <span class="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Created between</span>
-                                <div class="flex flex-col gap-2 rounded-xl border border-border/60 bg-background/60 px-3 py-2.5 shadow-sm backdrop-blur-sm">
+                                <div
+                                    class="flex flex-col gap-2 rounded-xl border border-border/60 bg-background/60 px-3 py-2.5 shadow-sm backdrop-blur-sm"
+                                >
                                     <input
                                         :value="dateFrom"
                                         type="date"
                                         :max="dateTo || undefined"
-                                        class="w-full bg-transparent text-xs font-medium text-foreground focus:outline-none [color-scheme:light] dark:[color-scheme:dark]"
+                                        class="w-full bg-transparent text-xs font-medium text-foreground [color-scheme:light] focus:outline-none dark:[color-scheme:dark]"
                                         @input="emit('update:dateFrom', ($event.target as HTMLInputElement).value)"
                                     />
                                     <span class="text-center text-[10px] text-muted-foreground/50">to</span>
@@ -124,7 +126,7 @@ function closeSheetAfterPick(): void {
                                         :value="dateTo"
                                         type="date"
                                         :min="dateFrom || undefined"
-                                        class="w-full bg-transparent text-xs font-medium text-foreground focus:outline-none [color-scheme:light] dark:[color-scheme:dark]"
+                                        class="w-full bg-transparent text-xs font-medium text-foreground [color-scheme:light] focus:outline-none dark:[color-scheme:dark]"
                                         @input="emit('update:dateTo', ($event.target as HTMLInputElement).value)"
                                     />
                                     <button
@@ -157,9 +159,7 @@ function closeSheetAfterPick(): void {
                                         "
                                     >
                                         All
-                                        <span class="text-[10px] font-bold tabular-nums text-muted-foreground">{{
-                                            priorityCounts['All'] ?? 0
-                                        }}</span>
+                                        <span class="text-[10px] font-bold tabular-nums text-muted-foreground">{{ priorityCounts['All'] ?? 0 }}</span>
                                     </button>
                                     <button
                                         v-for="p in priorityOptions"
@@ -169,7 +169,7 @@ function closeSheetAfterPick(): void {
                                         :class="
                                             currentPriority !== p.name
                                                 ? 'text-muted-foreground hover:bg-background/60'
-                                                : 'shadow-sm ring-1 ring-current/20'
+                                                : 'ring-current/20 shadow-sm ring-1'
                                         "
                                         :style="currentPriority === p.name ? { color: p.color, backgroundColor: p.color + '1a' } : {}"
                                         @click="
@@ -195,13 +195,7 @@ function closeSheetAfterPick(): void {
                                     </button>
                                 </div>
                             </div>
-                            <Button
-                                v-if="showReset"
-                                type="button"
-                                variant="outline"
-                                class="w-full text-xs font-semibold"
-                                @click="emit('reset')"
-                            >
+                            <Button v-if="showReset" type="button" variant="outline" class="w-full text-xs font-semibold" @click="emit('reset')">
                                 <X class="mr-1.5 h-3.5 w-3.5" />
                                 Reset all filters
                             </Button>
@@ -210,7 +204,7 @@ function closeSheetAfterPick(): void {
                 </Sheet>
             </div>
             <div
-                class="flex w-full items-center gap-1 overflow-x-auto rounded-xl border border-border/60 bg-background/60 p-1 shadow-sm backdrop-blur-sm no-scrollbar"
+                class="no-scrollbar flex w-full items-center gap-1 overflow-x-auto rounded-xl border border-border/60 bg-background/60 p-1 shadow-sm backdrop-blur-sm"
             >
                 <button
                     type="button"
@@ -233,7 +227,7 @@ function closeSheetAfterPick(): void {
                     :class="
                         currentPriority !== p.name
                             ? 'text-muted-foreground hover:bg-background/60 hover:text-foreground'
-                            : 'shadow-sm ring-1 ring-current/20'
+                            : 'ring-current/20 shadow-sm ring-1'
                     "
                     :style="currentPriority === p.name ? { color: p.color, backgroundColor: p.color + '1a' } : {}"
                     @click="emit('update:currentPriority', p.name)"
@@ -258,12 +252,9 @@ function closeSheetAfterPick(): void {
         <!-- Desktop toolbar -->
         <div class="hidden flex-wrap items-center gap-2 md:flex">
             <div class="hidden w-[min(11rem,42vw)] shrink-0 md:block">
-                <Select
-                    :model-value="currentCategory"
-                    @update:model-value="(v) => emit('update:currentCategory', typeof v === 'string' ? v : 'All')"
-                >
+                <Select :model-value="currentCategory" @update:model-value="(v) => emit('update:currentCategory', typeof v === 'string' ? v : 'All')">
                     <SelectTrigger
-                        class="h-9 rounded-xl border-border/60 bg-background/60 shadow-none backdrop-blur-sm focus:ring-1 focus:ring-ring hover:border-primary/25"
+                        class="h-9 rounded-xl border-border/60 bg-background/60 shadow-none backdrop-blur-sm hover:border-primary/25 focus:ring-1 focus:ring-ring"
                     >
                         <SelectValue placeholder="Category" />
                     </SelectTrigger>
@@ -319,7 +310,7 @@ function closeSheetAfterPick(): void {
             </div>
 
             <div
-                class="hidden w-full items-center gap-1 overflow-x-auto rounded-xl border border-border/60 bg-background/60 p-1 shadow-sm backdrop-blur-sm no-scrollbar md:flex md:w-auto lg:max-w-none"
+                class="no-scrollbar hidden w-full items-center gap-1 overflow-x-auto rounded-xl border border-border/60 bg-background/60 p-1 shadow-sm backdrop-blur-sm md:flex md:w-auto lg:max-w-none"
             >
                 <button
                     type="button"
@@ -342,7 +333,7 @@ function closeSheetAfterPick(): void {
                     :class="
                         currentPriority !== p.name
                             ? 'text-muted-foreground hover:bg-background/60 hover:text-foreground'
-                            : 'shadow-sm ring-1 ring-current/20'
+                            : 'ring-current/20 shadow-sm ring-1'
                     "
                     :style="currentPriority === p.name ? { color: p.color, backgroundColor: p.color + '1a' } : {}"
                     @click="emit('update:currentPriority', p.name)"
@@ -389,7 +380,6 @@ function closeSheetAfterPick(): void {
                 </button>
             </Transition>
         </div>
-
     </div>
 </template>
 

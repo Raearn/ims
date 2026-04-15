@@ -3,25 +3,11 @@ import AuditConfigChangeBlock from '@/components/AuditConfigChangeBlock.vue';
 import TicketDetailBody from '@/components/TicketDetailBody.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-    Dialog,
-    DialogContent,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { laravelFetch } from '@/lib/laravelFetch';
 import type { TicketDetail } from '@/types/ticketDetail';
-import {
-    ArrowLeftRight,
-    Clock,
-    Layers,
-    LayoutList,
-    ScrollText,
-    Ticket,
-    UserRound,
-} from 'lucide-vue-next';
+import { ArrowLeftRight, Clock, Layers, LayoutList, ScrollText, Ticket, UserRound } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
 export interface AuditChangeDetailEntry {
@@ -62,11 +48,7 @@ const usesTicketConfigChangeBlock = computed(() => {
         return false;
     }
 
-    return (
-        action === 'ticket_statuses_updated' ||
-        action === 'ticket_categories_updated' ||
-        action === 'ticket_priorities_updated'
-    );
+    return action === 'ticket_statuses_updated' || action === 'ticket_categories_updated' || action === 'ticket_priorities_updated';
 });
 
 async function fetchLinkedTicket(): Promise<void> {
@@ -80,7 +62,7 @@ async function fetchLinkedTicket(): Promise<void> {
     try {
         const res = await laravelFetch(route('tickets.detail-json', { ticket: id }));
         if (res.ok) {
-            const data = await res.json() as { ticket: TicketDetail; priorities: typeof ticketPriorities.value };
+            const data = (await res.json()) as { ticket: TicketDetail; priorities: typeof ticketPriorities.value };
             ticketDetail.value = data.ticket;
             ticketPriorities.value = data.priorities;
         }
@@ -143,9 +125,7 @@ function formatUserRoleLabel(role: string): string {
                             <ScrollText class="h-5 w-5" />
                         </div>
                         <div class="min-w-0 flex-1 space-y-1">
-                            <DialogTitle class="text-lg font-semibold tracking-tight text-foreground">
-                                Audit log event
-                            </DialogTitle>
+                            <DialogTitle class="text-lg font-semibold tracking-tight text-foreground"> Audit log event </DialogTitle>
                             <p class="max-w-xl text-sm leading-relaxed text-muted-foreground">
                                 Who performed the action, when it happened, and how values changed.
                             </p>
@@ -163,7 +143,7 @@ function formatUserRoleLabel(role: string): string {
                             </span>
                             <div class="min-w-0">
                                 <p class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/90">When</p>
-                                <p class="mt-1 text-sm font-semibold leading-snug text-foreground tabular-nums">
+                                <p class="mt-1 text-sm font-semibold tabular-nums leading-snug text-foreground">
                                     {{ entry.createdAtFormatted }}
                                 </p>
                                 <p class="mt-0.5 text-xs text-muted-foreground">{{ entry.createdAtRelative }}</p>
@@ -184,7 +164,13 @@ function formatUserRoleLabel(role: string): string {
                                     <div
                                         class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/60 bg-gradient-to-br from-muted to-muted/50 text-[10px] font-bold uppercase text-foreground shadow-inner"
                                     >
-                                        {{ entry.userName.split(' ').map((n) => n[0]).join('').substring(0, 2) }}
+                                        {{
+                                            entry.userName
+                                                .split(' ')
+                                                .map((n) => n[0])
+                                                .join('')
+                                                .substring(0, 2)
+                                        }}
                                     </div>
                                     <span class="text-sm font-semibold text-foreground">{{ entry.userName }}</span>
                                     <Badge
@@ -227,7 +213,7 @@ function formatUserRoleLabel(role: string): string {
                                     <p class="mt-1 font-mono text-xs font-bold text-primary">
                                         {{ entry.ticketTktId }}
                                     </p>
-                                    <p class="mt-0.5 text-xs leading-snug text-muted-foreground line-clamp-3">
+                                    <p class="mt-0.5 line-clamp-3 text-xs leading-snug text-muted-foreground">
                                         {{ entry.ticketTitle }}
                                     </p>
                                 </template>
@@ -237,9 +223,7 @@ function formatUserRoleLabel(role: string): string {
                     </div>
                 </DialogHeader>
 
-                <div
-                    class="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain bg-muted/20 px-6 py-5 dark:bg-muted/10"
-                >
+                <div class="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain bg-muted/20 px-6 py-5 dark:bg-muted/10">
                     <section v-if="entry.oldValue || entry.newValue" class="space-y-4">
                         <div class="flex items-center gap-3">
                             <span
@@ -247,9 +231,7 @@ function formatUserRoleLabel(role: string): string {
                             >
                                 <ArrowLeftRight class="h-4 w-4" />
                             </span>
-                            <h3 class="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                                What changed
-                            </h3>
+                            <h3 class="text-xs font-semibold uppercase tracking-widest text-muted-foreground">What changed</h3>
                             <Separator class="flex-1 bg-border/60" />
                         </div>
 
@@ -262,24 +244,20 @@ function formatUserRoleLabel(role: string): string {
                                     class="h-1 shrink-0 bg-gradient-to-r from-destructive/0 via-destructive/50 to-destructive/0"
                                     aria-hidden="true"
                                 />
-                                <div
-                                    class="flex min-h-0 flex-1 flex-col px-4 pb-4 pt-3 md:overflow-y-auto"
-                                >
+                                <div class="flex min-h-0 flex-1 flex-col px-4 pb-4 pt-3 md:overflow-y-auto">
                                     <span
                                         class="mb-3 inline-flex w-fit items-center gap-1.5 rounded-full border border-destructive/25 bg-destructive/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-destructive"
                                     >
                                         Previous
                                     </span>
                                     <div class="min-h-0 min-w-0 flex-1">
-                                        <AuditConfigChangeBlock
-                                            v-if="usesTicketConfigChangeBlock"
-                                            :text="entry.oldValue"
-                                            tone="previous"
-                                        />
+                                        <AuditConfigChangeBlock v-if="usesTicketConfigChangeBlock" :text="entry.oldValue" tone="previous" />
                                         <div
                                             v-else
-                                            class="text-[11px] font-medium leading-relaxed whitespace-pre-wrap break-words text-destructive/90 line-through"
-                                        >{{ entry.oldValue }}</div>
+                                            class="whitespace-pre-wrap break-words text-[11px] font-medium leading-relaxed text-destructive/90 line-through"
+                                        >
+                                            {{ entry.oldValue }}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -292,24 +270,20 @@ function formatUserRoleLabel(role: string): string {
                                     class="h-1 shrink-0 bg-gradient-to-r from-emerald-500/0 via-emerald-500/50 to-emerald-500/0"
                                     aria-hidden="true"
                                 />
-                                <div
-                                    class="flex min-h-0 flex-1 flex-col px-4 pb-4 pt-3 md:overflow-y-auto"
-                                >
+                                <div class="flex min-h-0 flex-1 flex-col px-4 pb-4 pt-3 md:overflow-y-auto">
                                     <span
                                         class="mb-3 inline-flex w-fit items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400"
                                     >
                                         Updated
                                     </span>
                                     <div class="min-h-0 min-w-0 flex-1">
-                                        <AuditConfigChangeBlock
-                                            v-if="usesTicketConfigChangeBlock"
-                                            :text="entry.newValue"
-                                            tone="updated"
-                                        />
+                                        <AuditConfigChangeBlock v-if="usesTicketConfigChangeBlock" :text="entry.newValue" tone="updated" />
                                         <div
                                             v-else
-                                            class="text-[11px] font-medium leading-relaxed whitespace-pre-wrap break-words text-emerald-800 dark:text-emerald-200"
-                                        >{{ entry.newValue }}</div>
+                                            class="whitespace-pre-wrap break-words text-[11px] font-medium leading-relaxed text-emerald-800 dark:text-emerald-200"
+                                        >
+                                            {{ entry.newValue }}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -323,14 +297,10 @@ function formatUserRoleLabel(role: string): string {
                             >
                                 <LayoutList class="h-4 w-4" />
                             </span>
-                            <h3 class="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                                Incident snapshot
-                            </h3>
+                            <h3 class="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Incident snapshot</h3>
                             <Separator class="flex-1 bg-border/60" />
                         </div>
-                        <p class="-mt-1 text-xs text-muted-foreground">
-                            Current incident state (overview, history, and comments).
-                        </p>
+                        <p class="-mt-1 text-xs text-muted-foreground">Current incident state (overview, history, and comments).</p>
                         <div
                             class="overflow-hidden rounded-2xl border border-border/50 bg-card shadow-md ring-1 ring-black/[0.03] dark:ring-white/[0.06]"
                         >
@@ -352,13 +322,7 @@ function formatUserRoleLabel(role: string): string {
                 <DialogFooter
                     class="shrink-0 flex-row justify-end gap-2 border-t border-border/50 bg-gradient-to-t from-muted/40 to-muted/10 px-6 py-4 dark:from-muted/25 dark:to-transparent"
                 >
-                    <Button
-                        type="button"
-                        variant="default"
-                        size="sm"
-                        class="h-9 min-w-[5.5rem] text-xs font-semibold shadow-sm"
-                        @click="close"
-                    >
+                    <Button type="button" variant="default" size="sm" class="h-9 min-w-[5.5rem] text-xs font-semibold shadow-sm" @click="close">
                         Done
                     </Button>
                 </DialogFooter>

@@ -8,9 +8,9 @@ import type {
 import IncidentsFiltersToolbar from '@/components/incidents/IncidentsFiltersToolbar.vue';
 import IncidentsKpiStrip from '@/components/incidents/IncidentsKpiStrip.vue';
 import IncidentsListPanel from '@/components/incidents/IncidentsListPanel.vue';
+import TicketDetailModal from '@/components/TicketDetailModal.vue';
 import { useIncidentsList } from '@/composables/useIncidentsList';
 import { ensureLucideIconsLoaded } from '@/composables/useLucideIconRegistry';
-import TicketDetailModal from '@/components/TicketDetailModal.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/vue3';
@@ -65,9 +65,7 @@ const {
 
 const listPanelRef = ref<InstanceType<typeof IncidentsListPanel> | null>(null);
 
-const openQueueCount = computed(
-    () => ticketStats.value.find((s) => s.status === primaryQueueStatusName.value)?.value ?? 0,
-);
+const openQueueCount = computed(() => ticketStats.value.find((s) => s.status === primaryQueueStatusName.value)?.value ?? 0);
 
 const showFiltersReset = computed(
     () =>
@@ -153,8 +151,8 @@ watch(
                             </span>
                         </div>
                         <p class="text-sm text-muted-foreground">
-                            Incidents you reported or are assigned to handle. View details and join the conversation — changes to
-                            status or assignment are done by admins and supervisors.
+                            Incidents you reported or are assigned to handle. View details and join the conversation — changes to status or assignment
+                            are done by admins and supervisors.
                         </p>
                     </div>
                 </div>

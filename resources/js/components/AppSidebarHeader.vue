@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from '@/components/ui/breadcrumb';
-import { SidebarTrigger } from '@/components/ui/sidebar';
-import ThemeToggle from '@/components/ThemeToggle.vue';
 import NotificationBell from '@/components/NotificationBell.vue';
+import ThemeToggle from '@/components/ThemeToggle.vue';
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from '@/components/ui/breadcrumb';
+import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { SidebarTrigger } from '@/components/ui/sidebar';
 import type { BreadcrumbItemType, SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Button } from '@/components/ui/button';
 import { Plus, Ticket, UserPlus } from 'lucide-vue-next';
 import { computed } from 'vue';
 
@@ -20,7 +20,7 @@ const canManageUsers = computed(() => page.props.auth.user?.role === 'admin');
 
 <template>
     <header
-        class="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-2 border-b border-sidebar-border/60 bg-background/80 px-6 shadow-sm shadow-black/[0.02] backdrop-blur-md transition-[width,height] ease-linear supports-[backdrop-filter]:bg-background/70 group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12 md:px-4 dark:border-sidebar-border/50 dark:shadow-black/20"
+        class="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-2 border-b border-sidebar-border/60 bg-background/80 px-6 shadow-sm shadow-black/[0.02] backdrop-blur-md transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12 supports-[backdrop-filter]:bg-background/70 dark:border-sidebar-border/50 dark:shadow-black/20 md:px-4"
     >
         <div class="flex items-center gap-2">
             <SidebarTrigger class="-ml-1" />
@@ -56,13 +56,13 @@ const canManageUsers = computed(() => page.props.auth.user?.role === 'admin');
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" class="w-48">
                     <DropdownMenuItem as-child class="cursor-pointer">
-                        <Link :href="route('tickets', { create: 'true' })" class="flex items-center w-full">
+                        <Link :href="route('tickets', { create: 'true' })" class="flex w-full items-center">
                             <Ticket class="mr-2 h-4 w-4" />
                             <span>Add New Ticket</span>
                         </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem v-if="canManageUsers" as-child class="cursor-pointer">
-                        <Link :href="route('users', { create: 'true' })" class="flex items-center w-full">
+                        <Link :href="route('users', { create: 'true' })" class="flex w-full items-center">
                             <UserPlus class="mr-2 h-4 w-4" />
                             <span>Add New User</span>
                         </Link>

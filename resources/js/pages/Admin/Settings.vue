@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ensureLucideIconsLoaded, lucideAllIconMap, lucideIconsLoading, resolveLucideIcon } from '@/composables/useLucideIconRegistry';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type SharedData } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
@@ -24,13 +25,7 @@ import {
     Settings,
     Trash2,
 } from 'lucide-vue-next';
-import {
-    ensureLucideIconsLoaded,
-    lucideAllIconMap,
-    lucideIconsLoading,
-    resolveLucideIcon,
-} from '@/composables/useLucideIconRegistry';
-import { TransitionGroup, computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 interface SettingMeta {
@@ -177,7 +172,7 @@ function categoryParentGroupKey(cat: CategoryRow): string | number | null {
 }
 
 function isCategoryRootRow(cat: CategoryRow): boolean {
-    return cat.parent_id == null && ! cat.parentClientKey;
+    return cat.parent_id == null && !cat.parentClientKey;
 }
 
 /** Index of the top-level row that owns this row (walk left to the root). */
@@ -197,7 +192,7 @@ function rootIndexContainingRow(idx: number): number {
 /** Contiguous block [start,end] for a top-level category and its direct children. */
 function categorySubtreeRangeFromRoot(rootIdx: number): { start: number; end: number } {
     const row = categories[rootIdx];
-    if (! row || ! isCategoryRootRow(row)) {
+    if (!row || !isCategoryRootRow(row)) {
         return { start: rootIdx, end: rootIdx };
     }
     let end = rootIdx;
@@ -248,7 +243,7 @@ function categoryRootHasChildren(idx: number): boolean {
     }
     for (let i = idx + 1; i < categories.length; i++) {
         const c = categories[i];
-        if (c.parent_id == null && ! c.parentClientKey) {
+        if (c.parent_id == null && !c.parentClientKey) {
             break;
         }
         if (isDirectChildOf(c, row)) {
@@ -261,7 +256,7 @@ function categoryRootHasChildren(idx: number): boolean {
 
 function insertIndexAfterCategorySubtree(parentIdx: number): number {
     const parent = categories[parentIdx];
-    if (! parent) {
+    if (!parent) {
         return categories.length;
     }
     let i = parentIdx + 1;
@@ -282,7 +277,7 @@ function addCategory(): void {
 
 function addSubcategory(parentIdx: number): void {
     const parent = categories[parentIdx];
-    if (! parent) {
+    if (!parent) {
         return;
     }
     if (parent.parent_id != null || parent.parentClientKey) {
@@ -294,7 +289,7 @@ function addSubcategory(parentIdx: number): void {
         icon: parent.icon || 'Network',
         clientKey,
         parent_id: parent.id ?? null,
-        parentClientKey: parent.id == null ? parent.clientKey ?? null : null,
+        parentClientKey: parent.id == null ? (parent.clientKey ?? null) : null,
     };
     const at = insertIndexAfterCategorySubtree(parentIdx);
     categories.splice(at, 0, row);
@@ -315,15 +310,14 @@ function ticketCountForCategoryRow(row: CategoryRow): number {
 
 function requestRemoveCategory(idx: number): void {
     const row = categories[idx];
-    if (! row) {
+    if (!row) {
         return;
     }
     if (isProtectedCategoryRow(row)) {
         return;
     }
     if (categoryRootHasChildren(idx)) {
-        inUseModalMessage.value =
-            'Remove or move subcategories under this category before removing the parent.';
+        inUseModalMessage.value = 'Remove or move subcategories under this category before removing the parent.';
         inUseModalKind.value = null;
         inUseModalEntityId.value = null;
         inUseModalTicketCount.value = 0;
@@ -358,7 +352,7 @@ function moveRootSubtreeUp(rootIdx: number): void {
         return;
     }
     let prevRootStart = start - 1;
-    while (prevRootStart >= 0 && ! isCategoryRootRow(categories[prevRootStart])) {
+    while (prevRootStart >= 0 && !isCategoryRootRow(categories[prevRootStart])) {
         prevRootStart--;
     }
     if (prevRootStart < 0) {
@@ -377,7 +371,7 @@ function moveRootSubtreeDown(rootIdx: number): void {
         return;
     }
     const nextRootStart = end + 1;
-    if (! isCategoryRootRow(categories[nextRootStart])) {
+    if (!isCategoryRootRow(categories[nextRootStart])) {
         return;
     }
     const { end: nextEnd } = categorySubtreeRangeFromRoot(nextRootStart);
@@ -390,7 +384,7 @@ function moveRootSubtreeDown(rootIdx: number): void {
 
 function moveCategoryUp(idx: number): void {
     const row = categories[idx];
-    if (! row) {
+    if (!row) {
         return;
     }
     if (isCategoryRootRow(row)) {
@@ -405,7 +399,7 @@ function moveCategoryUp(idx: number): void {
 }
 function moveCategoryDown(idx: number): void {
     const row = categories[idx];
-    if (! row) {
+    if (!row) {
         return;
     }
     if (isCategoryRootRow(row)) {
@@ -440,7 +434,7 @@ function ticketCountForPriorityRow(row: PriorityRow): number {
 
 function requestRemovePriority(idx: number): void {
     const row = priorities[idx];
-    if (! row) {
+    if (!row) {
         return;
     }
     if (isProtectedPriorityRow(row)) {
@@ -467,11 +461,15 @@ function requestRemovePriority(idx: number): void {
     priorities.splice(idx, 1);
 }
 function movePriorityUp(idx: number): void {
-    if (idx === 0) { return; }
+    if (idx === 0) {
+        return;
+    }
     [priorities[idx - 1], priorities[idx]] = [priorities[idx], priorities[idx - 1]];
 }
 function movePriorityDown(idx: number): void {
-    if (idx === priorities.length - 1) { return; }
+    if (idx === priorities.length - 1) {
+        return;
+    }
     [priorities[idx], priorities[idx + 1]] = [priorities[idx + 1], priorities[idx]];
 }
 
@@ -502,7 +500,7 @@ function ticketCountForStatusRow(row: StatusRow): number {
 
 function requestRemoveStatus(idx: number): void {
     const row = statuses[idx];
-    if (! row) {
+    if (!row) {
         return;
     }
     if (isProtectedStatusRow(row)) {
@@ -529,11 +527,15 @@ function requestRemoveStatus(idx: number): void {
     statuses.splice(idx, 1);
 }
 function moveStatusUp(idx: number): void {
-    if (idx === 0) { return; }
+    if (idx === 0) {
+        return;
+    }
     [statuses[idx - 1], statuses[idx]] = [statuses[idx], statuses[idx - 1]];
 }
 function moveStatusDown(idx: number): void {
-    if (idx === statuses.length - 1) { return; }
+    if (idx === statuses.length - 1) {
+        return;
+    }
     [statuses[idx], statuses[idx + 1]] = [statuses[idx + 1], statuses[idx]];
 }
 
@@ -619,10 +621,7 @@ function finishEditingStatusName(): void {
 }
 
 watch([editingNameKeyCategories, editingNameKeyPriorities, editingNameKeyStatuses], async () => {
-    const active =
-        editingNameKeyCategories.value ??
-        editingNameKeyPriorities.value ??
-        editingNameKeyStatuses.value;
+    const active = editingNameKeyCategories.value ?? editingNameKeyPriorities.value ?? editingNameKeyStatuses.value;
     if (active === null) {
         return;
     }
@@ -643,7 +642,7 @@ function onConfigDragStart(kind: ConfigListKind, idx: number, e: DragEvent): voi
 
     const handle = e.currentTarget as HTMLElement | null;
     const row = handle?.closest('[data-config-dnd-row]') as HTMLElement | null;
-    if (! row || ! e.dataTransfer) {
+    if (!row || !e.dataTransfer) {
         return;
     }
 
@@ -720,7 +719,7 @@ function onConfigDrop(kind: ConfigListKind, toIdx: number, e: DragEvent): void {
     const state = dragConfig.value;
     dragConfig.value = null;
     dragOverConfig.value = null;
-    if (! state || state.kind !== kind) {
+    if (!state || state.kind !== kind) {
         return;
     }
     const from = state.from;
@@ -729,7 +728,7 @@ function onConfigDrop(kind: ConfigListKind, toIdx: number, e: DragEvent): void {
     }
     if (kind === 'categories') {
         const fromRow = categories[from];
-        if (! fromRow) {
+        if (!fromRow) {
             return;
         }
         if (isCategoryRootRow(fromRow)) {
@@ -820,7 +819,7 @@ function resolveIcon(name: string) {
 const filteredIconNames = computed((): string[] => {
     const q = iconSearch.value.toLowerCase().trim();
     const names = Object.keys(lucideAllIconMap.value).sort();
-    if (! q) {
+    if (!q) {
         return names;
     }
     return names.filter((n) => n.toLowerCase().includes(q));
@@ -861,7 +860,7 @@ function startIconGridReveal(): void {
     iconGridDisplayLimit.value = Math.min(firstChunk, total);
     let shown = iconGridDisplayLimit.value;
     const step = (): void => {
-        if (! activePicker.value) {
+        if (!activePicker.value) {
             iconGridRevealFrameId = null;
             return;
         }
@@ -879,13 +878,13 @@ function startIconGridReveal(): void {
 }
 
 watch(iconSearch, () => {
-    if (activePicker.value && ! lucideIconsLoading.value) {
+    if (activePicker.value && !lucideIconsLoading.value) {
         startIconGridReveal();
     }
 });
 
 watch(lucideIconsLoading, (loading) => {
-    if (! loading && activePicker.value) {
+    if (!loading && activePicker.value) {
         startIconGridReveal();
     }
 });
@@ -893,17 +892,17 @@ watch(lucideIconsLoading, (loading) => {
 async function openPicker(e: MouseEvent, type: 'cat' | 'pri' | 'stat', idx: number): Promise<void> {
     if (type === 'cat') {
         const row = categories[idx];
-        if (! row || isProtectedCategoryRow(row) || ! isEditingCategoryName(row, idx)) {
+        if (!row || isProtectedCategoryRow(row) || !isEditingCategoryName(row, idx)) {
             return;
         }
     } else if (type === 'pri') {
         const row = priorities[idx];
-        if (! row || isProtectedPriorityRow(row) || ! isEditingPriorityName(row, idx)) {
+        if (!row || isProtectedPriorityRow(row) || !isEditingPriorityName(row, idx)) {
             return;
         }
     } else {
         const row = statuses[idx];
-        if (! row || isProtectedStatusRow(row) || ! isEditingStatusName(row, idx)) {
+        if (!row || isProtectedStatusRow(row) || !isEditingStatusName(row, idx)) {
             return;
         }
     }
@@ -948,23 +947,25 @@ function closePicker(): void {
 }
 
 function selectIcon(icon: string): void {
-    if (! activePicker.value) { return; }
+    if (!activePicker.value) {
+        return;
+    }
     const { type, idx } = activePicker.value;
     if (type === 'cat') {
         const row = categories[idx];
-        if (! row || isProtectedCategoryRow(row) || ! isEditingCategoryName(row, idx)) {
+        if (!row || isProtectedCategoryRow(row) || !isEditingCategoryName(row, idx)) {
             return;
         }
         categories[idx].icon = icon;
     } else if (type === 'pri') {
         const row = priorities[idx];
-        if (! row || isProtectedPriorityRow(row) || ! isEditingPriorityName(row, idx)) {
+        if (!row || isProtectedPriorityRow(row) || !isEditingPriorityName(row, idx)) {
             return;
         }
         priorities[idx].icon = icon;
     } else {
         const row = statuses[idx];
-        if (! row || isProtectedStatusRow(row) || ! isEditingStatusName(row, idx)) {
+        if (!row || isProtectedStatusRow(row) || !isEditingStatusName(row, idx)) {
             return;
         }
         statuses[idx].icon = icon;
@@ -973,7 +974,9 @@ function selectIcon(icon: string): void {
 }
 
 function currentPickerIcon(): string {
-    if (! activePicker.value) { return ''; }
+    if (!activePicker.value) {
+        return '';
+    }
     const { type, idx } = activePicker.value;
     if (type === 'cat') {
         return categories[idx]?.icon ?? '';
@@ -986,10 +989,12 @@ function currentPickerIcon(): string {
 
 // Close picker on Escape key or page scroll (not when scrolling inside the picker list)
 function onKeydown(e: KeyboardEvent): void {
-    if (e.key === 'Escape') { closePicker(); }
+    if (e.key === 'Escape') {
+        closePicker();
+    }
 }
 function onScroll(e: Event): void {
-    if (! activePicker.value) {
+    if (!activePicker.value) {
         return;
     }
     const target = e.target;
@@ -1031,7 +1036,7 @@ const emptyLabelWarningContext = ref<TicketConfigSaveKind | null>(null);
 
 function onEmptyLabelWarningOpen(open: boolean): void {
     emptyLabelWarningOpen.value = open;
-    if (! open) {
+    if (!open) {
         emptyLabelWarningContext.value = null;
     }
 }
@@ -1113,7 +1118,7 @@ function serializeCategoriesForSave(): Record<string, unknown>[] {
     let rootOrder = 0;
     const out: Record<string, unknown>[] = [];
     for (const row of categories) {
-        const isRoot = row.parent_id == null && ! row.parentClientKey;
+        const isRoot = row.parent_id == null && !row.parentClientKey;
         if (isRoot) {
             out.push({
                 id: row.id ?? null,
@@ -1126,10 +1131,7 @@ function serializeCategoriesForSave(): Record<string, unknown>[] {
             });
             rootOrder += 1;
         } else {
-            const parentKey =
-                row.parent_id != null && row.parent_id !== undefined
-                    ? row.parent_id
-                    : `ck:${row.parentClientKey ?? ''}`;
+            const parentKey = row.parent_id != null && row.parent_id !== undefined ? row.parent_id : `ck:${row.parentClientKey ?? ''}`;
             out.push({
                 id: row.id ?? null,
                 client_key: row.clientKey ?? null,
@@ -1137,8 +1139,7 @@ function serializeCategoriesForSave(): Record<string, unknown>[] {
                 icon: row.icon,
                 sort_order: nextChildOrder(parentKey),
                 parent_id: row.parent_id != null && row.parent_id !== undefined ? row.parent_id : null,
-                parent_client_key:
-                    row.parent_id != null && row.parent_id !== undefined ? null : (row.parentClientKey ?? null),
+                parent_client_key: row.parent_id != null && row.parent_id !== undefined ? null : (row.parentClientKey ?? null),
             });
         }
     }
@@ -1148,7 +1149,7 @@ function serializeCategoriesForSave(): Record<string, unknown>[] {
 
 function categoryCanMoveUp(idx: number): boolean {
     const row = categories[idx];
-    if (! row) {
+    if (!row) {
         return false;
     }
     if (isCategoryRootRow(row)) {
@@ -1160,7 +1161,7 @@ function categoryCanMoveUp(idx: number): boolean {
 
 function categoryCanMoveDown(idx: number): boolean {
     const row = categories[idx];
-    if (! row) {
+    if (!row) {
         return false;
     }
     if (isCategoryRootRow(row)) {
@@ -1263,7 +1264,7 @@ function submitStatuses(): void {
 
 function onInUseModalOpen(open: boolean): void {
     inUseModalOpen.value = open;
-    if (! open) {
+    if (!open) {
         inUseModalMessage.value = '';
         inUseModalKind.value = null;
         inUseModalStep.value = 'info';
@@ -1351,7 +1352,6 @@ function submitAppearance(): void {
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="mx-auto flex h-full w-full max-w-4xl flex-1 flex-col gap-6 p-4 pb-20 md:p-6">
-
             <!-- Flash banners -->
             <Transition
                 enter-active-class="transition duration-200 ease-out"
@@ -1390,9 +1390,7 @@ function submitAppearance(): void {
                     <Settings class="h-6 w-6 text-primary" />
                     Settings
                 </h1>
-                <p class="mt-1 text-sm text-muted-foreground">
-                    Manage global application configuration, incident options, and UI preferences.
-                </p>
+                <p class="mt-1 text-sm text-muted-foreground">Manage global application configuration, incident options, and UI preferences.</p>
             </div>
 
             <!-- Tabs -->
@@ -1406,13 +1404,12 @@ function submitAppearance(): void {
                 <!-- ══ GENERAL TAB ═══════════════════════════════════════ -->
                 <TabsContent value="general">
                     <form @submit.prevent="submitGeneral">
-                        <Card class="shadow-sm border border-border/60 transition-all duration-300 hover:shadow-md">
+                        <Card class="border border-border/60 shadow-sm transition-all duration-300 hover:shadow-md">
                             <CardHeader>
                                 <CardTitle>General Settings</CardTitle>
                                 <CardDescription>Application name as shown across the system.</CardDescription>
                             </CardHeader>
                             <CardContent class="space-y-6">
-
                                 <div class="grid gap-2">
                                     <Label for="app_name">Application Name</Label>
                                     <Input id="app_name" v-model="generalForm.settings.app_name" placeholder="My Application" />
@@ -1427,7 +1424,6 @@ function submitAppearance(): void {
                                         {{ generalForm.processing ? 'Saving…' : 'Save General Settings' }}
                                     </Button>
                                 </div>
-
                             </CardContent>
                         </Card>
                     </form>
@@ -1436,134 +1432,150 @@ function submitAppearance(): void {
                 <!-- ══ INCIDENT CONFIG TAB ════════════════════════════════ -->
                 <TabsContent value="tickets">
                     <div class="space-y-6">
-
                         <!-- Categories -->
                         <form @submit.prevent="submitCategories">
-                            <Card class="shadow-sm border border-border/60 transition-all duration-300 hover:shadow-md">
+                            <Card class="border border-border/60 shadow-sm transition-all duration-300 hover:shadow-md">
                                 <CardHeader>
                                     <CardTitle>Incident Categories</CardTitle>
                                     <CardDescription>
-                                        Top-level categories and optional subcategories (one level). Use the pencil (right side) to edit name and icon; drag a top-level row or use the arrows to move the whole category with its subcategories. Drag within subcategories to reorder only among siblings. Remove subcategories before removing a parent. At least one top-level category must remain.
+                                        Top-level categories and optional subcategories (one level). Use the pencil (right side) to edit name and
+                                        icon; drag a top-level row or use the arrows to move the whole category with its subcategories. Drag within
+                                        subcategories to reorder only among siblings. Remove subcategories before removing a parent. At least one
+                                        top-level category must remain.
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent class="flex flex-col gap-2">
                                     <TransitionGroup name="ticket-config-dnd" tag="div" class="flex flex-col gap-2">
-                                    <div
-                                        v-for="(cat, idx) in categories"
-                                        :key="rowKeyCategory(cat, idx)"
-                                        data-config-dnd-row
-                                        class="group flex items-center gap-2 rounded-lg border border-border/50 bg-muted/20 px-3 py-2 transition-[transform,opacity,box-shadow,background-color] duration-300 ease-out hover:bg-muted/40"
-                                        :class="[
-                                            configRowDragOverClass('categories', idx),
-                                            configRowDraggingClass('categories', idx),
-                                            cat.parent_id != null || cat.parentClientKey ? 'ml-4 border-l-2 border-primary/25 pl-3' : '',
-                                        ]"
-                                        @dragover.prevent="onConfigDragOver('categories', idx, $event)"
-                                        @dragleave="onConfigDragLeave('categories', idx, $event)"
-                                        @drop.prevent="onConfigDrop('categories', idx, $event)"
-                                    >
-                                        <span
-                                            class="inline-flex shrink-0 touch-none cursor-grab select-none text-muted-foreground/40 active:cursor-grabbing group-hover:text-muted-foreground"
-                                            draggable="true"
-                                            title="Drag to reorder"
-                                            @dragstart.stop="onConfigDragStart('categories', idx, $event)"
-                                            @dragend="onConfigDragEnd"
+                                        <div
+                                            v-for="(cat, idx) in categories"
+                                            :key="rowKeyCategory(cat, idx)"
+                                            data-config-dnd-row
+                                            class="group flex items-center gap-2 rounded-lg border border-border/50 bg-muted/20 px-3 py-2 transition-[transform,opacity,box-shadow,background-color] duration-300 ease-out hover:bg-muted/40"
+                                            :class="[
+                                                configRowDragOverClass('categories', idx),
+                                                configRowDraggingClass('categories', idx),
+                                                cat.parent_id != null || cat.parentClientKey ? 'ml-4 border-l-2 border-primary/25 pl-3' : '',
+                                            ]"
+                                            @dragover.prevent="onConfigDragOver('categories', idx, $event)"
+                                            @dragleave="onConfigDragLeave('categories', idx, $event)"
+                                            @drop.prevent="onConfigDrop('categories', idx, $event)"
                                         >
-                                            <GripVertical class="h-4 w-4 pointer-events-none" />
-                                        </span>
+                                            <span
+                                                class="inline-flex shrink-0 cursor-grab touch-none select-none text-muted-foreground/40 active:cursor-grabbing group-hover:text-muted-foreground"
+                                                draggable="true"
+                                                title="Drag to reorder"
+                                                @dragstart.stop="onConfigDragStart('categories', idx, $event)"
+                                                @dragend="onConfigDragEnd"
+                                            >
+                                                <GripVertical class="pointer-events-none h-4 w-4" />
+                                            </span>
 
-                                        <!-- Icon trigger (only while row edit mode) -->
-                                        <button
-                                            type="button"
-                                            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-input bg-background text-foreground shadow-sm transition-all hover:border-primary/50 hover:ring-2 hover:ring-primary/20 focus:outline-none disabled:pointer-events-none disabled:opacity-50"
-                                            :class="activePicker?.type === 'cat' && activePicker.idx === idx ? 'border-primary ring-2 ring-primary/20' : ''"
-                                            :disabled="isProtectedCategoryRow(cat) || !isEditingCategoryName(cat, idx)"
-                                            :title="
-                                                isProtectedCategoryRow(cat)
-                                                    ? 'Built-in category: icon cannot be changed'
-                                                    : isEditingCategoryName(cat, idx)
-                                                      ? `Change icon (${cat.icon})`
-                                                      : 'Click Edit to change icon'
-                                            "
-                                            @click="openPicker($event, 'cat', idx)"
-                                        >
-                                            <component :is="resolveIcon(cat.icon)" class="h-4 w-4" />
-                                        </button>
+                                            <!-- Icon trigger (only while row edit mode) -->
+                                            <button
+                                                type="button"
+                                                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-input bg-background text-foreground shadow-sm transition-all hover:border-primary/50 hover:ring-2 hover:ring-primary/20 focus:outline-none disabled:pointer-events-none disabled:opacity-50"
+                                                :class="
+                                                    activePicker?.type === 'cat' && activePicker.idx === idx
+                                                        ? 'border-primary ring-2 ring-primary/20'
+                                                        : ''
+                                                "
+                                                :disabled="isProtectedCategoryRow(cat) || !isEditingCategoryName(cat, idx)"
+                                                :title="
+                                                    isProtectedCategoryRow(cat)
+                                                        ? 'Built-in category: icon cannot be changed'
+                                                        : isEditingCategoryName(cat, idx)
+                                                          ? `Change icon (${cat.icon})`
+                                                          : 'Click Edit to change icon'
+                                                "
+                                                @click="openPicker($event, 'cat', idx)"
+                                            >
+                                                <component :is="resolveIcon(cat.icon)" class="h-4 w-4" />
+                                            </button>
 
-                                        <div class="flex min-w-0 flex-1 items-center gap-1.5">
-                                            <template v-if="isEditingCategoryName(cat, idx)">
-                                                <Input
-                                                    id="ticket-config-editing-name-input"
-                                                    v-model="cat.name"
-                                                    class="min-w-0 flex-1 border-0 bg-transparent px-2 py-1 text-sm font-medium shadow-none focus-visible:ring-2 focus-visible:ring-ring"
-                                                    placeholder="Category name"
-                                                    @keydown.enter.prevent="finishEditingCategoryName"
-                                                    @keydown.escape.prevent="finishEditingCategoryName"
-                                                />
-                                                <Button
+                                            <div class="flex min-w-0 flex-1 items-center gap-1.5">
+                                                <template v-if="isEditingCategoryName(cat, idx)">
+                                                    <Input
+                                                        id="ticket-config-editing-name-input"
+                                                        v-model="cat.name"
+                                                        class="min-w-0 flex-1 border-0 bg-transparent px-2 py-1 text-sm font-medium shadow-none focus-visible:ring-2 focus-visible:ring-ring"
+                                                        placeholder="Category name"
+                                                        @keydown.enter.prevent="finishEditingCategoryName"
+                                                        @keydown.escape.prevent="finishEditingCategoryName"
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="icon"
+                                                        class="h-8 w-8 shrink-0"
+                                                        title="Done editing"
+                                                        @click="finishEditingCategoryName"
+                                                    >
+                                                        <Check class="h-3.5 w-3.5" />
+                                                    </Button>
+                                                </template>
+                                                <template v-else>
+                                                    <span
+                                                        class="min-w-0 flex-1 truncate px-0.5 py-1 text-sm"
+                                                        :class="
+                                                            !cat.name.trim()
+                                                                ? 'font-normal italic text-muted-foreground'
+                                                                : isProtectedCategoryRow(cat)
+                                                                  ? 'select-none font-normal text-muted-foreground'
+                                                                  : 'font-medium text-foreground'
+                                                        "
+                                                        :title="isProtectedCategoryRow(cat) ? 'Built-in category: name is fixed' : undefined"
+                                                    >
+                                                        {{ cat.name.trim() || 'Unnamed category' }}
+                                                    </span>
+                                                </template>
+                                            </div>
+
+                                            <div class="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                                                <button
+                                                    v-if="cat.parent_id == null && !cat.parentClientKey"
                                                     type="button"
-                                                    variant="outline"
-                                                    size="icon"
-                                                    class="h-8 w-8 shrink-0"
-                                                    title="Done editing"
-                                                    @click="finishEditingCategoryName"
+                                                    class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+                                                    title="Add subcategory"
+                                                    @click="addSubcategory(idx)"
                                                 >
-                                                    <Check class="h-3.5 w-3.5" />
-                                                </Button>
-                                            </template>
-                                            <template v-else>
-                                                <span
-                                                    class="min-w-0 flex-1 truncate px-0.5 py-1 text-sm"
-                                                    :class="
-                                                        ! cat.name.trim()
-                                                            ? 'text-muted-foreground italic font-normal'
-                                                            : isProtectedCategoryRow(cat)
-                                                              ? 'select-none font-normal text-muted-foreground'
-                                                              : 'font-medium text-foreground'
-                                                    "
-                                                    :title="isProtectedCategoryRow(cat) ? 'Built-in category: name is fixed' : undefined"
+                                                    <Plus class="h-3.5 w-3.5" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
+                                                    :disabled="!categoryCanMoveUp(idx)"
+                                                    @click="moveCategoryUp(idx)"
                                                 >
-                                                    {{ cat.name.trim() || 'Unnamed category' }}
-                                                </span>
-                                            </template>
+                                                    <ArrowUp class="h-3.5 w-3.5" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
+                                                    :disabled="!categoryCanMoveDown(idx)"
+                                                    @click="moveCategoryDown(idx)"
+                                                >
+                                                    <ArrowDown class="h-3.5 w-3.5" />
+                                                </button>
+                                                <button
+                                                    v-if="!isProtectedCategoryRow(cat)"
+                                                    type="button"
+                                                    class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                                    title="Remove row"
+                                                    @click="requestRemoveCategory(idx)"
+                                                >
+                                                    <Trash2 class="h-3.5 w-3.5" />
+                                                </button>
+                                                <button
+                                                    v-if="!isProtectedCategoryRow(cat)"
+                                                    type="button"
+                                                    class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+                                                    title="Edit name and icon"
+                                                    @click="startEditingCategoryName(cat, idx)"
+                                                >
+                                                    <Pencil class="h-3.5 w-3.5" />
+                                                </button>
+                                            </div>
                                         </div>
-
-                                        <div class="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                                            <button
-                                                v-if="cat.parent_id == null && !cat.parentClientKey"
-                                                type="button"
-                                                class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
-                                                title="Add subcategory"
-                                                @click="addSubcategory(idx)"
-                                            >
-                                                <Plus class="h-3.5 w-3.5" />
-                                            </button>
-                                            <button type="button" class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30" :disabled="!categoryCanMoveUp(idx)" @click="moveCategoryUp(idx)">
-                                                <ArrowUp class="h-3.5 w-3.5" />
-                                            </button>
-                                            <button type="button" class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30" :disabled="!categoryCanMoveDown(idx)" @click="moveCategoryDown(idx)">
-                                                <ArrowDown class="h-3.5 w-3.5" />
-                                            </button>
-                                            <button
-                                                v-if="!isProtectedCategoryRow(cat)"
-                                                type="button"
-                                                class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                                                title="Remove row"
-                                                @click="requestRemoveCategory(idx)"
-                                            >
-                                                <Trash2 class="h-3.5 w-3.5" />
-                                            </button>
-                                            <button
-                                                v-if="!isProtectedCategoryRow(cat)"
-                                                type="button"
-                                                class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
-                                                title="Edit name and icon"
-                                                @click="startEditingCategoryName(cat, idx)"
-                                            >
-                                                <Pencil class="h-3.5 w-3.5" />
-                                            </button>
-                                        </div>
-                                    </div>
                                     </TransitionGroup>
 
                                     <div class="flex items-center justify-between pt-1">
@@ -1581,143 +1593,168 @@ function submitAppearance(): void {
 
                         <!-- Priorities -->
                         <form @submit.prevent="submitPriorities">
-                            <Card class="shadow-sm border border-border/60 transition-all duration-300 hover:shadow-md">
+                            <Card class="border border-border/60 shadow-sm transition-all duration-300 hover:shadow-md">
                                 <CardHeader>
                                     <CardTitle>Incident Priorities</CardTitle>
                                     <CardDescription>
-                                        Priority levels for incidents. Default priorities cannot be removed; their names, icons, and colours are fixed. Custom rows: use the pencil (right side) to edit name, icon, and colour. You can add levels with your own styling.
+                                        Priority levels for incidents. Default priorities cannot be removed; their names, icons, and colours are
+                                        fixed. Custom rows: use the pencil (right side) to edit name, icon, and colour. You can add levels with your
+                                        own styling.
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent class="flex flex-col gap-2">
                                     <TransitionGroup name="ticket-config-dnd" tag="div" class="flex flex-col gap-2">
-                                    <div
-                                        v-for="(pri, idx) in priorities"
-                                        :key="rowKeyPriority(pri, idx)"
-                                        data-config-dnd-row
-                                        class="group flex items-center gap-2 rounded-lg border border-border/50 bg-muted/20 px-3 py-2 transition-[transform,opacity,box-shadow,background-color] duration-300 ease-out hover:bg-muted/40"
-                                        :class="[configRowDragOverClass('priorities', idx), configRowDraggingClass('priorities', idx)]"
-                                        @dragover.prevent="onConfigDragOver('priorities', idx, $event)"
-                                        @dragleave="onConfigDragLeave('priorities', idx, $event)"
-                                        @drop.prevent="onConfigDrop('priorities', idx, $event)"
-                                    >
-                                        <span
-                                            class="inline-flex shrink-0 touch-none cursor-grab select-none text-muted-foreground/40 active:cursor-grabbing group-hover:text-muted-foreground"
-                                            draggable="true"
-                                            title="Drag to reorder"
-                                            @dragstart.stop="onConfigDragStart('priorities', idx, $event)"
-                                            @dragend="onConfigDragEnd"
+                                        <div
+                                            v-for="(pri, idx) in priorities"
+                                            :key="rowKeyPriority(pri, idx)"
+                                            data-config-dnd-row
+                                            class="group flex items-center gap-2 rounded-lg border border-border/50 bg-muted/20 px-3 py-2 transition-[transform,opacity,box-shadow,background-color] duration-300 ease-out hover:bg-muted/40"
+                                            :class="[configRowDragOverClass('priorities', idx), configRowDraggingClass('priorities', idx)]"
+                                            @dragover.prevent="onConfigDragOver('priorities', idx, $event)"
+                                            @dragleave="onConfigDragLeave('priorities', idx, $event)"
+                                            @drop.prevent="onConfigDrop('priorities', idx, $event)"
                                         >
-                                            <GripVertical class="h-4 w-4 pointer-events-none" />
-                                        </span>
+                                            <span
+                                                class="inline-flex shrink-0 cursor-grab touch-none select-none text-muted-foreground/40 active:cursor-grabbing group-hover:text-muted-foreground"
+                                                draggable="true"
+                                                title="Drag to reorder"
+                                                @dragstart.stop="onConfigDragStart('priorities', idx, $event)"
+                                                @dragend="onConfigDragEnd"
+                                            >
+                                                <GripVertical class="pointer-events-none h-4 w-4" />
+                                            </span>
 
-                                        <!-- Icon trigger (custom rows: only while row edit mode) -->
-                                        <button
-                                            type="button"
-                                            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-input bg-background shadow-sm transition-all hover:border-primary/50 hover:ring-2 hover:ring-primary/20 focus:outline-none disabled:pointer-events-none disabled:opacity-50"
-                                            :class="activePicker?.type === 'pri' && activePicker.idx === idx ? 'border-primary ring-2 ring-primary/20' : ''"
-                                            :style="{ color: pri.color }"
-                                            :disabled="isProtectedPriorityRow(pri) || !isEditingPriorityName(pri, idx)"
-                                            :title="
-                                                isProtectedPriorityRow(pri)
-                                                    ? 'Built-in priority: icon cannot be changed'
-                                                    : isEditingPriorityName(pri, idx)
-                                                      ? `Change icon (${pri.icon})`
-                                                      : 'Click Edit to change icon'
-                                            "
-                                            @click="openPicker($event, 'pri', idx)"
-                                        >
-                                            <component :is="resolveIcon(pri.icon)" class="h-4 w-4" />
-                                        </button>
+                                            <!-- Icon trigger (custom rows: only while row edit mode) -->
+                                            <button
+                                                type="button"
+                                                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-input bg-background shadow-sm transition-all hover:border-primary/50 hover:ring-2 hover:ring-primary/20 focus:outline-none disabled:pointer-events-none disabled:opacity-50"
+                                                :class="
+                                                    activePicker?.type === 'pri' && activePicker.idx === idx
+                                                        ? 'border-primary ring-2 ring-primary/20'
+                                                        : ''
+                                                "
+                                                :style="{ color: pri.color }"
+                                                :disabled="isProtectedPriorityRow(pri) || !isEditingPriorityName(pri, idx)"
+                                                :title="
+                                                    isProtectedPriorityRow(pri)
+                                                        ? 'Built-in priority: icon cannot be changed'
+                                                        : isEditingPriorityName(pri, idx)
+                                                          ? `Change icon (${pri.icon})`
+                                                          : 'Click Edit to change icon'
+                                                "
+                                                @click="openPicker($event, 'pri', idx)"
+                                            >
+                                                <component :is="resolveIcon(pri.icon)" class="h-4 w-4" />
+                                            </button>
 
-                                        <div class="flex min-w-0 flex-1 items-center gap-1.5">
-                                            <template v-if="isEditingPriorityName(pri, idx)">
-                                                <Input
-                                                    id="ticket-config-editing-name-input"
-                                                    v-model="pri.name"
-                                                    class="min-w-0 flex-1 border-0 bg-transparent px-2 py-1 text-sm font-medium shadow-none focus-visible:ring-2 focus-visible:ring-ring"
-                                                    placeholder="Priority name"
-                                                    @keydown.enter.prevent="finishEditingPriorityName"
-                                                    @keydown.escape.prevent="finishEditingPriorityName"
-                                                />
-                                                <Button
-                                                    type="button"
-                                                    variant="outline"
-                                                    size="icon"
-                                                    class="h-8 w-8 shrink-0"
-                                                    title="Done editing"
-                                                    @click="finishEditingPriorityName"
-                                                >
-                                                    <Check class="h-3.5 w-3.5" />
-                                                </Button>
-                                            </template>
-                                            <template v-else>
+                                            <div class="flex min-w-0 flex-1 items-center gap-1.5">
+                                                <template v-if="isEditingPriorityName(pri, idx)">
+                                                    <Input
+                                                        id="ticket-config-editing-name-input"
+                                                        v-model="pri.name"
+                                                        class="min-w-0 flex-1 border-0 bg-transparent px-2 py-1 text-sm font-medium shadow-none focus-visible:ring-2 focus-visible:ring-ring"
+                                                        placeholder="Priority name"
+                                                        @keydown.enter.prevent="finishEditingPriorityName"
+                                                        @keydown.escape.prevent="finishEditingPriorityName"
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="icon"
+                                                        class="h-8 w-8 shrink-0"
+                                                        title="Done editing"
+                                                        @click="finishEditingPriorityName"
+                                                    >
+                                                        <Check class="h-3.5 w-3.5" />
+                                                    </Button>
+                                                </template>
+                                                <template v-else>
+                                                    <span
+                                                        class="min-w-0 flex-1 truncate px-0.5 py-1 text-sm"
+                                                        :class="
+                                                            !pri.name.trim()
+                                                                ? 'font-normal italic text-muted-foreground'
+                                                                : isProtectedPriorityRow(pri)
+                                                                  ? 'select-none font-normal text-muted-foreground'
+                                                                  : 'font-medium text-foreground'
+                                                        "
+                                                        :title="isProtectedPriorityRow(pri) ? 'Built-in priority: name is fixed' : undefined"
+                                                    >
+                                                        {{ pri.name.trim() || 'Unnamed priority' }}
+                                                    </span>
+                                                </template>
+                                            </div>
+
+                                            <!-- Color swatch -->
+                                            <label
+                                                v-if="!isProtectedPriorityRow(pri) && isEditingPriorityName(pri, idx)"
+                                                class="relative flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md border border-input bg-background shadow-sm transition-all hover:border-primary/50 hover:ring-2 hover:ring-primary/20"
+                                                :title="pri.color"
+                                            >
                                                 <span
-                                                    class="min-w-0 flex-1 truncate px-0.5 py-1 text-sm"
-                                                    :class="
-                                                        ! pri.name.trim()
-                                                            ? 'text-muted-foreground italic font-normal'
-                                                            : isProtectedPriorityRow(pri)
-                                                              ? 'select-none font-normal text-muted-foreground'
-                                                              : 'font-medium text-foreground'
-                                                    "
-                                                    :title="isProtectedPriorityRow(pri) ? 'Built-in priority: name is fixed' : undefined"
+                                                    class="h-4 w-4 rounded-full border border-border/50 shadow-sm"
+                                                    :style="{ backgroundColor: pri.color }"
+                                                />
+                                                <input v-model="pri.color" type="color" class="sr-only" />
+                                            </label>
+                                            <span
+                                                v-else-if="!isProtectedPriorityRow(pri)"
+                                                class="flex h-8 w-8 shrink-0 cursor-default items-center justify-center rounded-md border border-input bg-background opacity-90 shadow-sm"
+                                                title="Click Edit to change colour"
+                                            >
+                                                <span
+                                                    class="h-4 w-4 rounded-full border border-border/50 shadow-sm"
+                                                    :style="{ backgroundColor: pri.color }"
+                                                />
+                                            </span>
+                                            <span
+                                                v-else
+                                                class="flex h-8 w-8 shrink-0 cursor-not-allowed items-center justify-center rounded-md border border-input bg-background opacity-70 shadow-sm"
+                                                title="Built-in priority: colour cannot be changed"
+                                            >
+                                                <span
+                                                    class="h-4 w-4 rounded-full border border-border/50 shadow-sm"
+                                                    :style="{ backgroundColor: pri.color }"
+                                                />
+                                            </span>
+
+                                            <div class="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                                                <button
+                                                    type="button"
+                                                    class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
+                                                    :disabled="idx === 0"
+                                                    @click="movePriorityUp(idx)"
                                                 >
-                                                    {{ pri.name.trim() || 'Unnamed priority' }}
-                                                </span>
-                                            </template>
+                                                    <ArrowUp class="h-3.5 w-3.5" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
+                                                    :disabled="idx === priorities.length - 1"
+                                                    @click="movePriorityDown(idx)"
+                                                >
+                                                    <ArrowDown class="h-3.5 w-3.5" />
+                                                </button>
+                                                <button
+                                                    v-if="!isProtectedPriorityRow(pri)"
+                                                    type="button"
+                                                    class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                                    title="Remove row"
+                                                    @click="requestRemovePriority(idx)"
+                                                >
+                                                    <Trash2 class="h-3.5 w-3.5" />
+                                                </button>
+                                                <button
+                                                    v-if="!isProtectedPriorityRow(pri)"
+                                                    type="button"
+                                                    class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+                                                    title="Edit name, icon, and colour"
+                                                    @click="startEditingPriorityName(pri, idx)"
+                                                >
+                                                    <Pencil class="h-3.5 w-3.5" />
+                                                </button>
+                                            </div>
                                         </div>
-
-                                        <!-- Color swatch -->
-                                        <label
-                                            v-if="!isProtectedPriorityRow(pri) && isEditingPriorityName(pri, idx)"
-                                            class="relative flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md border border-input bg-background shadow-sm transition-all hover:border-primary/50 hover:ring-2 hover:ring-primary/20"
-                                            :title="pri.color"
-                                        >
-                                            <span class="h-4 w-4 rounded-full border border-border/50 shadow-sm" :style="{ backgroundColor: pri.color }" />
-                                            <input v-model="pri.color" type="color" class="sr-only" />
-                                        </label>
-                                        <span
-                                            v-else-if="!isProtectedPriorityRow(pri)"
-                                            class="flex h-8 w-8 shrink-0 cursor-default items-center justify-center rounded-md border border-input bg-background opacity-90 shadow-sm"
-                                            title="Click Edit to change colour"
-                                        >
-                                            <span class="h-4 w-4 rounded-full border border-border/50 shadow-sm" :style="{ backgroundColor: pri.color }" />
-                                        </span>
-                                        <span
-                                            v-else
-                                            class="flex h-8 w-8 shrink-0 cursor-not-allowed items-center justify-center rounded-md border border-input bg-background opacity-70 shadow-sm"
-                                            title="Built-in priority: colour cannot be changed"
-                                        >
-                                            <span class="h-4 w-4 rounded-full border border-border/50 shadow-sm" :style="{ backgroundColor: pri.color }" />
-                                        </span>
-
-                                        <div class="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                                            <button type="button" class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30" :disabled="idx === 0" @click="movePriorityUp(idx)">
-                                                <ArrowUp class="h-3.5 w-3.5" />
-                                            </button>
-                                            <button type="button" class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30" :disabled="idx === priorities.length - 1" @click="movePriorityDown(idx)">
-                                                <ArrowDown class="h-3.5 w-3.5" />
-                                            </button>
-                                            <button
-                                                v-if="!isProtectedPriorityRow(pri)"
-                                                type="button"
-                                                class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                                                title="Remove row"
-                                                @click="requestRemovePriority(idx)"
-                                            >
-                                                <Trash2 class="h-3.5 w-3.5" />
-                                            </button>
-                                            <button
-                                                v-if="!isProtectedPriorityRow(pri)"
-                                                type="button"
-                                                class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
-                                                title="Edit name, icon, and colour"
-                                                @click="startEditingPriorityName(pri, idx)"
-                                            >
-                                                <Pencil class="h-3.5 w-3.5" />
-                                            </button>
-                                        </div>
-                                    </div>
                                     </TransitionGroup>
 
                                     <div class="flex items-center justify-between pt-1">
@@ -1735,160 +1772,185 @@ function submitAppearance(): void {
 
                         <!-- Statuses -->
                         <form @submit.prevent="submitStatuses">
-                            <Card class="shadow-sm border border-border/60 transition-all duration-300 hover:shadow-md">
+                            <Card class="border border-border/60 shadow-sm transition-all duration-300 hover:shadow-md">
                                 <CardHeader>
                                     <CardTitle>Incident Statuses</CardTitle>
                                     <CardDescription>
-                                        Workflow labels with icon and colour. Default statuses cannot be removed; their names, icons, colours, and handler rules are fixed. Custom rows: use the pencil (right side) to edit name, icon, colour, and handler rules.
+                                        Workflow labels with icon and colour. Default statuses cannot be removed; their names, icons, colours, and
+                                        handler rules are fixed. Custom rows: use the pencil (right side) to edit name, icon, colour, and handler
+                                        rules.
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent class="flex flex-col gap-2">
                                     <TransitionGroup name="ticket-config-dnd" tag="div" class="flex flex-col gap-2">
-                                    <div
-                                        v-for="(st, idx) in statuses"
-                                        :key="rowKeyStatus(st, idx)"
-                                        data-config-dnd-row
-                                        class="group flex items-center gap-2 rounded-lg border border-border/50 bg-muted/20 px-3 py-2 transition-[transform,opacity,box-shadow,background-color] duration-300 ease-out hover:bg-muted/40"
-                                        :class="[configRowDragOverClass('statuses', idx), configRowDraggingClass('statuses', idx)]"
-                                        @dragover.prevent="onConfigDragOver('statuses', idx, $event)"
-                                        @dragleave="onConfigDragLeave('statuses', idx, $event)"
-                                        @drop.prevent="onConfigDrop('statuses', idx, $event)"
-                                    >
-                                        <span
-                                            class="inline-flex shrink-0 touch-none cursor-grab select-none text-muted-foreground/40 active:cursor-grabbing group-hover:text-muted-foreground"
-                                            draggable="true"
-                                            title="Drag to reorder"
-                                            @dragstart.stop="onConfigDragStart('statuses', idx, $event)"
-                                            @dragend="onConfigDragEnd"
+                                        <div
+                                            v-for="(st, idx) in statuses"
+                                            :key="rowKeyStatus(st, idx)"
+                                            data-config-dnd-row
+                                            class="group flex items-center gap-2 rounded-lg border border-border/50 bg-muted/20 px-3 py-2 transition-[transform,opacity,box-shadow,background-color] duration-300 ease-out hover:bg-muted/40"
+                                            :class="[configRowDragOverClass('statuses', idx), configRowDraggingClass('statuses', idx)]"
+                                            @dragover.prevent="onConfigDragOver('statuses', idx, $event)"
+                                            @dragleave="onConfigDragLeave('statuses', idx, $event)"
+                                            @drop.prevent="onConfigDrop('statuses', idx, $event)"
                                         >
-                                            <GripVertical class="h-4 w-4 pointer-events-none" />
-                                        </span>
-                                        <button
-                                            type="button"
-                                            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-input bg-background shadow-sm transition-all hover:border-primary/50 hover:ring-2 hover:ring-primary/20 focus:outline-none disabled:pointer-events-none disabled:opacity-50"
-                                            :class="activePicker?.type === 'stat' && activePicker.idx === idx ? 'border-primary ring-2 ring-primary/20' : ''"
-                                            :style="{ color: st.color }"
-                                            :disabled="isProtectedStatusRow(st) || !isEditingStatusName(st, idx)"
-                                            :title="
-                                                isProtectedStatusRow(st)
-                                                    ? 'Built-in status: icon cannot be changed'
-                                                    : isEditingStatusName(st, idx)
-                                                      ? `Change icon (${st.icon})`
-                                                      : 'Click Edit to change icon'
-                                            "
-                                            @click="openPicker($event, 'stat', idx)"
-                                        >
-                                            <component :is="resolveIcon(st.icon)" class="h-4 w-4" />
-                                        </button>
-                                        <div class="flex min-w-0 flex-1 items-center gap-1.5">
-                                            <template v-if="isEditingStatusName(st, idx)">
-                                                <Input
-                                                    id="ticket-config-editing-name-input"
-                                                    v-model="statuses[idx].name"
-                                                    class="min-w-0 flex-1 border-0 bg-transparent px-2 py-1 text-sm font-medium shadow-none focus-visible:ring-2 focus-visible:ring-ring"
-                                                    placeholder="Status label"
-                                                    @keydown.enter.prevent="finishEditingStatusName"
-                                                    @keydown.escape.prevent="finishEditingStatusName"
-                                                />
-                                                <Button
-                                                    type="button"
-                                                    variant="outline"
-                                                    size="icon"
-                                                    class="h-8 w-8 shrink-0"
-                                                    title="Done editing"
-                                                    @click="finishEditingStatusName"
-                                                >
-                                                    <Check class="h-3.5 w-3.5" />
-                                                </Button>
-                                            </template>
-                                            <template v-else>
-                                                <span
-                                                    class="min-w-0 flex-1 truncate px-0.5 py-1 text-sm"
-                                                    :class="
-                                                        ! st.name.trim()
-                                                            ? 'text-muted-foreground italic font-normal'
-                                                            : isProtectedStatusRow(st)
-                                                              ? 'select-none font-normal text-muted-foreground'
-                                                              : 'font-medium text-foreground'
-                                                    "
-                                                    :title="isProtectedStatusRow(st) ? 'Built-in status: name is fixed' : undefined"
-                                                >
-                                                    {{ st.name.trim() || 'Unnamed status' }}
-                                                </span>
-                                            </template>
-                                        </div>
-                                        <Select
-                                            :model-value="st.handler_requirement ?? 'optional'"
-                                            :disabled="isProtectedStatusRow(st) || !isEditingStatusName(st, idx)"
-                                            @update:model-value="(v) => (statuses[idx].handler_requirement = v as StatusHandlerRequirement)"
-                                        >
-                                            <SelectTrigger
-                                                class="h-8 w-[9.75rem] shrink-0 text-xs"
+                                            <span
+                                                class="inline-flex shrink-0 cursor-grab touch-none select-none text-muted-foreground/40 active:cursor-grabbing group-hover:text-muted-foreground"
+                                                draggable="true"
+                                                title="Drag to reorder"
+                                                @dragstart.stop="onConfigDragStart('statuses', idx, $event)"
+                                                @dragend="onConfigDragEnd"
+                                            >
+                                                <GripVertical class="pointer-events-none h-4 w-4" />
+                                            </span>
+                                            <button
+                                                type="button"
+                                                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-input bg-background shadow-sm transition-all hover:border-primary/50 hover:ring-2 hover:ring-primary/20 focus:outline-none disabled:pointer-events-none disabled:opacity-50"
+                                                :class="
+                                                    activePicker?.type === 'stat' && activePicker.idx === idx
+                                                        ? 'border-primary ring-2 ring-primary/20'
+                                                        : ''
+                                                "
+                                                :style="{ color: st.color }"
+                                                :disabled="isProtectedStatusRow(st) || !isEditingStatusName(st, idx)"
                                                 :title="
                                                     isProtectedStatusRow(st)
-                                                        ? 'Built-in statuses cannot change handler rules'
+                                                        ? 'Built-in status: icon cannot be changed'
                                                         : isEditingStatusName(st, idx)
-                                                          ? undefined
-                                                          : 'Click Edit to change handler rules'
+                                                          ? `Change icon (${st.icon})`
+                                                          : 'Click Edit to change icon'
                                                 "
+                                                @click="openPicker($event, 'stat', idx)"
                                             >
-                                                <SelectValue placeholder="Handlers" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="none">No handlers</SelectItem>
-                                                <SelectItem value="optional">Handlers optional</SelectItem>
-                                                <SelectItem value="required">Handlers required</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        <label
-                                            v-if="!isProtectedStatusRow(st) && isEditingStatusName(st, idx)"
-                                            class="relative flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md border border-input bg-background shadow-sm transition-all hover:border-primary/50 hover:ring-2 hover:ring-primary/20"
-                                            :title="st.color"
-                                        >
-                                            <span class="h-4 w-4 rounded-full border border-border/50 shadow-sm" :style="{ backgroundColor: st.color }" />
-                                            <input v-model="st.color" type="color" class="sr-only" />
-                                        </label>
-                                        <span
-                                            v-else-if="!isProtectedStatusRow(st)"
-                                            class="flex h-8 w-8 shrink-0 cursor-default items-center justify-center rounded-md border border-input bg-background opacity-90 shadow-sm"
-                                            title="Click Edit to change colour"
-                                        >
-                                            <span class="h-4 w-4 rounded-full border border-border/50 shadow-sm" :style="{ backgroundColor: st.color }" />
-                                        </span>
-                                        <span
-                                            v-else
-                                            class="flex h-8 w-8 shrink-0 cursor-not-allowed items-center justify-center rounded-md border border-input bg-background opacity-70 shadow-sm"
-                                            title="Built-in status: colour cannot be changed"
-                                        >
-                                            <span class="h-4 w-4 rounded-full border border-border/50 shadow-sm" :style="{ backgroundColor: st.color }" />
-                                        </span>
-                                        <div class="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                                            <button type="button" class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30" :disabled="idx === 0" @click="moveStatusUp(idx)">
-                                                <ArrowUp class="h-3.5 w-3.5" />
+                                                <component :is="resolveIcon(st.icon)" class="h-4 w-4" />
                                             </button>
-                                            <button type="button" class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30" :disabled="idx === statuses.length - 1" @click="moveStatusDown(idx)">
-                                                <ArrowDown class="h-3.5 w-3.5" />
-                                            </button>
-                                            <button
-                                                v-if="!isProtectedStatusRow(st)"
-                                                type="button"
-                                                class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                                                title="Remove row"
-                                                @click="requestRemoveStatus(idx)"
+                                            <div class="flex min-w-0 flex-1 items-center gap-1.5">
+                                                <template v-if="isEditingStatusName(st, idx)">
+                                                    <Input
+                                                        id="ticket-config-editing-name-input"
+                                                        v-model="statuses[idx].name"
+                                                        class="min-w-0 flex-1 border-0 bg-transparent px-2 py-1 text-sm font-medium shadow-none focus-visible:ring-2 focus-visible:ring-ring"
+                                                        placeholder="Status label"
+                                                        @keydown.enter.prevent="finishEditingStatusName"
+                                                        @keydown.escape.prevent="finishEditingStatusName"
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="icon"
+                                                        class="h-8 w-8 shrink-0"
+                                                        title="Done editing"
+                                                        @click="finishEditingStatusName"
+                                                    >
+                                                        <Check class="h-3.5 w-3.5" />
+                                                    </Button>
+                                                </template>
+                                                <template v-else>
+                                                    <span
+                                                        class="min-w-0 flex-1 truncate px-0.5 py-1 text-sm"
+                                                        :class="
+                                                            !st.name.trim()
+                                                                ? 'font-normal italic text-muted-foreground'
+                                                                : isProtectedStatusRow(st)
+                                                                  ? 'select-none font-normal text-muted-foreground'
+                                                                  : 'font-medium text-foreground'
+                                                        "
+                                                        :title="isProtectedStatusRow(st) ? 'Built-in status: name is fixed' : undefined"
+                                                    >
+                                                        {{ st.name.trim() || 'Unnamed status' }}
+                                                    </span>
+                                                </template>
+                                            </div>
+                                            <Select
+                                                :model-value="st.handler_requirement ?? 'optional'"
+                                                :disabled="isProtectedStatusRow(st) || !isEditingStatusName(st, idx)"
+                                                @update:model-value="(v) => (statuses[idx].handler_requirement = v as StatusHandlerRequirement)"
                                             >
-                                                <Trash2 class="h-3.5 w-3.5" />
-                                            </button>
-                                            <button
-                                                v-if="!isProtectedStatusRow(st)"
-                                                type="button"
-                                                class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
-                                                title="Edit name, icon, colour, and handlers"
-                                                @click="startEditingStatusName(st, idx)"
+                                                <SelectTrigger
+                                                    class="h-8 w-[9.75rem] shrink-0 text-xs"
+                                                    :title="
+                                                        isProtectedStatusRow(st)
+                                                            ? 'Built-in statuses cannot change handler rules'
+                                                            : isEditingStatusName(st, idx)
+                                                              ? undefined
+                                                              : 'Click Edit to change handler rules'
+                                                    "
+                                                >
+                                                    <SelectValue placeholder="Handlers" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="none">No handlers</SelectItem>
+                                                    <SelectItem value="optional">Handlers optional</SelectItem>
+                                                    <SelectItem value="required">Handlers required</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                            <label
+                                                v-if="!isProtectedStatusRow(st) && isEditingStatusName(st, idx)"
+                                                class="relative flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md border border-input bg-background shadow-sm transition-all hover:border-primary/50 hover:ring-2 hover:ring-primary/20"
+                                                :title="st.color"
                                             >
-                                                <Pencil class="h-3.5 w-3.5" />
-                                            </button>
+                                                <span
+                                                    class="h-4 w-4 rounded-full border border-border/50 shadow-sm"
+                                                    :style="{ backgroundColor: st.color }"
+                                                />
+                                                <input v-model="st.color" type="color" class="sr-only" />
+                                            </label>
+                                            <span
+                                                v-else-if="!isProtectedStatusRow(st)"
+                                                class="flex h-8 w-8 shrink-0 cursor-default items-center justify-center rounded-md border border-input bg-background opacity-90 shadow-sm"
+                                                title="Click Edit to change colour"
+                                            >
+                                                <span
+                                                    class="h-4 w-4 rounded-full border border-border/50 shadow-sm"
+                                                    :style="{ backgroundColor: st.color }"
+                                                />
+                                            </span>
+                                            <span
+                                                v-else
+                                                class="flex h-8 w-8 shrink-0 cursor-not-allowed items-center justify-center rounded-md border border-input bg-background opacity-70 shadow-sm"
+                                                title="Built-in status: colour cannot be changed"
+                                            >
+                                                <span
+                                                    class="h-4 w-4 rounded-full border border-border/50 shadow-sm"
+                                                    :style="{ backgroundColor: st.color }"
+                                                />
+                                            </span>
+                                            <div class="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                                                <button
+                                                    type="button"
+                                                    class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
+                                                    :disabled="idx === 0"
+                                                    @click="moveStatusUp(idx)"
+                                                >
+                                                    <ArrowUp class="h-3.5 w-3.5" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
+                                                    :disabled="idx === statuses.length - 1"
+                                                    @click="moveStatusDown(idx)"
+                                                >
+                                                    <ArrowDown class="h-3.5 w-3.5" />
+                                                </button>
+                                                <button
+                                                    v-if="!isProtectedStatusRow(st)"
+                                                    type="button"
+                                                    class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                                    title="Remove row"
+                                                    @click="requestRemoveStatus(idx)"
+                                                >
+                                                    <Trash2 class="h-3.5 w-3.5" />
+                                                </button>
+                                                <button
+                                                    v-if="!isProtectedStatusRow(st)"
+                                                    type="button"
+                                                    class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+                                                    title="Edit name, icon, colour, and handlers"
+                                                    @click="startEditingStatusName(st, idx)"
+                                                >
+                                                    <Pencil class="h-3.5 w-3.5" />
+                                                </button>
+                                            </div>
                                         </div>
-                                    </div>
                                     </TransitionGroup>
 
                                     <div class="flex items-center justify-between pt-1">
@@ -1903,20 +1965,18 @@ function submitAppearance(): void {
                                 </CardContent>
                             </Card>
                         </form>
-
                     </div>
                 </TabsContent>
 
                 <!-- ══ APPEARANCE TAB ══════════════════════════════════════ -->
                 <TabsContent value="appearance">
                     <form @submit.prevent="submitAppearance">
-                        <Card class="shadow-sm border border-border/60 transition-all duration-300 hover:shadow-md">
+                        <Card class="border border-border/60 shadow-sm transition-all duration-300 hover:shadow-md">
                             <CardHeader>
                                 <CardTitle>Appearance</CardTitle>
                                 <CardDescription>Default UI preferences for the application.</CardDescription>
                             </CardHeader>
                             <CardContent class="space-y-6">
-
                                 <div class="grid gap-2">
                                     <Label for="default_theme">Default Theme</Label>
                                     <Select
@@ -1941,19 +2001,15 @@ function submitAppearance(): void {
                                         {{ appearanceForm.processing ? 'Saving…' : 'Save Appearance Settings' }}
                                     </Button>
                                 </div>
-
                             </CardContent>
                         </Card>
                     </form>
                 </TabsContent>
-
             </Tabs>
         </div>
 
         <Dialog :open="inUseModalOpen" @update:open="onInUseModalOpen">
-            <DialogContent
-                class="gap-0 overflow-hidden border border-border/40 bg-card p-0 shadow-2xl sm:rounded-2xl sm:max-w-[432px]"
-            >
+            <DialogContent class="gap-0 overflow-hidden border border-border/40 bg-card p-0 shadow-2xl sm:max-w-[432px] sm:rounded-2xl">
                 <div class="relative px-6 pb-6 pt-7">
                     <div
                         v-if="inUseModalStep === 'info'"
@@ -1983,16 +2039,10 @@ function submitAppearance(): void {
                                 <template v-if="inUseModalStep === 'info'">{{ inUseModalInfoTitle }}</template>
                                 <template v-else>Delete these incidents?</template>
                             </DialogTitle>
-                            <DialogDescription
-                                v-if="inUseModalStep === 'info'"
-                                class="text-[15px] leading-relaxed text-foreground antialiased"
-                            >
+                            <DialogDescription v-if="inUseModalStep === 'info'" class="text-[15px] leading-relaxed text-foreground antialiased">
                                 {{ inUseModalMessage }}
                             </DialogDescription>
-                            <DialogDescription
-                                v-else
-                                class="text-[15px] leading-relaxed text-foreground antialiased"
-                            >
+                            <DialogDescription v-else class="text-[15px] leading-relaxed text-foreground antialiased">
                                 This will permanently delete
                                 {{ inUseModalTicketCount === 1 ? '1 incident' : `${inUseModalTicketCount} incidents` }}
                                 that currently match {{ inUseConfirmScopeLabel }}, including comments and history. This cannot be undone.
@@ -2014,11 +2064,7 @@ function submitAppearance(): void {
                             Delete
                             {{ inUseModalTicketCount === 1 ? '1 incident' : `${inUseModalTicketCount} incidents` }}
                         </Button>
-                        <Button
-                            type="button"
-                            class="h-10 w-full font-semibold sm:w-auto sm:min-w-[8.5rem]"
-                            @click="onInUseModalOpen(false)"
-                        >
+                        <Button type="button" class="h-10 w-full font-semibold sm:w-auto sm:min-w-[8.5rem]" @click="onInUseModalOpen(false)">
                             {{ inUseModalEntityId != null ? 'Cancel' : 'Got it' }}
                         </Button>
                     </template>
@@ -2049,9 +2095,7 @@ function submitAppearance(): void {
         </Dialog>
 
         <Dialog :open="emptyLabelWarningOpen" @update:open="onEmptyLabelWarningOpen">
-            <DialogContent
-                class="gap-0 overflow-hidden border border-border/40 bg-card p-0 shadow-2xl sm:rounded-2xl sm:max-w-[432px]"
-            >
+            <DialogContent class="gap-0 overflow-hidden border border-border/40 bg-card p-0 shadow-2xl sm:max-w-[432px] sm:rounded-2xl">
                 <div class="relative px-6 pb-6 pt-7">
                     <div
                         class="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[radial-gradient(ellipse_80%_100%_at_50%_-20%,rgba(245,158,11,0.22),transparent)] dark:bg-[radial-gradient(ellipse_80%_100%_at_50%_-20%,rgba(245,158,11,0.14),transparent)]"
@@ -2064,9 +2108,7 @@ function submitAppearance(): void {
                             <AlertCircle class="h-7 w-7" stroke-width="2" />
                         </div>
                         <div class="space-y-3 pr-8">
-                            <DialogTitle class="text-xl font-semibold tracking-tight text-foreground">
-                                Missing labels
-                            </DialogTitle>
+                            <DialogTitle class="text-xl font-semibold tracking-tight text-foreground"> Missing labels </DialogTitle>
                             <DialogDescription class="text-[15px] leading-relaxed text-foreground antialiased">
                                 {{ emptyLabelWarningBody }}
                             </DialogDescription>
@@ -2074,11 +2116,7 @@ function submitAppearance(): void {
                     </DialogHeader>
                 </div>
                 <DialogFooter class="border-t border-border/60 bg-muted/25 px-6 py-4 sm:gap-2">
-                    <Button
-                        type="button"
-                        class="h-10 w-full font-semibold sm:w-auto sm:min-w-[8.5rem]"
-                        @click="onEmptyLabelWarningOpen(false)"
-                    >
+                    <Button type="button" class="h-10 w-full font-semibold sm:w-auto sm:min-w-[8.5rem]" @click="onEmptyLabelWarningOpen(false)">
                         Got it
                     </Button>
                 </DialogFooter>
@@ -2119,14 +2157,8 @@ function submitAppearance(): void {
                     </div>
 
                     <!-- Icon grid -->
-                    <div
-                        ref="iconPickerScrollRef"
-                        class="relative h-60 overflow-y-auto overscroll-y-contain p-2"
-                    >
-                        <div
-                            v-if="lucideIconsLoading"
-                            class="flex min-h-[13.5rem] flex-col items-center justify-center gap-3 px-4 text-center"
-                        >
+                    <div ref="iconPickerScrollRef" class="relative h-60 overflow-y-auto overscroll-y-contain p-2">
+                        <div v-if="lucideIconsLoading" class="flex min-h-[13.5rem] flex-col items-center justify-center gap-3 px-4 text-center">
                             <Loader2 class="h-9 w-9 animate-spin text-muted-foreground" />
                             <p class="text-xs text-muted-foreground">Loading icon library…</p>
                         </div>
@@ -2136,9 +2168,11 @@ function submitAppearance(): void {
                                 :key="iconName"
                                 type="button"
                                 class="flex flex-col items-center gap-1 rounded-lg p-1.5 transition-colors focus:outline-none focus:ring-1 focus:ring-ring"
-                                :class="currentPickerIcon() === iconName
-                                    ? 'bg-primary/10 text-primary ring-1 ring-primary/40'
-                                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'"
+                                :class="
+                                    currentPickerIcon() === iconName
+                                        ? 'bg-primary/10 text-primary ring-1 ring-primary/40'
+                                        : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                                "
                                 :title="iconName"
                                 @click="selectIcon(iconName)"
                             >
@@ -2146,10 +2180,7 @@ function submitAppearance(): void {
                                 <span class="w-full truncate text-center text-[8px] leading-tight">{{ iconName }}</span>
                             </button>
 
-                            <div
-                                v-if="filteredIconNames.length === 0"
-                                class="col-span-5 py-8 text-center text-xs text-muted-foreground"
-                            >
+                            <div v-if="filteredIconNames.length === 0" class="col-span-5 py-8 text-center text-xs text-muted-foreground">
                                 No icons match "{{ iconSearch }}"
                             </div>
                             <div
