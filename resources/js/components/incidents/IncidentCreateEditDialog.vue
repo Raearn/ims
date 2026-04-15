@@ -45,6 +45,7 @@ export type IncidentMainForm = {
     tags: string[];
     solution: string;
     attachment: File | null;
+    incident_occurred_at: string;
 };
 
 const props = defineProps<{
@@ -248,8 +249,34 @@ watch(
                                     required
                                     class="py-5 text-sm"
                                 />
-                                <span v-if="form.errors.title" class="text-xs font-medium text-destructive">{{ form.errors.title }}</span>
+                            <span v-if="form.errors.title" class="text-xs font-medium text-destructive">{{ form.errors.title }}</span>
                             </div>
+
+                            <div class="grid gap-2">
+                                <Label for="incident-occurred-at" class="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                                    Date &amp; Time of Incident
+                                    <span class="ml-1 font-normal normal-case text-muted-foreground/60">(optional — if different from report date)</span>
+                                </Label>
+                                <div class="relative">
+                                    <Input
+                                        id="incident-occurred-at"
+                                        v-model="form.incident_occurred_at"
+                                        type="datetime-local"
+                                        :max="new Date().toISOString().slice(0, 16)"
+                                        class="py-5 text-sm pr-9"
+                                    />
+                                    <button
+                                        v-if="form.incident_occurred_at"
+                                        type="button"
+                                        class="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-destructive"
+                                        @click="form.incident_occurred_at = ''"
+                                    >
+                                        <X class="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
+                                <span v-if="form.errors.incident_occurred_at" class="text-xs font-medium text-destructive">{{ form.errors.incident_occurred_at }}</span>
+                            </div>
+
                             <div class="grid gap-2">
                                 <Label class="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                                     Description <span class="font-normal normal-case text-muted-foreground/60">(optional)</span>

@@ -36,9 +36,11 @@ final class IncidentInertiaPayload
             'createdAt' => $ticket->created_at->diffForHumans(),
             'createdAtFormatted' => $ticket->created_at->format('M d, Y \a\t h:i A'),
             'createdAtRaw' => $ticket->created_at->format('Y-m-d'),
+            'incidentOccurredAt' => $ticket->incident_occurred_at?->format('Y-m-d\TH:i'),
+            'incidentOccurredAtFormatted' => $ticket->incident_occurred_at?->format('M d, Y \a\t h:i A'),
             'solution' => $ticket->solution,
             'resolvedInDuration' => $ticket->resolved_at
-                ? $ticket->resolved_at->diffForHumans($ticket->created_at, CarbonInterface::DIFF_ABSOLUTE, false, 2)
+                ? $ticket->resolved_at->diffForHumans($ticket->incident_occurred_at ?? $ticket->created_at, CarbonInterface::DIFF_ABSOLUTE, false, 2)
                 : null,
             'resolvedAtFormatted' => $ticket->resolved_at?->format('M d, Y \a\t h:i A'),
             'commentsCount' => (int) ($ticket->comments_count ?? 0),
@@ -74,9 +76,11 @@ final class IncidentInertiaPayload
                 'createdAt' => $ticket->created_at->diffForHumans(),
                 'createdAtFormatted' => $ticket->created_at->format('M d, Y \a\t h:i A'),
                 'createdAtRaw' => $ticket->created_at->format('Y-m-d'),
+                'incidentOccurredAt' => $ticket->incident_occurred_at?->format('Y-m-d\TH:i'),
+                'incidentOccurredAtFormatted' => $ticket->incident_occurred_at?->format('M d, Y \a\t h:i A'),
                 'solution' => $ticket->solution,
                 'resolvedInDuration' => $ticket->resolved_at
-                    ? $ticket->resolved_at->diffForHumans($ticket->created_at, CarbonInterface::DIFF_ABSOLUTE, false, 2)
+                    ? $ticket->resolved_at->diffForHumans($ticket->incident_occurred_at ?? $ticket->created_at, CarbonInterface::DIFF_ABSOLUTE, false, 2)
                     : null,
                 'resolvedAtFormatted' => $ticket->resolved_at?->format('M d, Y \a\t h:i A'),
                 'commentsCount' => (int) $ticket->comments_count,

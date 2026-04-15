@@ -326,6 +326,7 @@ Route::prefix('admin')->middleware(['auth', 'verified'])->group(function () {
                 'tags' => ['required', 'array', 'min:1'],
                 'tags.*' => ['string'],
                 'attachment' => 'nullable|image|max:4096',
+                'incident_occurred_at' => ['nullable', 'date', 'before_or_equal:now'],
             ]);
 
             if (in_array($validated['status'], TicketStatus::namesRequiringHandlersForForms(), true)) {
@@ -353,6 +354,7 @@ Route::prefix('admin')->middleware(['auth', 'verified'])->group(function () {
                 'category' => $categoryName,
                 'ticket_category_id' => $validated['ticket_category_id'],
                 'user_id' => auth()->id(),
+                'incident_occurred_at' => $validated['incident_occurred_at'] ?? null,
             ]);
 
             $tagIds = [];
@@ -807,6 +809,7 @@ Route::prefix('admin')->middleware(['auth', 'verified'])->group(function () {
                 'tags' => ['required', 'array', 'min:1'],
                 'tags.*' => ['string'],
                 'attachment' => 'nullable|image|max:4096',
+                'incident_occurred_at' => ['nullable', 'date', 'before_or_equal:now'],
             ]);
 
             if (in_array($validated['status'], TicketStatus::namesRequiringHandlersForForms(), true)) {
@@ -852,6 +855,9 @@ Route::prefix('admin')->middleware(['auth', 'verified'])->group(function () {
                 'category' => $categoryName,
                 'ticket_category_id' => $validated['ticket_category_id'],
                 'attachment' => $validated['attachment'] ?? $ticket->attachment,
+                'incident_occurred_at' => array_key_exists('incident_occurred_at', $validated)
+                    ? ($validated['incident_occurred_at'] ?? null)
+                    : $ticket->incident_occurred_at,
             ]);
 
             $tagIds = [];

@@ -33,12 +33,14 @@ class Ticket extends Model
         'category',
         'ticket_category_id',
         'user_id',
+        'incident_occurred_at',
     ];
 
     protected function casts(): array
     {
         return [
             'resolved_at' => 'datetime',
+            'incident_occurred_at' => 'datetime',
         ];
     }
 

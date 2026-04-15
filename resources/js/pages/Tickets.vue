@@ -169,6 +169,7 @@ const openEditModal = (ticket: IncidentTicketRow) => {
     form.tags = [...ticket.tags];
     form.solution = ticket.solution ?? '';
     form.attachment = null;
+    form.incident_occurred_at = ticket.incidentOccurredAt ?? '';
     attachmentPreview.value = ticket.attachmentUrl ?? null;
     attachmentCompression.value = null;
     isCreateModalOpen.value = true;
@@ -184,6 +185,7 @@ const form = useForm({
     tags: [] as string[],
     solution: '',
     attachment: null as File | null,
+    incident_occurred_at: '',
 });
 
 const isAssignModalOpen = ref(false);
@@ -638,6 +640,9 @@ watch(isCreateModalOpen, (val) => {
         form.reset();
         form.status = defaultNewTicketStatusName.value;
         form.ticket_category_id = props.categories[0]?.id ?? null;
+        const now = new Date();
+        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+        form.incident_occurred_at = now.toISOString().slice(0, 16);
         attachmentPreview.value = null;
         attachmentCompression.value = null;
     }
