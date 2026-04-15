@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/sidebar';
 import { type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { AlertTriangle, Folder, LayoutGrid, ScrollText, Users, Activity, Settings, UserRound } from 'lucide-vue-next';
+import { AlertTriangle, Folder, LayoutGrid, ScrollText, Users, Activity, Settings, UserRound, Lightbulb } from 'lucide-vue-next';
 import { computed } from 'vue';
 import AppLogo from './AppLogo.vue';
 
@@ -146,6 +146,14 @@ const homeRoute = computed(() => {
                                     <Link :href="route('audit-log')">
                                         <ScrollText />
                                         <span>Audit Log</span>
+                                    </Link>
+                                </SidebarMenuButton>
+                            </SidebarMenuItem>
+                            <SidebarMenuItem>
+                                <SidebarMenuButton as-child :is-active="route().current('admin.solutions')">
+                                    <Link :href="route('admin.solutions')">
+                                        <Lightbulb />
+                                        <span>Solutions</span>
                                     </Link>
                                 </SidebarMenuButton>
                             </SidebarMenuItem>

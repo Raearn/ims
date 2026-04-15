@@ -1486,6 +1486,9 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(fu
         ]);
     })->name('audit-log');
 
+    // ── Solutions ──────────────────────────────────────────────────────────────
+    Route::get('solutions', [App\Http\Controllers\Admin\SolutionsController::class, 'index'])->name('admin.solutions');
+
     // ── Diagnostics ────────────────────────────────────────────────────────────
     Route::get('diagnostics', function () {
         // Collect database statistics based on IMS context

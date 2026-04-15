@@ -18,6 +18,7 @@ import { compressImage } from '@/lib/utils';
 import { ensureLucideIconsLoaded, lucideAllIconMap, resolveLucideIcon } from '@/composables/useLucideIconRegistry';
 import type { InertiaForm } from '@inertiajs/vue3';
 import {
+    CalendarClock,
     CheckCircle2,
     Circle,
     Info,
@@ -257,22 +258,42 @@ watch(
                                     Date &amp; Time of Incident
                                     <span class="ml-1 font-normal normal-case text-muted-foreground/60">(optional — if different from report date)</span>
                                 </Label>
-                                <div class="relative">
+                                <div
+                                    :class="[
+                                        'group relative flex h-[58px] items-center rounded-md border shadow-sm transition-colors focus-within:ring-1 focus-within:ring-ring',
+                                        form.incident_occurred_at
+                                            ? 'border-primary/40 bg-primary/5 focus-within:border-primary'
+                                            : 'border-input bg-transparent focus-within:border-primary',
+                                    ]"
+                                >
+                                    <div
+                                        :class="[
+                                            'flex h-full items-center justify-center pl-3.5 pr-2 transition-colors',
+                                            form.incident_occurred_at
+                                                ? 'text-primary'
+                                                : 'text-muted-foreground group-focus-within:text-primary',
+                                        ]"
+                                    >
+                                        <CalendarClock class="h-4 w-4" />
+                                    </div>
                                     <Input
                                         id="incident-occurred-at"
                                         v-model="form.incident_occurred_at"
                                         type="datetime-local"
                                         :max="new Date().toISOString().slice(0, 16)"
-                                        class="py-5 text-sm pr-9"
+                                        class="h-full flex-1 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 [&::-webkit-calendar-picker-indicator]:mr-3 [&::-webkit-calendar-picker-indicator]:opacity-50 [&::-webkit-calendar-picker-indicator]:transition-opacity hover:[&::-webkit-calendar-picker-indicator]:opacity-100 dark:[&::-webkit-calendar-picker-indicator]:invert"
                                     />
-                                    <button
-                                        v-if="form.incident_occurred_at"
-                                        type="button"
-                                        class="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-destructive"
-                                        @click="form.incident_occurred_at = ''"
-                                    >
-                                        <X class="h-3.5 w-3.5" />
-                                    </button>
+                                    <div class="absolute right-3.5 top-1/2 flex -translate-y-1/2 items-center">
+                                        <button
+                                            v-if="form.incident_occurred_at"
+                                            type="button"
+                                            class="flex h-5 w-5 items-center justify-center rounded-full bg-destructive/10 text-destructive transition-colors hover:bg-destructive hover:text-destructive-foreground"
+                                            title="Clear date"
+                                            @click="form.incident_occurred_at = ''"
+                                        >
+                                            <X class="h-3 w-3" />
+                                        </button>
+                                    </div>
                                 </div>
                                 <span v-if="form.errors.incident_occurred_at" class="text-xs font-medium text-destructive">{{ form.errors.incident_occurred_at }}</span>
                             </div>

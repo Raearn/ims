@@ -66,34 +66,16 @@ function closeSheetAfterPick(): void {
 
 <template>
     <div class="flex flex-col gap-3">
-        <!-- Mobile: status + sheet trigger -->
+        <!-- Mobile: sheet trigger -->
         <div class="flex flex-col gap-2 md:hidden">
-            <div class="flex min-w-0 items-center gap-2">
-                <div
-                    class="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto rounded-xl border border-border/60 bg-background/60 p-1 shadow-sm backdrop-blur-sm no-scrollbar"
-                >
-                    <button
-                        v-for="status in statusOptions"
-                        :key="status"
-                        type="button"
-                        :class="[
-                            'inline-flex shrink-0 items-center whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all duration-200',
-                            currentStatus === status
-                                ? 'bg-background text-foreground shadow-sm ring-1 ring-border/50 dark:bg-card'
-                                : 'text-muted-foreground hover:bg-background/60 hover:text-foreground',
-                        ]"
-                        @click="emit('update:currentStatus', status)"
-                    >
-                        {{ status }}
-                    </button>
-                </div>
+            <div class="flex min-w-0 items-center justify-between gap-2">
                 <Sheet v-model:open="mobileSheetOpen">
                     <SheetTrigger as-child>
                         <Button
                             type="button"
                             variant="outline"
                             size="sm"
-                            class="h-9 shrink-0 gap-1.5 border-border/60 bg-background/60 px-2.5 text-xs font-semibold shadow-sm backdrop-blur-sm"
+                            class="h-9 w-full shrink-0 gap-1.5 border-border/60 bg-background/60 px-2.5 text-xs font-semibold shadow-sm backdrop-blur-sm"
                         >
                             <SlidersHorizontal class="h-3.5 w-3.5" />
                             <span class="max-w-[7rem] truncate">{{ sheetTriggerLabel }}</span>
@@ -275,26 +257,7 @@ function closeSheetAfterPick(): void {
 
         <!-- Desktop toolbar -->
         <div class="hidden flex-wrap items-center gap-2 md:flex">
-            <div
-                class="flex min-w-0 max-w-full flex-1 items-center gap-1 overflow-x-auto rounded-xl border border-border/60 bg-background/60 p-1 shadow-sm backdrop-blur-sm no-scrollbar sm:flex-none md:max-w-none lg:min-w-0 lg:flex-1"
-            >
-                <button
-                    v-for="status in statusOptions"
-                    :key="status"
-                    type="button"
-                    :class="[
-                        'inline-flex shrink-0 items-center whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all duration-200',
-                        currentStatus === status
-                            ? 'bg-background text-foreground shadow-sm ring-1 ring-border/50 dark:bg-card'
-                            : 'text-muted-foreground hover:bg-background/60 hover:text-foreground',
-                    ]"
-                    @click="emit('update:currentStatus', status)"
-                >
-                    {{ status }}
-                </button>
-            </div>
-
-            <div class="hidden w-[min(11rem,42vw)] shrink-0 lg:block">
+            <div class="hidden w-[min(11rem,42vw)] shrink-0 md:block">
                 <Select
                     :model-value="currentCategory"
                     @update:model-value="(v) => emit('update:currentCategory', typeof v === 'string' ? v : 'All')"
@@ -319,7 +282,7 @@ function closeSheetAfterPick(): void {
             <div class="hidden flex-1 lg:block" />
 
             <div
-                class="hidden shrink-0 items-center gap-1.5 rounded-xl border border-border/60 bg-background/60 px-2.5 py-1.5 shadow-sm backdrop-blur-sm lg:flex"
+                class="hidden shrink-0 items-center gap-1.5 rounded-xl border border-border/60 bg-background/60 px-2.5 py-1.5 shadow-sm backdrop-blur-sm md:flex"
             >
                 <SlidersHorizontal class="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <input
@@ -427,66 +390,6 @@ function closeSheetAfterPick(): void {
             </Transition>
         </div>
 
-        <!-- Tablet: category row (md only, between mobile and lg) -->
-        <div class="hidden md:block lg:hidden">
-            <Select
-                :model-value="currentCategory"
-                @update:model-value="(v) => emit('update:currentCategory', typeof v === 'string' ? v : 'All')"
-            >
-                <SelectTrigger
-                    class="h-9 w-full rounded-xl border-border/60 bg-background/60 shadow-none backdrop-blur-sm focus:ring-1 focus:ring-ring hover:border-primary/25"
-                >
-                    <SelectValue placeholder="Category" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="All">All categories</SelectItem>
-                    <SelectItem v-for="c in categoryOptions" :key="c.id" :value="String(c.id)">
-                        <span class="flex items-center gap-2">
-                            <component :is="c.iconComponent" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                            <span>{{ c.filterLabel }}</span>
-                        </span>
-                    </SelectItem>
-                </SelectContent>
-            </Select>
-        </div>
-
-        <!-- Tablet date range (md only) -->
-        <div
-            class="hidden items-center gap-1.5 rounded-xl border border-border/60 bg-background/60 px-2.5 py-1.5 shadow-sm backdrop-blur-sm md:flex lg:hidden"
-        >
-            <SlidersHorizontal class="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />
-            <input
-                :value="dateFrom"
-                type="date"
-                :max="dateTo || undefined"
-                class="min-w-0 flex-1 cursor-pointer bg-transparent text-xs font-medium text-foreground [color-scheme:light] dark:[color-scheme:dark]"
-                title="From date"
-                aria-label="Filter from date"
-                @input="emit('update:dateFrom', ($event.target as HTMLInputElement).value)"
-            />
-            <span class="select-none text-xs text-muted-foreground/50" aria-hidden="true">–</span>
-            <input
-                :value="dateTo"
-                type="date"
-                :min="dateFrom || undefined"
-                class="min-w-0 flex-1 cursor-pointer bg-transparent text-xs font-medium text-foreground [color-scheme:light] dark:[color-scheme:dark]"
-                title="To date"
-                aria-label="Filter to date"
-                @input="emit('update:dateTo', ($event.target as HTMLInputElement).value)"
-            />
-            <button
-                v-if="dateFrom || dateTo"
-                type="button"
-                aria-label="Clear date range"
-                class="text-muted-foreground transition-colors hover:text-foreground"
-                @click="
-                    emit('update:dateFrom', '');
-                    emit('update:dateTo', '');
-                "
-            >
-                <X class="h-3 w-3" />
-            </button>
-        </div>
     </div>
 </template>
 
