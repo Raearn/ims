@@ -255,7 +255,11 @@ watch(
                                         id="incident-occurred-at"
                                         v-model="form.incident_occurred_at"
                                         type="datetime-local"
-                                        :max="new Date().toISOString().slice(0, 16)"
+                                        :max="
+                                            new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000)
+                                                .toISOString()
+                                                .slice(0, 16)
+                                        "
                                         class="h-full flex-1 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 [&::-webkit-calendar-picker-indicator]:mr-3 [&::-webkit-calendar-picker-indicator]:opacity-50 [&::-webkit-calendar-picker-indicator]:transition-opacity hover:[&::-webkit-calendar-picker-indicator]:opacity-100 dark:[&::-webkit-calendar-picker-indicator]:invert"
                                     />
                                     <div class="absolute right-3.5 top-1/2 flex -translate-y-1/2 items-center">

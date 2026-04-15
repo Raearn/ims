@@ -14,6 +14,8 @@ export interface TicketDetail {
     createdAt: string;
     createdAtFormatted: string;
     createdAtRaw: string;
+    incidentOccurredAt: string | null;
+    incidentOccurredAtFormatted: string | null;
     solution: string | null;
     resolvedInDuration: string | null;
     resolvedAtFormatted: string | null;

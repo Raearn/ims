@@ -347,10 +347,14 @@ function openInTickets(): void {
                 </div>
 
                 <div v-if="detailTab === 'overview'" class="grid gap-4 px-5 py-5">
-                    <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                    <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
                         <div class="flex flex-col gap-1 rounded-xl border border-border/40 bg-muted/40 px-3 py-2.5">
                             <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Category</span>
                             <span class="text-sm font-semibold text-foreground">{{ ticket.category }}</span>
+                        </div>
+                        <div class="flex flex-col gap-1 rounded-xl border border-border/40 bg-muted/40 px-3 py-2.5">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Date of Incident</span>
+                            <span class="text-sm font-semibold text-foreground">{{ ticket.incidentOccurredAtFormatted || '—' }}</span>
                         </div>
                         <div class="flex flex-col gap-1 rounded-xl border border-border/40 bg-muted/40 px-3 py-2.5">
                             <span class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Reporter</span>
@@ -440,7 +444,7 @@ function openInTickets(): void {
                     <div class="flex flex-col gap-1.5">
                         <div class="flex items-center gap-2 text-xs text-muted-foreground/70">
                             <Clock class="h-3.5 w-3.5 shrink-0" />
-                            <span>Opened {{ ticket.createdAt }}</span>
+                            <span>Reported {{ ticket.createdAt }}</span>
                             <span class="text-muted-foreground/40">·</span>
                             <span>{{ ticket.createdAtFormatted }}</span>
                         </div>
