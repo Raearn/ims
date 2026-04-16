@@ -56,17 +56,14 @@ class IncidentOccurredAtTest extends TestCase
         $this->assertTrue($ticket->incident_occurred_at->isSameMinute(now()->subHours(3)));
     }
 
-    public function test_store_allows_no_incident_occurred_at(): void
+    public function test_store_requires_incident_occurred_at(): void
     {
         $admin = User::factory()->admin()->create();
         $this->actingAs($admin);
 
         $this->post(route('tickets.store'), $this->basePayload([
             'incident_occurred_at' => null,
-        ]))->assertRedirect();
-
-        $ticket = Ticket::where('title', 'Test incident')->latest()->firstOrFail();
-        $this->assertNull($ticket->incident_occurred_at);
+        ]))->assertSessionHasErrors('incident_occurred_at');
     }
 
     public function test_store_rejects_future_incident_occurred_at(): void
@@ -103,7 +100,7 @@ class IncidentOccurredAtTest extends TestCase
         $this->assertNotNull($ticket->fresh()->incident_occurred_at);
     }
 
-    public function test_update_clears_incident_occurred_at_when_null_sent(): void
+    public function test_update_requires_incident_occurred_at_when_null_sent(): void
     {
         $admin = User::factory()->admin()->create();
         $this->actingAs($admin);
@@ -123,8 +120,6 @@ class IncidentOccurredAtTest extends TestCase
             'handler_ids' => [],
             'tags' => [$tag->name],
             'incident_occurred_at' => null,
-        ])->assertRedirect();
-
-        $this->assertNull($ticket->fresh()->incident_occurred_at);
+        ])->assertSessionHasErrors('incident_occurred_at');
     }
 }

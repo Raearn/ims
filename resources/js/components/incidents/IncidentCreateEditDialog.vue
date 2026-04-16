@@ -241,9 +241,9 @@ watch(
                     <div class="grid gap-6 lg:grid-cols-2 lg:items-start">
                         <div class="grid gap-5">
                             <div class="grid gap-2">
-                                <Label for="incident-title" class="text-xs font-bold uppercase tracking-wider text-muted-foreground"
-                                    >Incident Title</Label
-                                >
+                                <Label for="incident-title" class="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                                    Incident Title <span class="ml-1 text-destructive">*</span>
+                                </Label>
                                 <Input
                                     id="incident-title"
                                     v-model="form.title"
@@ -257,9 +257,7 @@ watch(
                             <div class="grid gap-2">
                                 <Label for="incident-occurred-at" class="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                                     Date &amp; Time of Incident
-                                    <span class="ml-1 font-normal normal-case text-muted-foreground/60"
-                                        >(optional — if different from report date)</span
-                                    >
+                                    <span class="ml-1 text-destructive">*</span>
                                 </Label>
                                 <div
                                     :class="[
@@ -281,6 +279,7 @@ watch(
                                         id="incident-occurred-at"
                                         v-model="form.incident_occurred_at"
                                         type="datetime-local"
+                                        required
                                         :max="
                                             new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000)
                                                 .toISOString()
@@ -671,6 +670,7 @@ watch(
                                         id="resolved-at"
                                         v-model="form.resolved_at"
                                         type="datetime-local"
+                                        :min="form.incident_occurred_at ? new Date(new Date(form.incident_occurred_at).getTime() + 60000).toISOString().slice(0, 16) : undefined"
                                         :max="
                                             new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000)
                                                 .toISOString()

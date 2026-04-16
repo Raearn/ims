@@ -139,6 +139,7 @@ class SecurityAuditLogTest extends TestCase
             'status' => $ticket->status,
             'handler_ids' => [],
             'tags' => [$tag->name],
+            'incident_occurred_at' => now()->subDay()->format('Y-m-d H:i:s'),
             'attachment' => UploadedFile::fake()->image('x.jpg', 100, 100),
         ])->assertRedirect();
 
@@ -167,6 +168,7 @@ class SecurityAuditLogTest extends TestCase
             'status' => $ticket->status,
             'handler_ids' => [],
             'tags' => ['Beta'],
+            'incident_occurred_at' => now()->subDay()->format('Y-m-d H:i:s'),
         ])->assertRedirect();
 
         $this->assertDatabaseHas('ticket_activities', [

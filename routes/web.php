@@ -327,11 +327,12 @@ Route::prefix('admin')->middleware(['auth', 'verified'])->group(function () {
                 'tags' => ['required', 'array', 'min:1'],
                 'tags.*' => ['string'],
                 'attachment' => 'nullable|image|max:4096',
-                'incident_occurred_at' => ['nullable', 'date'],
+                'incident_occurred_at' => ['required', 'date', 'before_or_equal:now'],
                 'resolved_at' => [
                     Rule::requiredIf(fn () => request('status') === 'Resolved'),
                     'nullable',
                     'date',
+                    'after:incident_occurred_at',
                 ],
             ]);
 
@@ -816,11 +817,12 @@ Route::prefix('admin')->middleware(['auth', 'verified'])->group(function () {
                 'tags' => ['required', 'array', 'min:1'],
                 'tags.*' => ['string'],
                 'attachment' => 'nullable|image|max:4096',
-                'incident_occurred_at' => ['nullable', 'date'],
+                'incident_occurred_at' => ['required', 'date', 'before_or_equal:now'],
                 'resolved_at' => [
                     Rule::requiredIf(fn () => request('status') === 'Resolved'),
                     'nullable',
                     'date',
+                    'after:incident_occurred_at',
                 ],
             ]);
 

@@ -36,6 +36,7 @@ class TicketActivityTest extends TestCase
             'priority' => 'Medium',
             'status' => 'Open',
             'tags' => ['StoreTestTag'],
+            'incident_occurred_at' => now()->subDay()->format('Y-m-d H:i:s'),
         ]);
 
         $ticket = Ticket::where('title', 'Test ticket')->firstOrFail();
@@ -81,6 +82,7 @@ class TicketActivityTest extends TestCase
             'status' => 'Open',
             'handler_ids' => [],
             'tags' => [$tag->name],
+            'incident_occurred_at' => now()->subDay()->format('Y-m-d H:i:s'),
         ]);
 
         $this->assertDatabaseHas('ticket_activities', [
@@ -131,6 +133,7 @@ class TicketActivityTest extends TestCase
             'status' => 'Open',
             'handler_ids' => [],
             'tags' => [$tag->name],
+            'incident_occurred_at' => now()->subDay()->format('Y-m-d H:i:s'),
         ]);
 
         $this->assertDatabaseHas('ticket_activities', [
@@ -155,6 +158,7 @@ class TicketActivityTest extends TestCase
             'status' => 'Open',
             'handler_ids' => [],
             'tags' => [$tag->name],
+            'incident_occurred_at' => now()->subDay()->format('Y-m-d H:i:s'),
         ]);
 
         $this->assertDatabaseHas('ticket_activities', [
