@@ -152,6 +152,7 @@ const openEditModal = (ticket: IncidentTicketRow) => {
     form.solution = ticket.solution ?? '';
     form.attachment = null;
     form.incident_occurred_at = ticket.incidentOccurredAt ?? '';
+    form.resolved_at = ticket.resolvedAtRaw ?? '';
     attachmentPreview.value = ticket.attachmentUrl ?? null;
     attachmentCompression.value = null;
     isCreateModalOpen.value = true;
@@ -168,6 +169,7 @@ const form = useForm({
     solution: '',
     attachment: null as File | null,
     incident_occurred_at: '',
+    resolved_at: '',
 });
 
 const isAssignModalOpen = ref(false);
@@ -461,9 +463,10 @@ const exportToExcel = async () => {
             { key: 'tags', header: 'Tags', width: 25 },
             { key: 'reporter', header: 'Reporter', width: 22 },
             { key: 'handlers', header: 'Handler(s)', width: 28 },
-            { key: 'createdAt', header: 'Created At', width: 22 },
+            { key: 'reportedAt', header: 'Reported At', width: 22 },
             { key: 'resolvedAt', header: 'Resolved At', width: 22 },
             { key: 'solution', header: 'Solution', width: 50 },
+            { key: 'resolvedWithin', header: 'Resolved Within', width: 20 },
         ];
 
         const headerRow = sheet.getRow(1);
@@ -529,9 +532,10 @@ const exportToExcel = async () => {
                 tags: t.tags.join(', ') || '—',
                 reporter: t.reporter,
                 handlers: t.handlers.map((h) => h.name).join(', ') || '—',
-                createdAt: t.createdAtFormatted,
+                reportedAt: t.incidentOccurredAtFormatted || t.createdAtFormatted,
                 resolvedAt: t.resolvedAtFormatted ?? '—',
                 solution: stripHtml(t.solution),
+                resolvedWithin: t.resolvedInDuration ?? '—',
             });
 
             row.height = 18;
@@ -588,8 +592,15 @@ const exportToExcel = async () => {
 };
 
 const submit = () => {
+    form.clearErrors();
+    
     if (form.tags.length === 0) {
         form.setError('tags', 'At least one tag is required.');
+        return;
+    }
+
+    if (form.status === 'Resolved' && form.resolved_at && form.incident_occurred_at && form.resolved_at <= form.incident_occurred_at) {
+        form.setError('resolved_at', 'Resolution time must be after the incident occurred.');
         return;
     }
 
@@ -634,6 +645,17 @@ watch(isCreateModalOpen, (val) => {
         attachmentCompression.value = null;
     }
 });
+
+watch(
+    () => form.status,
+    (newStatus) => {
+        if (newStatus === 'Resolved' && !form.resolved_at) {
+            const now = new Date();
+            now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+            form.resolved_at = now.toISOString().slice(0, 16);
+        }
+    }
+);
 
 const checkQueryForTicket = () => {
     const params = new URLSearchParams(window.location.search);

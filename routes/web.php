@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\SettingsController;
+use App\Http\Controllers\Admin\SolutionsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\MyIncidentsController;
 use App\Models\Tag;
@@ -326,7 +327,12 @@ Route::prefix('admin')->middleware(['auth', 'verified'])->group(function () {
                 'tags' => ['required', 'array', 'min:1'],
                 'tags.*' => ['string'],
                 'attachment' => 'nullable|image|max:4096',
-                'incident_occurred_at' => ['nullable', 'date', 'before_or_equal:now'],
+                'incident_occurred_at' => ['nullable', 'date'],
+                'resolved_at' => [
+                    Rule::requiredIf(fn () => request('status') === 'Resolved'),
+                    'nullable',
+                    'date',
+                ],
             ]);
 
             if (in_array($validated['status'], TicketStatus::namesRequiringHandlersForForms(), true)) {
@@ -355,6 +361,7 @@ Route::prefix('admin')->middleware(['auth', 'verified'])->group(function () {
                 'ticket_category_id' => $validated['ticket_category_id'],
                 'user_id' => auth()->id(),
                 'incident_occurred_at' => $validated['incident_occurred_at'] ?? null,
+                'resolved_at' => $validated['status'] === 'Resolved' ? ($validated['resolved_at'] ?? now()) : null,
             ]);
 
             $tagIds = [];
@@ -809,7 +816,12 @@ Route::prefix('admin')->middleware(['auth', 'verified'])->group(function () {
                 'tags' => ['required', 'array', 'min:1'],
                 'tags.*' => ['string'],
                 'attachment' => 'nullable|image|max:4096',
-                'incident_occurred_at' => ['nullable', 'date', 'before_or_equal:now'],
+                'incident_occurred_at' => ['nullable', 'date'],
+                'resolved_at' => [
+                    Rule::requiredIf(fn () => request('status') === 'Resolved'),
+                    'nullable',
+                    'date',
+                ],
             ]);
 
             if (in_array($validated['status'], TicketStatus::namesRequiringHandlersForForms(), true)) {
@@ -858,6 +870,7 @@ Route::prefix('admin')->middleware(['auth', 'verified'])->group(function () {
                 'incident_occurred_at' => array_key_exists('incident_occurred_at', $validated)
                     ? ($validated['incident_occurred_at'] ?? null)
                     : $ticket->incident_occurred_at,
+                'resolved_at' => $newStatus === 'Resolved' ? ($validated['resolved_at'] ?? now()) : null,
             ]);
 
             $tagIds = [];
@@ -1428,7 +1441,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 // ── Audit Log, Diagnostics, Settings (admin URL prefix) ─────────────────────
 Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin,supervisor,technical'])->group(function () {
     // ── Solutions ──────────────────────────────────────────────────────────────
-    Route::get('solutions', [App\Http\Controllers\Admin\SolutionsController::class, 'index'])->name('admin.solutions');
+    Route::get('solutions', [SolutionsController::class, 'index'])->name('admin.solutions');
 });
 
 Route::prefix('admin')->middleware(['auth', 'verified', 'role:admin'])->group(function () {

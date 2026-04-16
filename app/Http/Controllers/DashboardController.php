@@ -144,12 +144,20 @@ class DashboardController extends Controller
             ->where('resolved_at', '<=', $now)
             ->count();
 
-        $avgHours = (float) (Ticket::whereNotNull('resolved_at')
+        $avgSeconds = (int) (Ticket::whereNotNull('resolved_at')
             ->whereIn('status', $resolvedForStatWidgets)
             ->where('resolved_at', '>=', $currentPeriodStart)
             ->where('resolved_at', '<=', $now)
-            ->selectRaw('AVG(TIMESTAMPDIFF(MINUTE, created_at, resolved_at)) / 60 as h')
-            ->value('h') ?? 0);
+            ->selectRaw('AVG(TIMESTAMPDIFF(SECOND, created_at, resolved_at)) as s')
+            ->value('s') ?? 0);
+
+        $formattedAvgTime = '—';
+        if ($avgSeconds > 0) {
+            $h = floor($avgSeconds / 3600);
+            $m = floor(($avgSeconds % 3600) / 60);
+            $s = $avgSeconds % 60;
+            $formattedAvgTime = sprintf('%02d:%02d:%02d', $h, $m, $s);
+        }
 
         $trendDays = min((int) ceil($currentPeriodStart->diffInDays($now)), 90);
         if ($trendDays < 1 || $period === 'all') {
@@ -215,8 +223,8 @@ class DashboardController extends Controller
             ],
             [
                 'title' => 'Avg. Resolution Time',
-                'value' => $avgHours > 0 ? round($avgHours, 1).'h' : '—',
-                'description' => 'Mean hours (resolved tickets) · '.$periodLabel,
+                'value' => $formattedAvgTime,
+                'description' => 'Mean time (resolved tickets) · '.$periodLabel,
                 'sparkline' => $avgTimeSparkline,
                 'sparklineValueSuffix' => 'h',
                 'stroke' => '#3b82f6',

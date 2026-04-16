@@ -43,6 +43,7 @@ final class IncidentInertiaPayload
                 ? $ticket->resolved_at->diffForHumans($ticket->incident_occurred_at ?? $ticket->created_at, CarbonInterface::DIFF_ABSOLUTE, false, 2)
                 : null,
             'resolvedAtFormatted' => $ticket->resolved_at?->format('M d, Y \a\t h:i A'),
+            'resolvedAtRaw' => $ticket->resolved_at?->format('Y-m-d\TH:i'),
             'commentsCount' => (int) ($ticket->comments_count ?? 0),
         ];
     }
@@ -83,6 +84,7 @@ final class IncidentInertiaPayload
                     ? $ticket->resolved_at->diffForHumans($ticket->incident_occurred_at ?? $ticket->created_at, CarbonInterface::DIFF_ABSOLUTE, false, 2)
                     : null,
                 'resolvedAtFormatted' => $ticket->resolved_at?->format('M d, Y \a\t h:i A'),
+                'resolvedAtRaw' => $ticket->resolved_at?->format('Y-m-d\TH:i'),
                 'commentsCount' => (int) $ticket->comments_count,
             ],
             'categories' => TicketCategory::orderedTreeForSettings()->map(fn (TicketCategory $c): array => [

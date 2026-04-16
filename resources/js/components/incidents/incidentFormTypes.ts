@@ -19,6 +19,7 @@ export type IncidentTicketRow = {
     solution: string | null;
     resolvedInDuration: string | null;
     resolvedAtFormatted: string | null;
+    resolvedAtRaw: string | null;
     attachmentUrl: string | null;
     commentsCount: number;
     tags: string[];

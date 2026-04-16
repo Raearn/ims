@@ -68,7 +68,7 @@ class Ticket extends Model
             }
 
             if ($ticket->isDirty('status')) {
-                if ($ticket->status === 'Resolved') {
+                if ($ticket->status === 'Resolved' && ! $ticket->isDirty('resolved_at')) {
                     $ticket->resolved_at = now();
                 } elseif (self::statusClearsResolvedAt($ticket->status)) {
                     $ticket->resolved_at = null;

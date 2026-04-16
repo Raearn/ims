@@ -62,7 +62,7 @@ const homeRoute = computed(() => {
         <SidebarHeader class="border-b border-sidebar-border/40 px-3 py-3 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-2">
             <SidebarMenu>
                 <SidebarMenuItem>
-                    <SidebarMenuButton size="lg" as-child>
+                    <SidebarMenuButton size="lg" class="h-auto group-data-[collapsible=icon]:!size-10 group-data-[collapsible=icon]:!p-0" as-child>
                         <Link :href="homeRoute">
                             <AppLogo />
                         </Link>

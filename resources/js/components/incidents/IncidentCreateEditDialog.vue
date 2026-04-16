@@ -25,6 +25,7 @@ export type IncidentMainForm = {
     solution: string;
     attachment: File | null;
     incident_occurred_at: string;
+    resolved_at: string;
 };
 
 const props = defineProps<{
@@ -171,6 +172,31 @@ const getInitials = (name: string) => {
         .substring(0, 2)
         .toUpperCase();
 };
+
+const resolvedWithinText = computed(() => {
+    if (props.form.status !== 'Resolved' || !props.form.resolved_at) return null;
+
+    let startStr = props.form.incident_occurred_at;
+    if (!startStr) {
+        startStr = props.editingTicket ? props.editingTicket.createdAtRaw : new Date().toISOString();
+    }
+
+    const start = new Date(startStr).getTime();
+    const end = new Date(props.form.resolved_at).getTime();
+
+    if (isNaN(start) || isNaN(end)) return null;
+
+    const diffMs = end - start;
+    if (diffMs < 0) return null;
+
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffDays > 0) return `${diffDays} day${diffDays > 1 ? 's' : ''} ${diffHours % 24} hr${diffHours % 24 !== 1 ? 's' : ''}`;
+    if (diffHours > 0) return `${diffHours} hr${diffHours > 1 ? 's' : ''} ${diffMins % 60} min${diffMins % 60 !== 1 ? 's' : ''}`;
+    return `${diffMins} min${diffMins !== 1 ? 's' : ''}`;
+});
 
 watch(
     () => props.open,
@@ -613,6 +639,69 @@ watch(
                                     </div>
                                 </div>
                                 <span v-if="form.errors.handler_ids" class="text-xs font-medium text-destructive">{{ form.errors.handler_ids }}</span>
+                            </div>
+
+                            <div v-if="form.status === 'Resolved'" class="grid gap-2">
+                                <Label for="resolved-at" class="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                                    Resolved At <span class="ml-1 text-destructive">*</span>
+                                </Label>
+                                <div
+                                    :class="[
+                                        'group relative flex h-[58px] items-center rounded-md border shadow-sm transition-colors focus-within:ring-1 focus-within:ring-ring',
+                                        form.errors.resolved_at
+                                            ? 'border-destructive bg-destructive/5 focus-within:border-destructive focus-within:ring-destructive'
+                                            : form.resolved_at
+                                              ? 'border-primary/40 bg-primary/5 focus-within:border-primary'
+                                              : 'border-input bg-transparent focus-within:border-primary',
+                                    ]"
+                                >
+                                    <div
+                                        :class="[
+                                            'flex h-full items-center justify-center pl-3.5 pr-2 transition-colors',
+                                            form.errors.resolved_at
+                                                ? 'text-destructive'
+                                                : form.resolved_at
+                                                  ? 'text-primary'
+                                                  : 'text-muted-foreground group-focus-within:text-primary',
+                                        ]"
+                                    >
+                                        <CalendarClock class="h-4 w-4" />
+                                    </div>
+                                    <Input
+                                        id="resolved-at"
+                                        v-model="form.resolved_at"
+                                        type="datetime-local"
+                                        :max="
+                                            new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000)
+                                                .toISOString()
+                                                .slice(0, 16)
+                                        "
+                                        required
+                                        :class="[
+                                            'h-full flex-1 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 [&::-webkit-calendar-picker-indicator]:mr-3 [&::-webkit-calendar-picker-indicator]:transition-opacity hover:[&::-webkit-calendar-picker-indicator]:opacity-100 dark:[&::-webkit-calendar-picker-indicator]:invert',
+                                            form.errors.resolved_at
+                                                ? 'text-destructive [&::-webkit-calendar-picker-indicator]:opacity-100'
+                                                : '[&::-webkit-calendar-picker-indicator]:opacity-50',
+                                        ]"
+                                    />
+                                    <div class="absolute right-3.5 top-1/2 flex -translate-y-1/2 items-center">
+                                        <button
+                                            v-if="form.resolved_at"
+                                            type="button"
+                                            class="flex h-5 w-5 items-center justify-center rounded-full bg-destructive/10 text-destructive transition-colors hover:bg-destructive hover:text-destructive-foreground"
+                                            title="Clear date"
+                                            @click="form.resolved_at = ''"
+                                        >
+                                            <X class="h-3 w-3" />
+                                        </button>
+                                    </div>
+                                </div>
+                                <span v-if="form.errors.resolved_at" class="text-[11px] font-bold text-destructive">{{
+                                    form.errors.resolved_at
+                                }}</span>
+                                <span v-else-if="resolvedWithinText" class="text-[11px] font-medium text-muted-foreground">
+                                    Resolved within: <span class="text-foreground">{{ resolvedWithinText }}</span>
+                                </span>
                             </div>
 
                             <div v-if="form.status === 'Resolved'" class="grid gap-2">

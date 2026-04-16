@@ -836,7 +836,10 @@ watch(isAssignModalOpen, (val) => {
                                 />
                             </div>
                         </div>
-                        <p class="mt-2 text-xs leading-relaxed text-muted-foreground">{{ stat.description }}</p>
+                        <div v-if="stat.title === 'Avg. Resolution Time' && stat.value !== '—'" class="mt-2 mb-0.5 text-[10px] font-bold tracking-widest text-muted-foreground/60 uppercase">
+                            HH : MM : SS
+                        </div>
+                        <p :class="['text-xs leading-relaxed text-muted-foreground', stat.title === 'Avg. Resolution Time' && stat.value !== '—' ? 'mt-0' : 'mt-2']">{{ stat.description }}</p>
                     </CardContent>
                 </Card>
                 </div>

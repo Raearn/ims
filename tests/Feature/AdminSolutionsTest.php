@@ -63,7 +63,7 @@ class AdminSolutionsTest extends TestCase
         $admin = User::factory()->admin()->create();
 
         $tag = Tag::firstOrCreate(['name' => 'Network']);
-        
+
         // Ticket with solution
         $ticketWithSolution = Ticket::factory()->create([
             'title' => 'Network down',

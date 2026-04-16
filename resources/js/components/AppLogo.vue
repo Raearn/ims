@@ -1,21 +1,23 @@
 <script setup lang="ts">
-import AppLogoIcon from '@/components/AppLogoIcon.vue';
+import { cn } from '@/lib/utils';
+import logo from '../../../public/logo.webp';
+import logoText from '../../../public/eastwestbpo-logo.png';
 
 interface Props {
     class?: string;
 }
 
-defineProps<Props>();
+const props = defineProps<Props>();
 </script>
 
 <template>
-    <div
-        class="flex aspect-square size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:rounded-md"
-    >
-        <AppLogoIcon class="size-5 fill-current group-data-[collapsible=icon]:size-4" />
+    <!-- Collapsed logo -->
+    <div :class="cn('hidden group-data-[collapsible=icon]:flex w-full items-center justify-center', props.class)">
+        <img :src="logo" alt="Logo" class="size-10 object-contain" />
     </div>
-    <div class="ml-3 grid min-w-0 flex-1 text-left text-sm group-data-[collapsible=icon]:hidden">
-        <span class="mb-0.5 truncate font-bold uppercase leading-none tracking-tight text-foreground">EastWest IMS</span>
-        <span class="truncate text-[10px] font-medium uppercase tracking-widest text-muted-foreground">Management System</span>
+    
+    <!-- Expanded logo -->
+    <div :class="cn('flex w-full items-center justify-center group-data-[collapsible=icon]:hidden px-1', props.class)">
+        <img :src="logoText" alt="EastWest BPO" class="h-auto w-full max-h-16 object-contain py-1" />
     </div>
 </template>

@@ -18,30 +18,30 @@ class SolutionsController extends Controller
     {
         $tags = Tag::with(['tickets' => function ($query) {
             $query->select('tickets.id', 'title', 'solution')
-                  ->whereNotNull('solution')
-                  ->where('solution', '!=', '')
-                  ->with('tags');
+                ->whereNotNull('solution')
+                ->where('solution', '!=', '')
+                ->with('tags');
         }])
-        ->orderBy('name')
-        ->get()
-        ->map(function ($tag) {
-            return [
-                'id' => $tag->id,
-                'name' => $tag->name,
-                'solutions' => $tag->tickets->map(function ($ticket) {
-                    return [
-                        'ticket_id' => $ticket->id,
-                        'ticket_title' => $ticket->title,
-                        'solution' => $ticket->solution,
-                        'tags' => $ticket->tags->pluck('name')->toArray(),
-                    ];
-                }),
-            ];
-        })
-        ->filter(function ($tag) {
-            return count($tag['solutions']) > 0;
-        })
-        ->values();
+            ->orderBy('name')
+            ->get()
+            ->map(function ($tag) {
+                return [
+                    'id' => $tag->id,
+                    'name' => $tag->name,
+                    'solutions' => $tag->tickets->map(function ($ticket) {
+                        return [
+                            'ticket_id' => $ticket->id,
+                            'ticket_title' => $ticket->title,
+                            'solution' => $ticket->solution,
+                            'tags' => $ticket->tags->pluck('name')->toArray(),
+                        ];
+                    }),
+                ];
+            })
+            ->filter(function ($tag) {
+                return count($tag['solutions']) > 0;
+            })
+            ->values();
 
         return Inertia::render('Solutions', [
             'tags' => $tags,
