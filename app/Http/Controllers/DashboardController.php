@@ -148,7 +148,7 @@ class DashboardController extends Controller
             ->whereIn('status', $resolvedForStatWidgets)
             ->where('resolved_at', '>=', $currentPeriodStart)
             ->where('resolved_at', '<=', $now)
-            ->selectRaw('AVG(TIMESTAMPDIFF(SECOND, created_at, resolved_at)) as s')
+            ->selectRaw('AVG(TIMESTAMPDIFF(SECOND, COALESCE(incident_occurred_at, created_at), resolved_at)) as s')
             ->value('s') ?? 0);
 
         $formattedAvgTime = '—';
@@ -180,7 +180,7 @@ class DashboardController extends Controller
             return $sparkDates->map(fn ($d) => (int) ($raw->get($d, 0)))->values()->all();
         };
 
-        $avgTimeSparkRaw = Ticket::selectRaw('DATE(resolved_at) as d, AVG(TIMESTAMPDIFF(MINUTE, created_at, resolved_at)) / 60 as h')
+        $avgTimeSparkRaw = Ticket::selectRaw('DATE(resolved_at) as d, AVG(TIMESTAMPDIFF(MINUTE, COALESCE(incident_occurred_at, created_at), resolved_at)) / 60 as h')
             ->whereNotNull('resolved_at')
             ->whereIn('status', $resolvedForStatWidgets)
             ->where('resolved_at', '>=', $sparkStart)

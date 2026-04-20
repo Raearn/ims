@@ -24,7 +24,9 @@ class ReportGenerationService
         $resolvedWithDates = $tickets->whereNotNull('resolved_at');
         $mttrHours = $resolvedWithDates->count() > 0
             ? collect($resolvedWithDates)->average(function ($ticket) {
-                return $ticket->created_at->diffInHours($ticket->resolved_at);
+                $start = $ticket->incident_occurred_at ?? $ticket->created_at;
+
+                return $start->diffInHours($ticket->resolved_at);
             })
             : 0;
 
